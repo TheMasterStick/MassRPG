@@ -7,7 +7,7 @@
 import type { ResourceType, StructureType, TileType } from '../world/types';
 import { MONSTERS } from '../data/monsters';
 
-export type SpriteCategory = 'tiles' | 'resources' | 'structures' | 'monsters' | 'player';
+export type SpriteCategory = 'tiles' | 'resources' | 'structures' | 'monsters' | 'player' | 'roof';
 export type Facing = 'up' | 'down' | 'left' | 'right';
 
 type LoadState = 'loading' | 'loaded' | 'missing';
@@ -47,6 +47,7 @@ export function getPlayerSprite(facing: Facing): HTMLImageElement | null {
 const TILE_TYPES: TileType[] = [
   'deep_water', 'water', 'beach', 'grass', 'plains', 'forest', 'taiga',
   'mountain', 'snow', 'desert', 'swamp', 'path', 'rubble',
+  'floor_wood', 'floor_brick', 'floor_cobble',
 ];
 const RESOURCE_TYPES: ResourceType[] = [
   'tree_normal', 'tree_oak', 'tree_willow', 'tree_maple', 'tree_yew', 'tree_magic',
@@ -57,9 +58,10 @@ const RESOURCE_TYPES: ResourceType[] = [
 ];
 const STRUCTURE_TYPES: StructureType[] = [
   'bank_chest', 'furnace', 'anvil', 'cooking_range', 'campfire', 'workbench',
-  'fence', 'wall', 'bed', 'storage_chest', 'tannery', 'loom', 'general_store',
+  'fence', 'wall', 'wall_window', 'bed', 'storage_chest', 'tannery', 'loom', 'general_store',
 ];
 const PLAYER_FACINGS: Facing[] = ['down', 'up', 'left', 'right'];
+const ROOF_IDS = ['tile_middle', 'tile_side', 'tatch_middle', 'tatch_side'];
 
 // Gather-action tool animation: a "prepare" (windup) frame and a "swing"
 // frame, shown while chopping/mining instead of the idle/walk sprite.
@@ -78,6 +80,7 @@ export function preloadAllSprites() {
   // Growth-stage art for the farm patch (bare soil / growing / ready to harvest).
   for (const stage of ['empty', 'sown', 'bloom']) load('resources', `farm_patch_${stage}`);
   for (const s of STRUCTURE_TYPES) load('structures', s);
+  for (const id of ROOF_IDS) load('roof', id);
   for (const m of MONSTERS) load('monsters', m.id);
   for (const f of PLAYER_FACINGS) {
     load('player', f);

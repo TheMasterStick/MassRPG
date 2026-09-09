@@ -7,8 +7,12 @@ import {
   WORLD_SIZE, REGIONS, REGION_BIOME, ROADS, RUINS,
   nearestTown, nearestTownDistance, type Region, type Ruin,
 } from './AeldorData';
+import { TOWN_BUILDINGS, type TownBuilding } from './Buildings';
 
-const VILLAGE_RADIUS = 7;
+// Wide enough to comfortably fit the largest town building (smithy_01, up to
+// 11 tiles from center) plus a little margin, so village-only effects (path/
+// grass terrain, no wild resource/monster spawns) cover the whole town.
+const VILLAGE_RADIUS = 13;
 const ROAD_HALF_WIDTH = 1.6;
 
 export interface VillageStructure { x: number; y: number; type: StructureType }
@@ -16,13 +20,11 @@ export interface VillageStructure { x: number; y: number; type: StructureType }
 const VILLAGE_STRUCTURES: VillageStructure[] = [
   { x: 3, y: 0, type: 'bank_chest' },
   { x: -3, y: 0, type: 'general_store' },
-  { x: 0, y: 3, type: 'furnace' },
-  { x: 1, y: 3, type: 'anvil' },
   { x: -1, y: 3, type: 'cooking_range' },
-  { x: 0, y: -3, type: 'bed' },
-  { x: 2, y: -2, type: 'workbench' },
   { x: -2, y: -2, type: 'loom' },
 ];
+
+interface BuildingCell { ch: string; localX: number; localY: number; originX: number; originY: number; instance: TownBuilding }
 
 const SNOWCAP_REGIONS = REGIONS.filter((r) => r.kind === 'snowcap');
 const OTHER_REGIONS = REGIONS.filter((r) => r.kind !== 'snowcap');
@@ -47,12 +49,53 @@ export class WorldGen {
   }
 
   villageStructureAt(x: number, y: number): StructureType | null {
+    const building = this.buildingCellAt(x, y);
+    if (building) {
+      if (building.ch === 'W') return 'wall';
+      if (building.ch === 'w') return 'wall_window';
+      const furniture = building.instance.prefab.furniture.find(
+        (f) => f.x === building.localX && f.y === building.localY,
+      );
+      return furniture ? furniture.type : null; // plain floor/door cell - nothing placed there
+    }
+
     const town = nearestTown(x, y);
     const lx = x - town.x;
     const ly = y - town.y;
     if (Math.abs(lx) > VILLAGE_RADIUS || Math.abs(ly) > VILLAGE_RADIUS) return null;
     for (const s of VILLAGE_STRUCTURES) if (s.x === lx && s.y === ly) return s.type;
     return null;
+  }
+
+  private buildingCellAt(x: number, y: number): BuildingCell | null {
+    const town = nearestTown(x, y);
+    for (const b of TOWN_BUILDINGS) {
+      const originX = town.x + b.dx;
+      const originY = town.y + b.dy;
+      const lx = x - originX;
+      const ly = y - originY;
+      if (lx < 0 || ly < 0 || lx >= b.prefab.width || ly >= b.prefab.height) continue;
+      return { ch: b.prefab.grid[ly][lx], localX: lx, localY: ly, originX, originY, instance: b };
+    }
+    return null;
+  }
+
+  /** For the renderer's roof overlay: which building (if any) covers this tile, and whether it's the front (south) row that gets the eave-trimmed roof piece instead of the plain repeating one. */
+  roofCellAt(x: number, y: number): { roof: 'tile' | 'tatch'; isSouthRow: boolean; originX: number; originY: number } | null {
+    const b = this.buildingCellAt(x, y);
+    if (!b) return null;
+    return {
+      roof: b.instance.prefab.roof,
+      isSouthRow: b.localY === b.instance.prefab.height - 1,
+      originX: b.originX,
+      originY: b.originY,
+    };
+  }
+
+  /** Which building instance (identified by its world origin) this tile belongs to, if any - used to hide that specific building's roof once the player steps inside it. */
+  buildingOriginAt(x: number, y: number): { originX: number; originY: number } | null {
+    const b = this.buildingCellAt(x, y);
+    return b ? { originX: b.originX, originY: b.originY } : null;
   }
 
   private onRoad(x: number, y: number): boolean {
@@ -126,6 +169,9 @@ export class WorldGen {
 
   tileAt(x: number, y: number): TileType {
     if (x < 0 || y < 0 || x >= WORLD_SIZE || y >= WORLD_SIZE) return 'deep_water';
+
+    const building = this.buildingCellAt(x, y);
+    if (building && (building.ch === '.' || building.ch === 'D')) return building.instance.prefab.floor;
 
     if (this.isVillage(x, y)) {
       const town = nearestTown(x, y);

@@ -16,6 +16,7 @@ listed in each subfolder's README on every load.
 | [`structures/`](structures/README.md) | Furnace, anvil, bank, campfire, ... | can be taller than one tile |
 | [`monsters/`](monsters/README.md) | Every enemy, from chicken to dragon | can be taller than one tile |
 | [`player/`](player/README.md) | The adventurer: idle, walk cycle, gather animations | can be taller than one tile |
+| [`roof/`](roof/README.md) | Building roof overlays (thatch/tile, middle/side) | tiles as a repeating pattern, hides when you go inside |
 | `hold/` | A staging area, not read by the game | drop files here, they get sorted from there |
 
 ## The rules that apply everywhere

@@ -66,10 +66,15 @@ not a pixel-exact reproduction of any source map.
 coordinates, each a full hub with a bank, general store, furnace, anvil,
 cooking range, loom and workbench, connected by a road network (a minimum
 spanning tree over all the towns) that doubles as a bridge wherever it
-needs to cross water. Three ruins (Old Cairn Ruins, Moonfall Ruins,
-Serpent's Spire) are marked zones of scattered rubble. Monster difficulty
-scales up with distance from the nearest town, so the roads and their
-surrounding land stay safe while the deep wilderness between settlements
+needs to cross water. Every town also has two real walk-in buildings — a
+small thatched-roof house (with a bed and a storage chest) and a
+stone-floored smithy (furnace, anvil, workbench) — with proper walls,
+windows, a door gap and a roof that renders above the building from
+outside and disappears once you're standing inside it, so you can see the
+interior. Three ruins (Old Cairn Ruins, Moonfall Ruins, Serpent's Spire)
+are marked zones of scattered rubble. Monster difficulty scales up with
+distance from the nearest town, so the roads and their surrounding land
+stay safe while the deep wilderness between settlements
 gets dangerous. World generation lives in `src/world/AeldorData.ts` (the
 authored towns/ruins/regions) and `src/world/WorldGen.ts` (turns that into
 tiles, still chunked and lazily generated so the browser never holds more
@@ -153,14 +158,22 @@ nearest town); and a built storage chest shares your single global bank
 rather than holding its own separate inventory. These are good spots to
 extend if you want to keep building this out.
 
-On the world itself: every town uses the same building layout rather than
-a unique one per settlement; roads are straight-ish lines between towns
-and will cross water as a "bridge" rather than routing around it;
-Serpent's Spire is a real island in the middle of the lake with no boat or
-swim mechanic yet to reach it (it renders correctly, it's just not
-reachable on foot); and the named-region shapes (mountains, forests, the
-lake, the desert) are this build's own interpretation of the reference
-maps it was designed from, not a pixel-exact reproduction.
+On the world itself: every town uses the same building layout (one house,
+one smithy, plus the loose bank/store/cooking range/loom) rather than a
+unique one per settlement, and every town's buildings are the same two
+prefabs regardless of regional flavor (a swamp town like Darkfen or a
+farming town like Highfield doesn't yet get its own distinct building set
+or extra structures) - `src/world/Buildings.ts` is where to add more
+prefabs (a bank/general-store building, an inn, per-region variants) once
+they're wanted; roads are straight-ish lines between towns and will cross
+water as a "bridge" rather than routing around it; Serpent's Spire is a
+real island in the middle of the lake with no boat or swim mechanic yet to
+reach it (it renders correctly, it's just not reachable on foot); the
+named-region shapes (mountains, forests, the lake, the desert) are this
+build's own interpretation of the reference maps it was designed from, not
+a pixel-exact reproduction; and there's no NPC system yet (`public/sprites/
+hold/` has a set of NPC portraits uploaded ahead of that work) - the
+buildings exist first so NPCs will have somewhere to actually live.
 
 On the UI: the Quest tab is a placeholder (there's no quest system yet);
 WASD movement steps one tile at a time in whatever direction you're

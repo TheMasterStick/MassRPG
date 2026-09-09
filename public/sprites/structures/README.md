@@ -13,9 +13,16 @@ campfire.png
 workbench.png
 fence.png
 wall.png
+wall_window.png
 bed.png
 storage_chest.png
 tannery.png
 loom.png
 general_store.png
 ```
+
+`wall.png` and `wall_window.png` are also used as the exterior wall/window
+segments of the game's built-in multi-tile buildings (a house and a
+smithy, see `src/world/Buildings.ts`) — one image tiled across every wall
+tile of the building's perimeter, not a single building-sized sprite.
+

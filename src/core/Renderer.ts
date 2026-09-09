@@ -60,6 +60,7 @@ const STRUCTURE_GLYPH: Record<StructureType, { glyph: string; color: string }> =
   workbench: { glyph: '⬚', color: '#8a6a3a' },
   fence: { glyph: '▓', color: '#9a7a4a' },
   wall: { glyph: '█', color: '#888' },
+  wall_window: { glyph: '▦', color: '#7fa8c9' },
   bed: { glyph: '▬', color: '#7a5a9a' },
   storage_chest: { glyph: '▣', color: '#a0763f' },
   tannery: { glyph: '■', color: '#6a4a2a' },
@@ -166,6 +167,8 @@ export class Renderer {
     objects.sort((a, b) => a.sortY - b.sortY);
     for (const obj of objects) obj.draw();
 
+    this.drawRoofs(world, player, camX, camY, minTX, maxTX, minTY, maxTY);
+
     if (hoverTile) {
       const sx = hoverTile.x * TILE_SIZE - camX;
       const sy = hoverTile.y * TILE_SIZE - camY;
@@ -190,6 +193,29 @@ export class Renderer {
     ctx.scale(-1, 1);
     ctx.drawImage(img, 0, 0, dw, dh);
     ctx.restore();
+  }
+
+  /** Roofs draw as a final overlay above everything (walls, furniture, monsters, the player) so buildings read correctly from outside, but are skipped entirely for whichever single building the player is currently standing inside, so its interior is visible. */
+  private drawRoofs(
+    world: World, player: Player, camX: number, camY: number,
+    minTX: number, maxTX: number, minTY: number, maxTY: number,
+  ) {
+    const playerBuilding = world.gen.buildingOriginAt(Math.round(player.x), Math.round(player.y));
+    const groups = new Map<HTMLImageElement, { sx: number; sy: number }[]>();
+
+    for (let ty = minTY; ty <= maxTY; ty++) {
+      for (let tx = minTX; tx <= maxTX; tx++) {
+        const roof = world.gen.roofCellAt(tx, ty);
+        if (!roof) continue;
+        if (playerBuilding && playerBuilding.originX === roof.originX && playerBuilding.originY === roof.originY) continue;
+        const sprite = getSprite('roof', `${roof.roof}_${roof.isSouthRow ? 'side' : 'middle'}`);
+        if (!sprite) continue;
+        let group = groups.get(sprite);
+        if (!group) { group = []; groups.set(sprite, group); }
+        group.push({ sx: tx * TILE_SIZE - camX, sy: ty * TILE_SIZE - camY });
+      }
+    }
+    for (const [sprite, cells] of groups) this.paintTilePattern(sprite, cells, camX, camY);
   }
 
   private getTilePattern(img: HTMLImageElement): CanvasPattern {

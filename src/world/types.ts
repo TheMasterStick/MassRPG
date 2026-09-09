@@ -1,7 +1,8 @@
 export type TileType =
   | 'deep_water' | 'water' | 'beach'
   | 'grass' | 'plains' | 'forest' | 'taiga' | 'mountain' | 'snow' | 'desert' | 'swamp'
-  | 'path' | 'rubble';
+  | 'path' | 'rubble'
+  | 'floor_wood' | 'floor_brick' | 'floor_cobble';
 
 export interface TileVisual {
   base: string;
@@ -24,6 +25,9 @@ export const TILE_VISUALS: Record<TileType, TileVisual> = {
   swamp: { base: '#5c6b3f', variants: ['#5c6b3f', '#57663a', '#607044'], walkable: true },
   path: { base: '#b09569', variants: ['#b09569', '#ab9063'], walkable: true },
   rubble: { base: '#8d8378', variants: ['#8d8378'], walkable: true },
+  floor_wood: { base: '#a07840', variants: ['#a07840'], walkable: true },
+  floor_brick: { base: '#9c5f4a', variants: ['#9c5f4a'], walkable: true },
+  floor_cobble: { base: '#8a8a8f', variants: ['#8a8a8f'], walkable: true },
 };
 
 export type ResourceType =
@@ -35,7 +39,7 @@ export type ResourceType =
 
 export type StructureType =
   | 'bank_chest' | 'furnace' | 'anvil' | 'cooking_range' | 'campfire' | 'workbench'
-  | 'fence' | 'wall' | 'bed' | 'storage_chest' | 'tannery' | 'loom' | 'general_store';
+  | 'fence' | 'wall' | 'wall_window' | 'bed' | 'storage_chest' | 'tannery' | 'loom' | 'general_store';
 
 export interface WorldPos {
   x: number;
