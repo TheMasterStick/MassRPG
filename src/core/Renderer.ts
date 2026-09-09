@@ -19,6 +19,11 @@ interface FloatingText { x: number; y: number; text: string; color: string; born
 // tile of that type without swimming as the camera pans.
 const TILE_TEXTURE_REPEAT_TILES = 6;
 
+// Monsters render a bit bigger than their tile, and with a red outline, so
+// they read clearly against busy ground textures instead of blending in.
+const MONSTER_RENDER_SCALE = 1.25;
+const MONSTER_OUTLINE_PX = 3;
+
 // Drawn only as a fallback until a matching PNG exists in public/sprites/
 // (see public/sprites/README.md for the exact filenames expected).
 const RESOURCE_GLYPH: Record<ResourceType, { glyph: string; color: string }> = {
@@ -72,6 +77,7 @@ export class Renderer {
   private ctx: CanvasRenderingContext2D;
   private floatingTexts: FloatingText[] = [];
   private patternCache = new Map<HTMLImageElement, CanvasPattern>();
+  private outlineCache = new Map<string, HTMLCanvasElement>();
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -262,18 +268,63 @@ export class Renderer {
     ctx.fillText(info.glyph, sx + TILE_SIZE / 2, sy + TILE_SIZE / 2 + 1);
   }
 
+  /** Builds (and caches) a red-outlined version of a monster sprite at a fixed draw size: the sprite drawn several times around its own edge and flattened to solid red, then the real art on top. Cached per image/flip/size since none of those change between frames for a given monster type. */
+  private getOutlinedMonsterSprite(img: HTMLImageElement, flip: boolean, dw: number, dh: number): HTMLCanvasElement {
+    const key = `${img.src}|${flip}|${Math.round(dw)}x${Math.round(dh)}`;
+    const cached = this.outlineCache.get(key);
+    if (cached) return cached;
+
+    const pad = MONSTER_OUTLINE_PX;
+    const canvas = document.createElement('canvas');
+    canvas.width = dw + pad * 2;
+    canvas.height = dh + pad * 2;
+    const octx = canvas.getContext('2d')!;
+    octx.imageSmoothingEnabled = true;
+    octx.imageSmoothingQuality = 'high';
+
+    const drawBase = (ox: number, oy: number) => {
+      if (!flip) { octx.drawImage(img, ox, oy, dw, dh); return; }
+      octx.save();
+      octx.translate(ox + dw, oy);
+      octx.scale(-1, 1);
+      octx.drawImage(img, 0, 0, dw, dh);
+      octx.restore();
+    };
+
+    const steps = 16;
+    for (let i = 0; i < steps; i++) {
+      const angle = (i / steps) * Math.PI * 2;
+      drawBase(pad + Math.cos(angle) * pad, pad + Math.sin(angle) * pad);
+    }
+    octx.globalCompositeOperation = 'source-in';
+    octx.fillStyle = '#ff2222';
+    octx.fillRect(0, 0, canvas.width, canvas.height);
+    octx.globalCompositeOperation = 'source-over';
+
+    drawBase(pad, pad);
+
+    this.outlineCache.set(key, canvas);
+    return canvas;
+  }
+
   private drawMonster(sx: number, sy: number, m: Monster) {
     const ctx = this.ctx;
     const def = m.def();
     const sprite = getSprite('monsters', m.defId);
-    if (sprite) this.drawSpriteOnTile(sprite, sx, sy, def.size, m.facing === 'left');
-    else {
-      const r = 8 * def.size;
+    if (sprite) {
+      const dw = TILE_SIZE * def.size * MONSTER_RENDER_SCALE;
+      const dh = dw * (sprite.naturalHeight / sprite.naturalWidth);
+      const outlined = this.getOutlinedMonsterSprite(sprite, m.facing === 'left', dw, dh);
+      const pad = MONSTER_OUTLINE_PX;
+      ctx.drawImage(outlined, sx + TILE_SIZE / 2 - dw / 2 - pad, sy + TILE_SIZE - dh - pad);
+    } else {
+      const r = 8 * def.size * MONSTER_RENDER_SCALE;
       ctx.fillStyle = def.color;
       ctx.beginPath();
       ctx.arc(sx + TILE_SIZE / 2, sy + TILE_SIZE / 2, r, 0, Math.PI * 2);
       ctx.fill();
-      ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+      ctx.strokeStyle = '#ff2222';
+      ctx.lineWidth = 2;
       ctx.stroke();
     }
 

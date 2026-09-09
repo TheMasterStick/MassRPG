@@ -96,6 +96,20 @@ export class MiniMap {
       ctx.fill();
     }
 
+    // Monsters as small red squares. (NPCs, once added, should render here the
+    // same way as yellow squares - there's no NPC entity yet to draw.)
+    ctx.fillStyle = '#ff3030';
+    const monsterHalf = 1.5;
+    for (const m of world.monsters) {
+      if (!m.isAlive()) continue;
+      const dx = m.x - px;
+      const dy = m.y - py;
+      if (Math.abs(dx) > worldRadius || Math.abs(dy) > worldRadius) continue;
+      const sx = SIZE / 2 + dx * SCALE;
+      const sy = SIZE / 2 + dy * SCALE;
+      ctx.fillRect(sx - monsterHalf, sy - monsterHalf, monsterHalf * 2, monsterHalf * 2);
+    }
+
     // Player marker, always centered.
     ctx.fillStyle = '#ffee55';
     ctx.strokeStyle = '#000000';
