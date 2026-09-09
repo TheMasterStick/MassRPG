@@ -87,9 +87,16 @@ export const MONSTERS: MonsterDef[] = [
   {
     id: 'wolf', name: 'Wolf', level: 15, hp: 30, attack: 13, strength: 13, defence: 9,
     attackBonus: 6, strengthBonus: 6, defenceBonus: 3, style: 'melee', attackSpeedTicks: 3,
-    aggressive: true, biomes: ['taiga', 'snow', 'forest'], color: '#7d7d7d', size: 0.9,
+    aggressive: true, biomes: ['taiga', 'forest'], color: '#7d7d7d', size: 0.9,
     guaranteedDrops: [{ itemId: 'bones', min: 1, max: 1, weight: 1 }],
     drops: [{ itemId: 'coins', min: 5, max: 20, weight: 1 }], noDropChance: 0.5,
+  },
+  {
+    id: 'frost_wolf', name: 'Frost wolf', level: 20, hp: 38, attack: 16, strength: 16, defence: 11,
+    attackBonus: 7, strengthBonus: 8, defenceBonus: 4, style: 'melee', attackSpeedTicks: 3,
+    aggressive: true, biomes: ['snow', 'taiga'], color: '#bcd9e8', size: 0.95,
+    guaranteedDrops: [{ itemId: 'bones', min: 1, max: 1, weight: 1 }],
+    drops: [{ itemId: 'coins', min: 8, max: 35, weight: 3 }, { itemId: 'iron_ore', min: 1, max: 1, weight: 1 }], noDropChance: 0.4,
   },
   {
     id: 'zombie', name: 'Zombie', level: 18, hp: 38, attack: 16, strength: 15, defence: 10,

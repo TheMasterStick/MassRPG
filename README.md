@@ -82,7 +82,7 @@ than the nearby area in memory).
   and craft leather armor; cut gems and set jewellery; clean and brew
   herblore potions.
 - **Combat**: OSRS-style accuracy/max-hit formulas for melee, ranged and
-  magic, loot tables, and 20 monster types spanning level 1 to 95+.
+  magic, loot tables, and 21 monster types spanning level 1 to 95+.
   Chickens, rats and cows are neutral (won't attack unless attacked);
   everything else aggroes within a short range, gives up if you get more
   than a few tiles from where it spawned, ambles back home, and won't

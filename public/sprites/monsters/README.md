@@ -29,6 +29,7 @@ small critters next to everything else.
 | `skeleton.png` | Skeleton | 10 | 0.85× |
 | `bandit.png` | Bandit | 12 | 0.85× |
 | `wolf.png` | Wolf | 15 | 0.9× |
+| `frost_wolf.png` | Frost wolf | 20 | 0.95× |
 | `zombie.png` | Zombie | 18 | 0.9× |
 | `hobgoblin.png` | Hobgoblin | 25 | 1× (baseline) |
 | `dark_wizard.png` | Dark wizard | 22 | 0.9× |
