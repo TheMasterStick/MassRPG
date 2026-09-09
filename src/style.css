@@ -1,0 +1,101 @@
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #0d0d10; font-family: 'Segoe UI', Tahoma, sans-serif; color: #eee; }
+#app { position: relative; width: 100vw; height: 100vh; }
+#game-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: pointer; image-rendering: pixelated; }
+
+/* ---------- Start screen ---------- */
+#start-screen { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: radial-gradient(circle at 50% 30%, #234a2c, #0d0d10 70%); z-index: 100; }
+#start-screen.hidden { display: none; }
+.start-box { background: rgba(20,20,24,0.9); border: 1px solid #3a3a42; border-radius: 10px; padding: 32px 40px; width: 380px; text-align: center; box-shadow: 0 10px 40px rgba(0,0,0,0.5); }
+.start-box h1 { margin: 0 0 4px; font-size: 32px; letter-spacing: 1px; color: #ffd27a; }
+.start-box p.tagline { margin: 0 0 24px; color: #9a9aa0; font-size: 13px; }
+.start-box input[type=text] { width: 100%; padding: 8px 10px; margin: 6px 0 14px; border-radius: 6px; border: 1px solid #444; background: #1b1b20; color: #eee; font-size: 14px; }
+.start-box label { display: block; text-align: left; font-size: 12px; color: #aaa; margin-top: 4px; }
+.start-box button { width: 100%; padding: 10px; margin-top: 8px; border-radius: 6px; border: none; background: #3a7a3a; color: #fff; font-size: 15px; cursor: pointer; font-weight: 600; }
+.start-box button:hover { background: #4a924a; }
+.start-box button.secondary { background: #444; }
+.start-box button.secondary:hover { background: #555; }
+.start-box .hint { font-size: 11px; color: #777; margin-top: 16px; line-height: 1.5; }
+
+/* ---------- HUD ---------- */
+#ui-root { position: absolute; inset: 0; pointer-events: none; }
+#ui-root .clickable { pointer-events: auto; }
+
+#hud-top-left { position: absolute; top: 10px; left: 10px; background: rgba(15,15,18,0.78); border: 1px solid #333; border-radius: 8px; padding: 8px 12px; min-width: 180px; pointer-events: auto; }
+.hud-row { display: flex; align-items: center; gap: 6px; margin: 3px 0; font-size: 12px; }
+.bar-track { flex: 1; height: 12px; background: #222; border-radius: 4px; overflow: hidden; border: 1px solid #000; }
+.bar-fill { height: 100%; transition: width 0.2s; }
+.bar-fill.hp { background: linear-gradient(#e05555,#a02020); }
+.hud-label { width: 46px; color: #ccc; }
+
+#hud-top-right { position: absolute; top: 10px; right: 10px; display: flex; gap: 6px; pointer-events: auto; }
+.icon-btn { background: rgba(15,15,18,0.85); border: 1px solid #444; color: #eee; border-radius: 6px; padding: 8px 10px; cursor: pointer; font-size: 13px; }
+.icon-btn:hover { background: #2a2a30; }
+.icon-btn.active { background: #3a5a3a; border-color: #5a8a5a; }
+
+#style-selector { position: absolute; top: 54px; right: 10px; display: flex; gap: 4px; pointer-events: auto; }
+.style-btn { background: rgba(15,15,18,0.85); border: 1px solid #444; color: #ccc; border-radius: 6px; padding: 5px 8px; font-size: 11px; cursor: pointer; }
+.style-btn.active { background: #4a4a8a; border-color: #7a7ad0; color: #fff; }
+
+#action-bar { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); width: 320px; pointer-events: none; text-align: center; }
+#action-progress { height: 8px; background: #222; border-radius: 4px; border: 1px solid #000; overflow: hidden; display: none; }
+#action-progress-fill { height: 100%; background: #d0a030; width: 0%; }
+#action-label { color: #ddd; font-size: 12px; margin-bottom: 4px; text-shadow: 0 1px 2px #000; }
+
+#game-log { position: absolute; bottom: 10px; left: 10px; width: 340px; height: 130px; background: rgba(10,10,12,0.72); border: 1px solid #333; border-radius: 8px; padding: 6px 10px; overflow-y: auto; font-size: 12px; pointer-events: auto; }
+#game-log div { margin: 1px 0; line-height: 1.35; }
+.log-info { color: #ccc; }
+.log-xp { color: #7fd0ff; }
+.log-combat { color: #ff9a6a; }
+.log-loot { color: #ffd76a; }
+.log-warning { color: #ff6a6a; }
+
+/* ---------- Panels ---------- */
+.panel { position: absolute; top: 90px; right: 10px; width: 320px; max-height: 68vh; background: rgba(16,16,20,0.94); border: 1px solid #3a3a42; border-radius: 10px; padding: 10px; overflow-y: auto; pointer-events: auto; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+.panel.hidden { display: none; }
+.panel h2 { margin: 0 0 8px; font-size: 15px; color: #ffd27a; border-bottom: 1px solid #333; padding-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
+.panel h2 .close-x { cursor: pointer; color: #999; font-size: 16px; }
+.panel h2 .close-x:hover { color: #fff; }
+
+#inventory-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
+.slot { position: relative; background: #1c1c22; border: 1px solid #333; border-radius: 6px; height: 52px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 10px; text-align: center; padding: 2px; }
+.slot:hover { border-color: #6a6a80; }
+.slot .qty { position: absolute; bottom: 2px; right: 4px; font-size: 10px; color: #ffe; text-shadow: 0 1px 2px #000; }
+.slot .name { color: #ddd; line-height: 1.1; }
+.slot.empty { cursor: default; }
+
+.skill-row { display: flex; align-items: center; gap: 8px; margin: 5px 0; font-size: 12px; }
+.skill-name { width: 92px; color: #ddd; }
+.skill-level { width: 34px; text-align: right; color: #ffd27a; font-weight: 600; }
+.skill-bar { flex: 1; height: 8px; background: #222; border-radius: 4px; overflow: hidden; border: 1px solid #000; }
+.skill-bar-fill { height: 100%; }
+
+.equip-row { display: flex; justify-content: space-between; align-items: center; padding: 5px 6px; margin: 3px 0; background: #1c1c22; border-radius: 6px; font-size: 12px; }
+.equip-row button { background: #3a3a44; border: none; color: #eee; border-radius: 4px; padding: 3px 8px; cursor: pointer; font-size: 11px; }
+
+.recipe-row, .build-row, .shop-row { display: flex; justify-content: space-between; align-items: center; padding: 6px; margin: 4px 0; background: #1c1c22; border-radius: 6px; font-size: 11px; gap: 6px; }
+.recipe-row.locked, .build-row.locked { opacity: 0.45; }
+.recipe-row button, .build-row button, .shop-row button { background: #3a5a3a; border: none; color: #fff; border-radius: 4px; padding: 4px 8px; cursor: pointer; font-size: 11px; white-space: nowrap; }
+.recipe-row button:disabled, .build-row button:disabled { background: #444; cursor: not-allowed; }
+.recipe-meta { flex: 1; }
+.recipe-meta .missing { color: #ff8a8a; font-size: 10px; }
+
+.tabs { display: flex; gap: 4px; margin-bottom: 8px; flex-wrap: wrap; }
+.tab-btn { background: #26262e; border: 1px solid #3a3a42; color: #bbb; padding: 4px 8px; border-radius: 5px; font-size: 10px; cursor: pointer; }
+.tab-btn.active { background: #3a5a3a; color: #fff; }
+
+.qty-controls { display: flex; align-items: center; gap: 4px; margin: 6px 0; }
+.qty-controls button { background: #3a3a44; border: none; color: #eee; border-radius: 4px; padding: 4px 8px; cursor: pointer; }
+.qty-controls input { width: 50px; text-align: center; background: #1c1c22; border: 1px solid #333; color: #eee; border-radius: 4px; padding: 4px; }
+
+#context-popup { position: absolute; background: rgba(20,20,24,0.97); border: 1px solid #444; border-radius: 6px; padding: 4px; z-index: 50; pointer-events: auto; box-shadow: 0 6px 20px rgba(0,0,0,0.6); }
+#context-popup.hidden { display: none; }
+#context-popup button { display: block; width: 100%; background: none; border: none; color: #eee; text-align: left; padding: 6px 12px; cursor: pointer; font-size: 12px; border-radius: 4px; white-space: nowrap; }
+#context-popup button:hover { background: #3a3a44; }
+
+.tooltip-name { font-weight: 600; color: #ffd27a; margin-bottom: 2px; }
+.tooltip-desc { color: #aaa; font-size: 11px; }
+
+#death-overlay { position: absolute; inset: 0; background: rgba(80,0,0,0.35); display: flex; align-items: center; justify-content: center; pointer-events: none; opacity: 0; transition: opacity 0.3s; z-index: 40; }
+#death-overlay.show { opacity: 1; }
+#death-overlay span { font-size: 28px; color: #fff; text-shadow: 0 2px 8px #000; font-weight: 700; }

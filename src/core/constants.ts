@@ -1,0 +1,15 @@
+export const TILE_SIZE = 32;
+export const CHUNK_SIZE = 16;
+export const TICK_MS = 600;
+export const VIEW_RADIUS_CHUNKS = 3;
+export const SIM_RADIUS_CHUNKS = 4; // chunks that get resource/monster simulation
+export const INVENTORY_SLOTS = 28;
+export const BANK_SLOTS = 200;
+export const RESOURCE_RESPAWN_TICKS = 8; // trees/rocks
+export const FISHING_RESPAWN_TICKS = 3;
+export const MONSTER_RESPAWN_TICKS = 50;
+export const REACH_TILES = 1; // interaction range (adjacent, incl. diagonal)
+export const MONSTER_AGGRO_RANGE = 5;
+export const MONSTER_LEASH_RANGE = 10;
+export const PLAYER_WALK_SPEED = 4; // tiles/sec
+export const PLAYER_RUN_SPEED = 7; // tiles/sec

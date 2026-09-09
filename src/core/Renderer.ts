@@ -1,0 +1,249 @@
+import { TILE_SIZE } from './constants';
+import type { World } from '../world/World';
+import type { Player } from '../entities/Player';
+import type { Monster } from '../entities/Monster';
+import { TILE_VISUALS, type TileType } from '../world/types';
+import { hash2D } from './Random';
+import { RESOURCE_NAMES } from '../data/biomes';
+import type { ResourceType, StructureType } from '../world/types';
+
+interface FloatingText { x: number; y: number; text: string; color: string; born: number; }
+
+const RESOURCE_GLYPH: Record<ResourceType, { glyph: string; color: string }> = {
+  tree_normal: { glyph: '♣', color: '#2e6b2b' },
+  tree_oak: { glyph: '♣', color: '#3f7d34' },
+  tree_willow: { glyph: '♣', color: '#4f8f52' },
+  tree_maple: { glyph: '♣', color: '#7a9c3f' },
+  tree_yew: { glyph: '♣', color: '#1f4d2e' },
+  tree_magic: { glyph: '♣', color: '#5e3f9c' },
+  rock_copper: { glyph: '◆', color: '#c67a3d' },
+  rock_tin: { glyph: '◆', color: '#b7b7b7' },
+  rock_iron: { glyph: '◆', color: '#8a6a56' },
+  rock_coal: { glyph: '◆', color: '#2b2b2b' },
+  rock_mithril: { glyph: '◆', color: '#4f6fc4' },
+  rock_adamant: { glyph: '◆', color: '#3f8f5f' },
+  rock_rune: { glyph: '◆', color: '#4fd0e0' },
+  rock_gold: { glyph: '◆', color: '#e0c33f' },
+  rock_silver: { glyph: '◆', color: '#d6d6e0' },
+  rock_gem: { glyph: '◆', color: '#d060c0' },
+  fishing_shrimp: { glyph: '≈', color: '#bfe4ff' },
+  fishing_lobster: { glyph: '≈', color: '#7fd0ff' },
+  fishing_swordfish: { glyph: '≈', color: '#4fb0ff' },
+  farm_patch: { glyph: '☷', color: '#7a5a3a' },
+  herb_patch: { glyph: '⚘', color: '#4a8a3a' },
+  flax_plant: { glyph: '⚘', color: '#6a9a4a' },
+};
+
+const STRUCTURE_GLYPH: Record<StructureType, { glyph: string; color: string }> = {
+  bank_chest: { glyph: '♜', color: '#d4af37' },
+  furnace: { glyph: '▲', color: '#7a4a2a' },
+  anvil: { glyph: '■', color: '#555' },
+  cooking_range: { glyph: '■', color: '#8a5a3a' },
+  campfire: { glyph: '♨', color: '#e0662a' },
+  workbench: { glyph: '⬚', color: '#8a6a3a' },
+  fence: { glyph: '▓', color: '#9a7a4a' },
+  wall: { glyph: '█', color: '#888' },
+  bed: { glyph: '▬', color: '#7a5a9a' },
+  storage_chest: { glyph: '▣', color: '#a0763f' },
+  tannery: { glyph: '■', color: '#6a4a2a' },
+  loom: { glyph: '⬡', color: '#6a5a3a' },
+  general_store: { glyph: '⚑', color: '#3a6ac0' },
+};
+
+export class Renderer {
+  private canvas: HTMLCanvasElement;
+  private ctx: CanvasRenderingContext2D;
+  private floatingTexts: FloatingText[] = [];
+
+  constructor(canvas: HTMLCanvasElement) {
+    this.canvas = canvas;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Canvas 2D context unavailable');
+    this.ctx = ctx;
+  }
+
+  addFloatingText(x: number, y: number, text: string, color: string) {
+    this.floatingTexts.push({ x, y, text, color, born: performance.now() });
+  }
+
+  resize() {
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    this.canvas.width = this.canvas.clientWidth * dpr;
+    this.canvas.height = this.canvas.clientHeight * dpr;
+    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  screenToWorldTile(screenX: number, screenY: number, player: Player): { x: number; y: number } {
+    const w = this.canvas.clientWidth;
+    const h = this.canvas.clientHeight;
+    const camX = player.x * TILE_SIZE - w / 2;
+    const camY = player.y * TILE_SIZE - h / 2;
+    return { x: Math.floor((screenX + camX) / TILE_SIZE), y: Math.floor((screenY + camY) / TILE_SIZE) };
+  }
+
+  render(world: World, player: Player, monsters: Monster[], hoverTile: { x: number; y: number } | null) {
+    const ctx = this.ctx;
+    const w = this.canvas.clientWidth;
+    const h = this.canvas.clientHeight;
+    ctx.clearRect(0, 0, w, h);
+
+    const camX = player.x * TILE_SIZE - w / 2;
+    const camY = player.y * TILE_SIZE - h / 2;
+
+    const minTX = Math.floor(camX / TILE_SIZE) - 1;
+    const maxTX = Math.floor((camX + w) / TILE_SIZE) + 1;
+    const minTY = Math.floor(camY / TILE_SIZE) - 1;
+    const maxTY = Math.floor((camY + h) / TILE_SIZE) + 1;
+
+    for (let ty = minTY; ty <= maxTY; ty++) {
+      for (let tx = minTX; tx <= maxTX; tx++) {
+        const sx = tx * TILE_SIZE - camX;
+        const sy = ty * TILE_SIZE - camY;
+        const tile = world.getTile(tx, ty);
+        this.drawTile(sx, sy, tile, tx, ty);
+
+        const structure = world.getStructure(tx, ty);
+        if (structure) {
+          this.drawStructure(sx, sy, structure);
+        } else if (world.isResourceAvailable(tx, ty)) {
+          const res = world.getResourceNode(tx, ty)!;
+          this.drawResource(sx, sy, res, tx, ty, world);
+        }
+      }
+    }
+
+    if (hoverTile) {
+      const sx = hoverTile.x * TILE_SIZE - camX;
+      const sy = hoverTile.y * TILE_SIZE - camY;
+      ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(sx + 1, sy + 1, TILE_SIZE - 2, TILE_SIZE - 2);
+    }
+
+    for (const m of monsters) {
+      if (!m.isAlive()) continue;
+      const sx = m.x * TILE_SIZE - camX;
+      const sy = m.y * TILE_SIZE - camY;
+      this.drawMonster(sx, sy, m);
+    }
+
+    this.drawPlayer(player.x * TILE_SIZE - camX, player.y * TILE_SIZE - camY, player);
+
+    this.drawFloatingTexts(camX, camY);
+  }
+
+  private drawTile(sx: number, sy: number, tile: TileType, tx: number, ty: number) {
+    const ctx = this.ctx;
+    const visual = TILE_VISUALS[tile];
+    const variantIdx = Math.floor(hash2D(1337, tx, ty) * visual.variants.length);
+    ctx.fillStyle = visual.variants[variantIdx] ?? visual.base;
+    ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
+  }
+
+  private drawResource(sx: number, sy: number, res: ResourceType, tx: number, ty: number, world: World) {
+    const ctx = this.ctx;
+    if (res === 'farm_patch' || res === 'herb_patch') {
+      const crop = world.getCropState(tx, ty);
+      ctx.fillStyle = '#4a3323';
+      ctx.fillRect(sx + 3, sy + 3, TILE_SIZE - 6, TILE_SIZE - 6);
+      if (crop) {
+        ctx.fillStyle = crop.ready ? '#5fbf4a' : '#3f7f3a';
+        const size = 4 + crop.progress * 10;
+        ctx.beginPath();
+        ctx.arc(sx + TILE_SIZE / 2, sy + TILE_SIZE / 2, size, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      return;
+    }
+    const info = RESOURCE_GLYPH[res];
+    ctx.fillStyle = info.color;
+    ctx.font = '20px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(info.glyph, sx + TILE_SIZE / 2, sy + TILE_SIZE / 2 + 1);
+  }
+
+  private drawStructure(sx: number, sy: number, type: StructureType) {
+    const ctx = this.ctx;
+    const info = STRUCTURE_GLYPH[type];
+    ctx.fillStyle = 'rgba(0,0,0,0.15)';
+    ctx.fillRect(sx + 2, sy + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+    ctx.fillStyle = info.color;
+    ctx.font = 'bold 18px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(info.glyph, sx + TILE_SIZE / 2, sy + TILE_SIZE / 2 + 1);
+  }
+
+  private drawMonster(sx: number, sy: number, m: Monster) {
+    const ctx = this.ctx;
+    const def = m.def();
+    const r = 8 * def.size;
+    ctx.fillStyle = def.color;
+    ctx.beginPath();
+    ctx.arc(sx + TILE_SIZE / 2, sy + TILE_SIZE / 2, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+    ctx.stroke();
+
+    if (m.currentHp < m.maxHp) {
+      const barW = TILE_SIZE - 8;
+      const pct = Math.max(0, m.currentHp / m.maxHp);
+      ctx.fillStyle = '#2b2b2b';
+      ctx.fillRect(sx + 4, sy - 6, barW, 4);
+      ctx.fillStyle = pct > 0.5 ? '#4caf50' : pct > 0.25 ? '#ff9800' : '#e53935';
+      ctx.fillRect(sx + 4, sy - 6, barW * pct, 4);
+    }
+    ctx.fillStyle = '#fff';
+    ctx.font = '10px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(`${def.name} (${def.level})`, sx + TILE_SIZE / 2, sy - 9);
+  }
+
+  private drawPlayer(sx: number, sy: number, player: Player) {
+    const ctx = this.ctx;
+    const cx = sx + TILE_SIZE / 2;
+    const cy = sy + TILE_SIZE / 2;
+    ctx.fillStyle = '#f2c078';
+    ctx.beginPath();
+    ctx.arc(cx, cy, 10, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#7a4a1a';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.fillStyle = '#2255cc';
+    const dir = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] }[player.facing];
+    ctx.beginPath();
+    ctx.arc(cx + dir[0] * 6, cy + dir[1] * 6, 3, 0, Math.PI * 2);
+    ctx.fill();
+
+    const barW = TILE_SIZE - 4;
+    const pct = Math.max(0, player.currentHp / player.maxHp());
+    ctx.fillStyle = '#2b2b2b';
+    ctx.fillRect(sx + 2, sy - 8, barW, 5);
+    ctx.fillStyle = pct > 0.5 ? '#4caf50' : pct > 0.25 ? '#ff9800' : '#e53935';
+    ctx.fillRect(sx + 2, sy - 8, barW * pct, 5);
+  }
+
+  private drawFloatingTexts(camX: number, camY: number) {
+    const ctx = this.ctx;
+    const now = performance.now();
+    this.floatingTexts = this.floatingTexts.filter((t) => now - t.born < 900);
+    for (const t of this.floatingTexts) {
+      const age = (now - t.born) / 900;
+      const sx = t.x * TILE_SIZE - camX + TILE_SIZE / 2;
+      const sy = t.y * TILE_SIZE - camY - age * 20;
+      ctx.globalAlpha = 1 - age;
+      ctx.fillStyle = t.color;
+      ctx.font = 'bold 14px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(t.text, sx, sy);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  static resourceName(res: ResourceType): string {
+    return RESOURCE_NAMES[res];
+  }
+}
