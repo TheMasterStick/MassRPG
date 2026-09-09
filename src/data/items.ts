@@ -43,12 +43,13 @@ export const METAL_TIERS = [
   { id: 'rune', name: 'Rune', tier: 6, oreLevel: 85, smithLevel: 85, value: 500 },
 ] as const;
 
-// Ores (primary). Bronze uses copper+tin instead of a single ore.
+// Ores (primary). Bronze uses copper+tin, and steel uses iron+coal, so
+// neither has an ore of its own.
 reg({ id: 'copper_ore', name: 'Copper ore', type: 'resource', stackable: true, value: 3, description: 'Used with tin to smith bronze.' });
 reg({ id: 'tin_ore', name: 'Tin ore', type: 'resource', stackable: true, value: 3, description: 'Used with copper to smith bronze.' });
 reg({ id: 'coal', name: 'Coal', type: 'resource', stackable: true, value: 5, description: 'Fuel for smelting the stronger metals.' });
 for (const m of METAL_TIERS) {
-  if (m.id === 'bronze') continue;
+  if (m.id === 'bronze' || m.id === 'steel') continue;
   reg({ id: `${m.id}_ore`, name: `${m.name} ore`, type: 'resource', stackable: true, value: m.value, description: `Raw ${m.name.toLowerCase()} ore, smelted into a bar.` });
 }
 reg({ id: 'gold_ore', name: 'Gold ore', type: 'resource', stackable: true, value: 20, description: 'Smelted into gold bars for jewellery.' });
