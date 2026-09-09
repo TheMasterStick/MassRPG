@@ -1,15 +1,18 @@
 # Monster sprites
 
 One image per monster type — not per instance, so a single `goblin.png`
-covers every goblin in the world. Drawn at 32px wide × your aspect ratio,
+covers every goblin in the world. Any resolution, transparent background,
 bottom-anchored to its tile — see the [top-level rules](../README.md).
 
-Draw all of these at the same canonical proportions (design each on the
-same size canvas, e.g. 32×32 or 32×48). The game automatically draws
-bigger monsters wider — a dragon is drawn at roughly 2.4× a goblin's
-width — so you don't need to pre-scale anything; just draw each one true
-to its own shape and the size column below tells you roughly how
-prominent it'll end up on screen relative to the others.
+Draw all of these at the same canonical proportions (frame each the same
+way in its own canvas, whatever size you're working at). The game
+automatically draws bigger monsters wider — a dragon is drawn at roughly
+2.4× a goblin's width — so you don't need to pre-scale anything; just
+draw each one true to its own shape and the size column below tells you
+roughly how prominent it'll end up on screen relative to the others.
+Note that a chicken at 0.5× ends up genuinely small on screen (roughly
+16px wide) — that's expected, not a bug, chickens are meant to read as
+small critters next to everything else.
 
 | file | monster | level | relative size |
 |---|---|---:|---:|

@@ -1,8 +1,10 @@
 # Tile textures
 
-Square, opaque, tileable ground textures. Each is stretched to fill its
-32×32 tile exactly (not aspect-preserved), so keep them square. See the
-[top-level rules](../README.md) for format/scaling details.
+Ground textures. Opaque (no transparency), any resolution — see the
+[top-level rules](../README.md). Unlike everything else in `sprites/`,
+these aren't stretched into a single 32×32 tile; they're tiled as a
+continuous repeating pattern anchored to the world, so a detailed texture
+keeps its character instead of blurring into a near-solid color.
 
 Drop in any subset — anything missing falls back to today's flat color.
 
@@ -24,4 +26,4 @@ rubble.png
 
 Optional variety: add `_1` and/or `_2` beside any of the above (e.g.
 `grass_1.png`, `grass_2.png`) for a second/third texture the game mixes in
-across the ground so it doesn't look like one tile copy-pasted forever.
+across the ground so it doesn't look like one texture repeated forever.

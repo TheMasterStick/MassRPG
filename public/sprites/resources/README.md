@@ -1,10 +1,15 @@
 # Resource sprites
 
-Trees, ore rocks, fishing spots, flax and farm/herb patches. Drawn at
-32px wide, height free and bottom-anchored to the tile — see the
-[top-level rules](../README.md). Trees especially read better tall: draw
-the trunk base at the very bottom of the canvas and let the canopy rise
-above the tile (e.g. 32×56 or 32×64).
+Trees, ore rocks, fishing spots, flax and farm/herb patches. Any
+resolution, transparent background, height free and bottom-anchored to
+the tile — see the [top-level rules](../README.md). Trees especially read
+better tall: draw the trunk base at the very bottom of the canvas and let
+the canopy rise above the tile.
+
+Note that only one fishing spot art was provided so far
+(`fishing_shrimp.png`, `fishing_lobster.png` and `fishing_swordfish.png`
+are currently all the same image) — draw separate art for any of the
+three whenever you want them visually distinct.
 
 ```
 tree_normal.png

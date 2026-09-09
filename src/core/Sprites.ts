@@ -61,6 +61,11 @@ const STRUCTURE_TYPES: StructureType[] = [
 ];
 const PLAYER_FACINGS: Facing[] = ['down', 'up', 'left', 'right'];
 
+// Gather-action tool animation: a "prepare" (windup) frame and a "swing"
+// frame, shown while chopping/mining instead of the idle/walk sprite.
+export type GatherTool = 'axe' | 'pickaxe';
+const GATHER_TOOLS: GatherTool[] = ['axe', 'pickaxe'];
+
 /** Kicks off loading every known sprite once at startup. Missing files fail silently per-file. */
 export function preloadAllSprites() {
   for (const t of TILE_TYPES) {
@@ -72,5 +77,14 @@ export function preloadAllSprites() {
   for (const r of RESOURCE_TYPES) load('resources', r);
   for (const s of STRUCTURE_TYPES) load('structures', s);
   for (const m of MONSTERS) load('monsters', m.id);
-  for (const f of PLAYER_FACINGS) load('player', f);
+  for (const f of PLAYER_FACINGS) {
+    load('player', f);
+    // Optional two-frame walk cycle per facing, alternated while moving.
+    load('player', `${f}_walk1`);
+    load('player', `${f}_walk2`);
+  }
+  for (const t of GATHER_TOOLS) {
+    load('player', `${t}_prepare`);
+    load('player', `${t}_swing`);
+  }
 }

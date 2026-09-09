@@ -1,7 +1,8 @@
 # Structure sprites
 
-Every player-built or village structure. Drawn at 32px wide, height free
-and bottom-anchored — see the [top-level rules](../README.md).
+Every player-built or village structure. Any resolution, transparent
+background, height free and bottom-anchored — see the
+[top-level rules](../README.md).
 
 ```
 bank_chest.png

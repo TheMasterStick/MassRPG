@@ -2,13 +2,22 @@ import { TILE_SIZE } from './constants';
 import type { World } from '../world/World';
 import type { Player } from '../entities/Player';
 import type { Monster } from '../entities/Monster';
-import { TILE_VISUALS, type TileType } from '../world/types';
+import { TILE_VISUALS } from '../world/types';
 import { hash2D } from './Random';
 import { RESOURCE_NAMES } from '../data/biomes';
 import type { ResourceType, StructureType } from '../world/types';
 import { getSprite, getPlayerSprite, preloadAllSprites } from './Sprites';
 
 interface FloatingText { x: number; y: number; text: string; color: string; born: number; }
+
+// How many tiles wide one repeat of a ground texture spans. Sprite art
+// arrives at all kinds of resolutions (hand-drawn 32px pixel art, or a
+// large detailed digital painting meant to tile); rather than squishing
+// the whole image into a single 32px tile (which flattens detailed
+// textures into near-nothing), it's tiled as a repeating pattern anchored
+// to world space, so the same texture reads consistently across every
+// tile of that type without swimming as the camera pans.
+const TILE_TEXTURE_REPEAT_TILES = 6;
 
 // Drawn only as a fallback until a matching PNG exists in public/sprites/
 // (see public/sprites/README.md for the exact filenames expected).
@@ -62,6 +71,7 @@ export class Renderer {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
   private floatingTexts: FloatingText[] = [];
+  private patternCache = new Map<HTMLImageElement, CanvasPattern>();
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -80,7 +90,11 @@ export class Renderer {
     this.canvas.width = this.canvas.clientWidth * dpr;
     this.canvas.height = this.canvas.clientHeight * dpr;
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    this.ctx.imageSmoothingEnabled = false; // keep hand-drawn pixel art crisp when scaled
+    // Sprite art here is large, detailed digital painting scaled down to
+    // tile size, not native small pixel grids - smooth, high-quality
+    // downscaling looks right for that; nearest-neighbour would alias badly.
+    this.ctx.imageSmoothingEnabled = true;
+    this.ctx.imageSmoothingQuality = 'high';
   }
 
   screenToWorldTile(screenX: number, screenY: number, player: Player): { x: number; y: number } {
@@ -106,13 +120,24 @@ export class Renderer {
     const maxTY = Math.floor((camY + h) / TILE_SIZE) + 1;
 
     const objects: Drawable[] = [];
+    const tilePatchGroups = new Map<HTMLImageElement, { sx: number; sy: number }[]>();
 
     for (let ty = minTY; ty <= maxTY; ty++) {
       for (let tx = minTX; tx <= maxTX; tx++) {
         const sx = tx * TILE_SIZE - camX;
         const sy = ty * TILE_SIZE - camY;
         const tile = world.getTile(tx, ty);
-        this.drawTile(sx, sy, tile, tx, ty);
+        const variantIdx = Math.floor(hash2D(1337, tx, ty) * 3);
+        const sprite = (variantIdx > 0 && getSprite('tiles', `${tile}_${variantIdx}`)) || getSprite('tiles', tile);
+        if (sprite) {
+          let group = tilePatchGroups.get(sprite);
+          if (!group) { group = []; tilePatchGroups.set(sprite, group); }
+          group.push({ sx, sy });
+        } else {
+          const visual = TILE_VISUALS[tile];
+          ctx.fillStyle = visual.variants[variantIdx] ?? visual.base;
+          ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
+        }
 
         const structure = world.getStructure(tx, ty);
         if (structure) {
@@ -123,6 +148,8 @@ export class Renderer {
         }
       }
     }
+
+    for (const [sprite, cells] of tilePatchGroups) this.paintTilePattern(sprite, cells, camX, camY);
 
     for (const m of monsters) {
       if (!m.isAlive()) continue;
@@ -151,17 +178,35 @@ export class Renderer {
     this.ctx.drawImage(img, sx + TILE_SIZE / 2 - dw / 2, sy + TILE_SIZE - dh, dw, dh);
   }
 
-  private drawTile(sx: number, sy: number, tile: TileType, tx: number, ty: number) {
-    const ctx = this.ctx;
-    const variantIdx = Math.floor(hash2D(1337, tx, ty) * 3);
-    const sprite = (variantIdx > 0 && getSprite('tiles', `${tile}_${variantIdx}`)) || getSprite('tiles', tile);
-    if (sprite) {
-      ctx.drawImage(sprite, sx, sy, TILE_SIZE, TILE_SIZE);
-      return;
+  private getTilePattern(img: HTMLImageElement): CanvasPattern {
+    let pattern = this.patternCache.get(img);
+    if (!pattern) {
+      pattern = this.ctx.createPattern(img, 'repeat')!;
+      this.patternCache.set(img, pattern);
     }
-    const visual = TILE_VISUALS[tile];
-    ctx.fillStyle = visual.variants[variantIdx] ?? visual.base;
-    ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
+    return pattern;
+  }
+
+  /** Fills every cell using this ground texture as one continuous pattern anchored to world space, rather than squishing the whole image into each 32px tile individually. */
+  private paintTilePattern(img: HTMLImageElement, cells: { sx: number; sy: number }[], camX: number, camY: number) {
+    const ctx = this.ctx;
+    const pattern = this.getTilePattern(img);
+    const repeatWorldPx = TILE_SIZE * TILE_TEXTURE_REPEAT_TILES;
+    const scale = repeatWorldPx / img.naturalWidth;
+    pattern.setTransform(new DOMMatrix([scale, 0, 0, scale, -camX, -camY]));
+
+    ctx.save();
+    ctx.beginPath();
+    for (const c of cells) ctx.rect(c.sx, c.sy, TILE_SIZE, TILE_SIZE);
+    ctx.clip();
+    ctx.fillStyle = pattern;
+    let minSx = Infinity, minSy = Infinity, maxSx = -Infinity, maxSy = -Infinity;
+    for (const c of cells) {
+      minSx = Math.min(minSx, c.sx); minSy = Math.min(minSy, c.sy);
+      maxSx = Math.max(maxSx, c.sx); maxSy = Math.max(maxSy, c.sy);
+    }
+    ctx.fillRect(minSx, minSy, maxSx - minSx + TILE_SIZE, maxSy - minSy + TILE_SIZE);
+    ctx.restore();
   }
 
   private drawResource(sx: number, sy: number, res: ResourceType, tx: number, ty: number, world: World) {
@@ -236,9 +281,28 @@ export class Renderer {
     ctx.fillText(`${def.name} (${def.level})`, sx + TILE_SIZE / 2, sy - 9);
   }
 
+  /** Picks the right player frame: mid-gather tool animation, walk cycle while moving, or idle facing sprite. */
+  private resolvePlayerSprite(player: Player): HTMLImageElement | null {
+    if (player.action?.type === 'gather') {
+      const resource = player.action.resourceOrRecipeId;
+      const tool = resource.startsWith('tree_') ? 'axe' : resource.startsWith('rock_') ? 'pickaxe' : null;
+      if (tool) {
+        const swinging = player.action.ticksRemaining <= 1;
+        const frame = getSprite('player', `${tool}_${swinging ? 'swing' : 'prepare'}`);
+        if (frame) return frame;
+      }
+    }
+    if (player.path.length > 0) {
+      const walkFrame = Math.floor(performance.now() / 220) % 2 === 0 ? '1' : '2';
+      const walking = getSprite('player', `${player.facing}_walk${walkFrame}`);
+      if (walking) return walking;
+    }
+    return getPlayerSprite(player.facing);
+  }
+
   private drawPlayer(sx: number, sy: number, player: Player) {
     const ctx = this.ctx;
-    const sprite = getPlayerSprite(player.facing);
+    const sprite = this.resolvePlayerSprite(player);
     if (sprite) {
       this.drawSpriteOnTile(sprite, sx, sy);
     } else {
