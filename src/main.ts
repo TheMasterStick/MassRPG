@@ -6,6 +6,7 @@ import { initUI } from './ui/UI';
 import { addItem, equip } from './systems/Inventory';
 import { hasSave, loadGame, deleteSave } from './systems/Save';
 import { el } from './ui/dom';
+import { AELDOR_SEED } from './world/AeldorData';
 
 const startScreen = document.getElementById('start-screen')!;
 const uiRoot = document.getElementById('ui-root')!;
@@ -32,35 +33,26 @@ function launchGame(world: World, player: Player) {
   (window as unknown as { __game: Game }).__game = game;
 }
 
-function newGame(seed: number) {
-  const world = new World(seed);
+function newGame() {
+  const world = new World(AELDOR_SEED);
   const player = new Player();
-  player.x = 0;
-  player.y = 0;
   giveStarterKit(player);
   launchGame(world, player);
 }
 
 function continueGame() {
   const result = loadGame();
-  if (!result) { newGame(Date.now() >>> 0); return; }
+  if (!result) { newGame(); return; }
   launchGame(result.world, result.player);
 }
 
 function buildStartScreen() {
-  const seedInput = el('input', { attrs: { type: 'text', placeholder: 'Leave blank for random' } }) as HTMLInputElement;
   const newBtn = el('button', { text: 'Begin Adventure' });
-  newBtn.addEventListener('click', () => {
-    const raw = seedInput.value.trim();
-    const seed = raw ? hashSeed(raw) : (Date.now() >>> 0);
-    newGame(seed);
-  });
+  newBtn.addEventListener('click', () => newGame());
 
   const box = el('div', { className: 'start-box' }, [
     el('h1', { text: 'MassRPG' }),
-    el('p', { className: 'tagline', text: 'A procedurally generated world of exploration, skills and adventure.' }),
-    el('label', { text: 'World seed' }),
-    seedInput,
+    el('p', { className: 'tagline', text: 'Aeldor: a hand-mapped 15,000x15,000 tile world of exploration, skills and adventure.' }),
     newBtn,
   ]);
 
@@ -75,19 +67,10 @@ function buildStartScreen() {
 
   box.append(el('div', {
     className: 'hint',
-    text: 'Click to move or interact. WASD/arrows to walk, hold Shift to run. I = Inventory, K = Skills, B = Build. Choose a combat style (Melee/Ranged/Magic) in the top-right before fighting.',
+    text: 'You begin in Capital Town. Click to move or interact. WASD/arrows to walk, hold Shift to run. I = Inventory, K = Skills, B = Build. Choose a combat style (Melee/Ranged/Magic) in the top-right before fighting.',
   }));
 
   startScreen.append(box);
-}
-
-function hashSeed(text: string): number {
-  let h = 2166136261;
-  for (let i = 0; i < text.length; i++) {
-    h ^= text.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return h >>> 0;
 }
 
 buildStartScreen();

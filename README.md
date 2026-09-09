@@ -1,10 +1,11 @@
 # MassRPG
 
-A gigantic, procedurally generated RPG you can play in the browser. Start as
-an adventurer with nothing but a hatchet and a pickaxe, and explore an
-infinite seeded world: chop trees, mine ore, fish the coasts, farm crops,
-smith and craft equipment, cook your catch, fight monsters from chickens to
-dragons, and build furnaces, chests and camps as you travel.
+A gigantic RPG you can play in the browser, set in **Aeldor** — a fixed,
+hand-mapped 15,000×15,000 tile world with 14 named towns, a capital, and
+ruins to explore, not an infinite random one. Start as an adventurer with
+nothing but a hatchet and a pickaxe: chop trees, mine ore, fish the coasts,
+farm crops, smith and craft equipment, cook your catch, fight monsters from
+chickens to dragons, and build furnaces, chests and camps as you travel.
 
 It's built as a single-player, RuneScape-flavoured sandbox: no server, no
 downloads, everything runs client-side and saves to your browser.
@@ -33,13 +34,31 @@ serve the folder with any static file server).
 - Click an inventory item for contextual actions (Equip, Eat, Drink, Light
   fire, Clean herb, Drop, Examine).
 
-## What's in the world
+## The world of Aeldor
 
-- **Procedural generation**: seeded simplex noise drives elevation,
-  moisture and temperature fields, which combine into biomes — ocean,
-  beach, grassland, forest, taiga, swamp, desert, snow and mountains — laid
-  out in infinite chunks around a fixed starting village (with a bank,
-  general store, furnace, anvil, cooking range, loom and workbench).
+A fixed 15,000×15,000 tile continent, generated once from an authored
+layout (not randomized per playthrough): a central lake (Embermere Lake,
+with the island ruin Serpent's Spire at its heart), the snow-capped
+Frostpeak Mountains in the north, Blackthorn Mountains and Stonehollow
+Hills flanking it, forests (Oakridge Woods, Whispering Woods, Elderwood
+Forest), the Darkfen swamp, and the desert Gray Wastes in the southeast —
+all surrounded by ocean. Named-region shapes are this build's own
+interpretation of a set of reference maps, filled in with simplex noise so
+biome edges read as natural coastline/treeline rather than hard shapes,
+not a pixel-exact reproduction of any source map.
+
+14 towns (plus the capital, where you start) are placed at fixed
+coordinates, each a full hub with a bank, general store, furnace, anvil,
+cooking range, loom and workbench, connected by a road network (a minimum
+spanning tree over all the towns) that doubles as a bridge wherever it
+needs to cross water. Three ruins (Old Cairn Ruins, Moonfall Ruins,
+Serpent's Spire) are marked zones of scattered rubble. Monster difficulty
+scales up with distance from the nearest town, so the roads and their
+surrounding land stay safe while the deep wilderness between settlements
+gets dangerous. World generation lives in `src/world/AeldorData.ts` (the
+authored towns/ruins/regions) and `src/world/WorldGen.ts` (turns that into
+tiles, still chunked and lazily generated so the browser never holds more
+than the nearby area in memory).
 - **18 skills**, using RuneScape's real XP curve (level 99 = 13,034,431 xp):
   Hitpoints, Attack, Strength, Defence, Ranged, Magic (combat); Woodcutting,
   Mining, Fishing, Farming (gathering); Cooking, Firemaking, Smithing,
@@ -56,7 +75,7 @@ serve the folder with any static file server).
 - **Combat**: OSRS-style accuracy/max-hit formulas for melee, ranged and
   magic, monster aggro/leash/wander AI, loot tables, and 20 monster types
   spanning level 1 to 95+. Tougher monsters only start appearing the
-  further you wander from the starting village.
+  further you get from the nearest town.
 - **Construction**: place furnaces, anvils, cooking ranges, tanneries,
   looms, workbenches, storage chests, beds (sets your respawn point),
   fences and walls anywhere you've cleared space, using planks, stone and
@@ -66,8 +85,8 @@ serve the folder with any static file server).
   build).
 - **Persistence**: autosaves every 20s to `localStorage`, plus a manual
   Save button; only the parts of the world you've changed (depleted nodes,
-  planted crops, buildings) are stored, so saves stay small in an infinite
-  world.
+  planted crops, buildings) are stored, so saves stay small even across a
+  225-million-tile map.
 
 ## Adding your own pixel art
 
@@ -89,7 +108,7 @@ GPU framework dependency) with a DOM-based UI layer on top.
 ```
 src/
   core/       game loop, camera/renderer, sprite loading, RNG, noise, tick-based engine
-  world/      chunked procedural world, tile/resource/structure state
+  world/      chunked world (fixed Aeldor layout), tile/resource/structure state
   data/       item, monster, recipe, skill and biome definitions (data-driven)
   entities/   Player and Monster models
   systems/    gathering, production, combat, construction, inventory,
@@ -110,6 +129,15 @@ simplified rather than 1:1 with RuneScape: Magic combat is a single
 always-available "channel raw magic" style rather than a spellbook/rune
 system; there's no Prayer, Runecraft, Thieving, Slayer or Hunter skill;
 death has no item loss (you respawn at full health at your bed or the
-village); and a built storage chest shares your single global bank rather
-than holding its own separate inventory. These are good spots to extend
-if you want to keep building this out.
+nearest town); and a built storage chest shares your single global bank
+rather than holding its own separate inventory. These are good spots to
+extend if you want to keep building this out.
+
+On the world itself: every town uses the same building layout rather than
+a unique one per settlement; roads are straight-ish lines between towns
+and will cross water as a "bridge" rather than routing around it;
+Serpent's Spire is a real island in the middle of the lake with no boat or
+swim mechanic yet to reach it (it renders correctly, it's just not
+reachable on foot); and the named-region shapes (mountains, forests, the
+lake, the desert) are this build's own interpretation of the reference
+maps it was designed from, not a pixel-exact reproduction.

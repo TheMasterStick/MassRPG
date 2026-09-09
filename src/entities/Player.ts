@@ -1,14 +1,15 @@
 import { SKILLS, type SkillId, levelForXp, xpForLevel } from '../data/skills';
 import { INVENTORY_SLOTS } from '../core/constants';
 import type { EquipSlot } from '../data/items';
+import { CAPITAL } from '../world/AeldorData';
 
 export interface InventorySlot { itemId: string; qty: number }
 export type CombatStyle = 'melee' | 'ranged' | 'magic';
 
 export class Player {
   name = 'Adventurer';
-  x = 0;
-  y = 0;
+  x = CAPITAL.x;
+  y = CAPITAL.y;
   facing: 'up' | 'down' | 'left' | 'right' = 'down';
   path: { x: number; y: number }[] = [];
   running = false;
@@ -23,7 +24,7 @@ export class Player {
   inventory: (InventorySlot | null)[] = new Array(INVENTORY_SLOTS).fill(null);
   equipment: Partial<Record<EquipSlot, string>> = {};
 
-  respawnPoint = { x: 0, y: -3 };
+  respawnPoint = { x: CAPITAL.x, y: CAPITAL.y };
 
   // Transient action state (gathering/production in progress)
   action: {
