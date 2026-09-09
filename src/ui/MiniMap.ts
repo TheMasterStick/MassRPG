@@ -1,17 +1,10 @@
 import { el } from './dom';
 import type { Game } from '../core/Game';
 import { TOWNS, RUINS } from '../world/AeldorData';
-import type { TileType } from '../world/types';
+import { TILE_MAP_COLORS } from './mapColors';
 
 const SIZE = 168;
 const SCALE = 3; // minimap pixels per world tile
-
-const MINIMAP_COLORS: Record<TileType, string> = {
-  deep_water: '#0f3d6e', water: '#1c6cad', beach: '#c9b578',
-  grass: '#4a8a3c', plains: '#889c4d', forest: '#204c28', taiga: '#2f5946',
-  mountain: '#5c584f', snow: '#dfe6e6', desert: '#b89a5e', swamp: '#334d3e',
-  path: '#9c8258', rubble: '#6d6a60',
-};
 
 export class MiniMap {
   private game: Game;
@@ -64,7 +57,7 @@ export class MiniMap {
     for (let ty = -radiusTiles; ty <= radiusTiles; ty++) {
       for (let tx = -radiusTiles; tx <= radiusTiles; tx++) {
         const tile = world.getTile(px + tx, py + ty);
-        ctx.fillStyle = MINIMAP_COLORS[tile] ?? '#000';
+        ctx.fillStyle = TILE_MAP_COLORS[tile] ?? '#000';
         ctx.fillRect(SIZE / 2 + tx * SCALE - SCALE / 2, SIZE / 2 + ty * SCALE - SCALE / 2, SCALE, SCALE);
       }
     }

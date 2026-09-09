@@ -35,8 +35,14 @@ nearby towns/ruins), and a tab bar for Combat style, Skills, Quests
   movement always takes priority — pressing a direction key breaks off
   combat/gathering the same as clicking away does, so you can always
   choose to run.
-- **I** — Inventory, **K** — Skills, **B** — Construction, or just click
-  the matching sidebar tab.
+- **I** — Inventory, **K** — Skills, **B** — Construction, **M** — World
+  map, or just click the matching sidebar tab/icon.
+- The **world map** shows the whole continent at once with every town and
+  ruin labelled, plus a zoom in/out control that narrows in on your
+  current surroundings. Click anywhere on it to instantly fast-travel
+  there (it snaps to the nearest walkable ground if you click on water) —
+  this is a teleport, not a walked path, since the map covers distances
+  far beyond normal pathfinding range.
 - Pick a **combat style** (Melee / Ranged / Magic) on the Combat tab
   before fighting — Ranged needs a bow and arrows equipped/carried, Magic
   works from level 1 with no equipment needed.

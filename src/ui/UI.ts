@@ -4,6 +4,7 @@ import { buildSidebar } from './Sidebar';
 import { buildStationPanel } from './StationPanel';
 import { buildBankPanel } from './BankPanel';
 import { buildShopPanel } from './ShopPanel';
+import { buildWorldMap } from './WorldMap';
 import { openPlantMenu } from './PlantMenu';
 import { initContextPopup } from './ContextPopup';
 import type { StructureType } from '../world/types';
@@ -17,10 +18,20 @@ export function initUI(root: HTMLElement, game: Game) {
   const station = buildStationPanel(root, game);
   const bank = buildBankPanel(root, game);
   const shop = buildShopPanel(root, game);
-  const floatingPanels = [station.panel, bank.panel, shop.panel];
+  const worldMap = buildWorldMap(root, game);
+  const floatingPanels = [station.panel, bank.panel, shop.panel, worldMap.panel];
   function hideFloatingExcept(keep?: HTMLElement) {
     for (const p of floatingPanels) if (p !== keep) p.classList.add('hidden');
   }
+
+  game.onToggleWorldMap = () => {
+    if (worldMap.panel.classList.contains('hidden')) {
+      hideFloatingExcept(worldMap.panel);
+      worldMap.open();
+    } else {
+      worldMap.close();
+    }
+  };
 
   game.onOpenStructure = (x: number, y: number, type: StructureType) => {
     if (type === 'bank_chest' || type === 'storage_chest') {
@@ -43,6 +54,8 @@ export function initUI(root: HTMLElement, game: Game) {
   window.addEventListener('keydown', (e) => {
     const tag = (e.target as HTMLElement)?.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA') return;
-    if (e.key.toLowerCase() === 'escape') hideFloatingExcept();
+    const key = e.key.toLowerCase();
+    if (key === 'escape') hideFloatingExcept();
+    if (key === 'm') game.onToggleWorldMap?.();
   });
 }

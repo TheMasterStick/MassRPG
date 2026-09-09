@@ -59,6 +59,28 @@ export function nearestAdjacentWalkable(world: World, from: Point, target: Point
   return best;
 }
 
+// Expanding ring search for the nearest walkable tile to `target`, regardless of
+// distance from the player - used for world-map fast travel, where the destination
+// can be thousands of tiles away and a full bfsPath search isn't practical.
+export function findNearestWalkable(world: World, target: Point, maxRadius = 30): Point | null {
+  if (world.isWalkable(target.x, target.y)) return target;
+  for (let r = 1; r <= maxRadius; r++) {
+    for (let dx = -r; dx <= r; dx++) {
+      for (const dy of [-r, r]) {
+        const p = { x: target.x + dx, y: target.y + dy };
+        if (world.isWalkable(p.x, p.y)) return p;
+      }
+    }
+    for (let dy = -r + 1; dy <= r - 1; dy++) {
+      for (const dx of [-r, r]) {
+        const p = { x: target.x + dx, y: target.y + dy };
+        if (world.isWalkable(p.x, p.y)) return p;
+      }
+    }
+  }
+  return null;
+}
+
 export function isAdjacent(a: Point, b: Point): boolean {
   return Math.abs(a.x - b.x) <= 1 && Math.abs(a.y - b.y) <= 1 && !(a.x === b.x && a.y === b.y);
 }

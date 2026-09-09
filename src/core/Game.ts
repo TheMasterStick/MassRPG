@@ -186,6 +186,7 @@ export class Game {
 
   onOpenPlantMenu: ((x: number, y: number) => void) | null = null;
   onOpenStructure: ((x: number, y: number, type: StructureType) => void) | null = null;
+  onToggleWorldMap: (() => void) | null = null;
 
   moveAdjacentThen(pi: PendingInteraction) {
     this.player.action = null;

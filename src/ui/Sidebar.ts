@@ -86,6 +86,10 @@ export function buildSidebar(uiRoot: HTMLElement, game: Game) {
     tabButtons.set(t.id, btn);
     tabBar.append(btn);
   }
+  const mapBtn = el('button', { className: 'sidebar-tab-btn', text: '🗺', attrs: { title: 'World map (M)' } });
+  mapBtn.addEventListener('click', () => game.onToggleWorldMap?.());
+  tabBar.append(mapBtn);
+
   const saveBtn = el('button', { className: 'sidebar-tab-btn', text: '💾', attrs: { title: 'Save' } });
   saveBtn.addEventListener('click', () => game.manualSave());
   tabBar.append(saveBtn);
