@@ -6,9 +6,12 @@ import { TILE_VISUALS, type TileType } from '../world/types';
 import { hash2D } from './Random';
 import { RESOURCE_NAMES } from '../data/biomes';
 import type { ResourceType, StructureType } from '../world/types';
+import { getSprite, getPlayerSprite, preloadAllSprites } from './Sprites';
 
 interface FloatingText { x: number; y: number; text: string; color: string; born: number; }
 
+// Drawn only as a fallback until a matching PNG exists in public/sprites/
+// (see public/sprites/README.md for the exact filenames expected).
 const RESOURCE_GLYPH: Record<ResourceType, { glyph: string; color: string }> = {
   tree_normal: { glyph: '♣', color: '#2e6b2b' },
   tree_oak: { glyph: '♣', color: '#3f7d34' },
@@ -50,6 +53,11 @@ const STRUCTURE_GLYPH: Record<StructureType, { glyph: string; color: string }> =
   general_store: { glyph: '⚑', color: '#3a6ac0' },
 };
 
+// A y-sorted "world object" drawn after the ground plane, so tall sprites
+// (a tree taller than one tile, a big monster) occlude correctly against
+// whatever is a row above/below them instead of always drawing on top.
+interface Drawable { sortY: number; draw: () => void }
+
 export class Renderer {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
@@ -60,6 +68,7 @@ export class Renderer {
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('Canvas 2D context unavailable');
     this.ctx = ctx;
+    preloadAllSprites();
   }
 
   addFloatingText(x: number, y: number, text: string, color: string) {
@@ -71,6 +80,7 @@ export class Renderer {
     this.canvas.width = this.canvas.clientWidth * dpr;
     this.canvas.height = this.canvas.clientHeight * dpr;
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    this.ctx.imageSmoothingEnabled = false; // keep hand-drawn pixel art crisp when scaled
   }
 
   screenToWorldTile(screenX: number, screenY: number, player: Player): { x: number; y: number } {
@@ -95,6 +105,8 @@ export class Renderer {
     const minTY = Math.floor(camY / TILE_SIZE) - 1;
     const maxTY = Math.floor((camY + h) / TILE_SIZE) + 1;
 
+    const objects: Drawable[] = [];
+
     for (let ty = minTY; ty <= maxTY; ty++) {
       for (let tx = minTX; tx <= maxTX; tx++) {
         const sx = tx * TILE_SIZE - camX;
@@ -104,13 +116,22 @@ export class Renderer {
 
         const structure = world.getStructure(tx, ty);
         if (structure) {
-          this.drawStructure(sx, sy, structure);
+          objects.push({ sortY: ty, draw: () => this.drawStructure(sx, sy, structure) });
         } else if (world.isResourceAvailable(tx, ty)) {
           const res = world.getResourceNode(tx, ty)!;
-          this.drawResource(sx, sy, res, tx, ty, world);
+          objects.push({ sortY: ty, draw: () => this.drawResource(sx, sy, res, tx, ty, world) });
         }
       }
     }
+
+    for (const m of monsters) {
+      if (!m.isAlive()) continue;
+      objects.push({ sortY: m.y, draw: () => this.drawMonster(m.x * TILE_SIZE - camX, m.y * TILE_SIZE - camY, m) });
+    }
+    objects.push({ sortY: player.y, draw: () => this.drawPlayer(player.x * TILE_SIZE - camX, player.y * TILE_SIZE - camY, player) });
+
+    objects.sort((a, b) => a.sortY - b.sortY);
+    for (const obj of objects) obj.draw();
 
     if (hoverTile) {
       const sx = hoverTile.x * TILE_SIZE - camX;
@@ -120,22 +141,25 @@ export class Renderer {
       ctx.strokeRect(sx + 1, sy + 1, TILE_SIZE - 2, TILE_SIZE - 2);
     }
 
-    for (const m of monsters) {
-      if (!m.isAlive()) continue;
-      const sx = m.x * TILE_SIZE - camX;
-      const sy = m.y * TILE_SIZE - camY;
-      this.drawMonster(sx, sy, m);
-    }
-
-    this.drawPlayer(player.x * TILE_SIZE - camX, player.y * TILE_SIZE - camY, player);
-
     this.drawFloatingTexts(camX, camY);
+  }
+
+  /** Draws an image anchored to the bottom-center of a tile, preserving its aspect ratio at a fixed tile-width. Lets tall art (trees, big monsters) rise above their own tile without distortion. */
+  private drawSpriteOnTile(img: HTMLImageElement, sx: number, sy: number, widthMul = 1) {
+    const dw = TILE_SIZE * widthMul;
+    const dh = dw * (img.naturalHeight / img.naturalWidth);
+    this.ctx.drawImage(img, sx + TILE_SIZE / 2 - dw / 2, sy + TILE_SIZE - dh, dw, dh);
   }
 
   private drawTile(sx: number, sy: number, tile: TileType, tx: number, ty: number) {
     const ctx = this.ctx;
+    const variantIdx = Math.floor(hash2D(1337, tx, ty) * 3);
+    const sprite = (variantIdx > 0 && getSprite('tiles', `${tile}_${variantIdx}`)) || getSprite('tiles', tile);
+    if (sprite) {
+      ctx.drawImage(sprite, sx, sy, TILE_SIZE, TILE_SIZE);
+      return;
+    }
     const visual = TILE_VISUALS[tile];
-    const variantIdx = Math.floor(hash2D(1337, tx, ty) * visual.variants.length);
     ctx.fillStyle = visual.variants[variantIdx] ?? visual.base;
     ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
   }
@@ -143,9 +167,10 @@ export class Renderer {
   private drawResource(sx: number, sy: number, res: ResourceType, tx: number, ty: number, world: World) {
     const ctx = this.ctx;
     if (res === 'farm_patch' || res === 'herb_patch') {
+      const sprite = getSprite('resources', res);
+      if (sprite) ctx.drawImage(sprite, sx, sy, TILE_SIZE, TILE_SIZE);
+      else { ctx.fillStyle = '#4a3323'; ctx.fillRect(sx + 3, sy + 3, TILE_SIZE - 6, TILE_SIZE - 6); }
       const crop = world.getCropState(tx, ty);
-      ctx.fillStyle = '#4a3323';
-      ctx.fillRect(sx + 3, sy + 3, TILE_SIZE - 6, TILE_SIZE - 6);
       if (crop) {
         ctx.fillStyle = crop.ready ? '#5fbf4a' : '#3f7f3a';
         const size = 4 + crop.progress * 10;
@@ -155,6 +180,10 @@ export class Renderer {
       }
       return;
     }
+
+    const sprite = getSprite('resources', res);
+    if (sprite) { this.drawSpriteOnTile(sprite, sx, sy); return; }
+
     const info = RESOURCE_GLYPH[res];
     ctx.fillStyle = info.color;
     ctx.font = '20px sans-serif';
@@ -165,6 +194,9 @@ export class Renderer {
 
   private drawStructure(sx: number, sy: number, type: StructureType) {
     const ctx = this.ctx;
+    const sprite = getSprite('structures', type);
+    if (sprite) { this.drawSpriteOnTile(sprite, sx, sy); return; }
+
     const info = STRUCTURE_GLYPH[type];
     ctx.fillStyle = 'rgba(0,0,0,0.15)';
     ctx.fillRect(sx + 2, sy + 2, TILE_SIZE - 4, TILE_SIZE - 4);
@@ -178,13 +210,17 @@ export class Renderer {
   private drawMonster(sx: number, sy: number, m: Monster) {
     const ctx = this.ctx;
     const def = m.def();
-    const r = 8 * def.size;
-    ctx.fillStyle = def.color;
-    ctx.beginPath();
-    ctx.arc(sx + TILE_SIZE / 2, sy + TILE_SIZE / 2, r, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(0,0,0,0.4)';
-    ctx.stroke();
+    const sprite = getSprite('monsters', m.defId);
+    if (sprite) this.drawSpriteOnTile(sprite, sx, sy, def.size);
+    else {
+      const r = 8 * def.size;
+      ctx.fillStyle = def.color;
+      ctx.beginPath();
+      ctx.arc(sx + TILE_SIZE / 2, sy + TILE_SIZE / 2, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+      ctx.stroke();
+    }
 
     if (m.currentHp < m.maxHp) {
       const barW = TILE_SIZE - 8;
@@ -202,21 +238,26 @@ export class Renderer {
 
   private drawPlayer(sx: number, sy: number, player: Player) {
     const ctx = this.ctx;
-    const cx = sx + TILE_SIZE / 2;
-    const cy = sy + TILE_SIZE / 2;
-    ctx.fillStyle = '#f2c078';
-    ctx.beginPath();
-    ctx.arc(cx, cy, 10, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = '#7a4a1a';
-    ctx.lineWidth = 2;
-    ctx.stroke();
+    const sprite = getPlayerSprite(player.facing);
+    if (sprite) {
+      this.drawSpriteOnTile(sprite, sx, sy);
+    } else {
+      const cx = sx + TILE_SIZE / 2;
+      const cy = sy + TILE_SIZE / 2;
+      ctx.fillStyle = '#f2c078';
+      ctx.beginPath();
+      ctx.arc(cx, cy, 10, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#7a4a1a';
+      ctx.lineWidth = 2;
+      ctx.stroke();
 
-    ctx.fillStyle = '#2255cc';
-    const dir = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] }[player.facing];
-    ctx.beginPath();
-    ctx.arc(cx + dir[0] * 6, cy + dir[1] * 6, 3, 0, Math.PI * 2);
-    ctx.fill();
+      ctx.fillStyle = '#2255cc';
+      const dir = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] }[player.facing];
+      ctx.beginPath();
+      ctx.arc(cx + dir[0] * 6, cy + dir[1] * 6, 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
 
     const barW = TILE_SIZE - 4;
     const pct = Math.max(0, player.currentHp / player.maxHp());

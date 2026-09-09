@@ -1,0 +1,76 @@
+// Loads user-supplied pixel art from /public/sprites/** at runtime, with
+// silent per-file fallback: anything not yet drawn just keeps using the
+// existing procedural glyph/shape rendering in Renderer.ts. Drop a
+// correctly-named PNG in the matching folder and it's picked up on the
+// next load — no code changes needed. See public/sprites/README.md.
+
+import type { ResourceType, StructureType, TileType } from '../world/types';
+import { MONSTERS } from '../data/monsters';
+
+export type SpriteCategory = 'tiles' | 'resources' | 'structures' | 'monsters' | 'player';
+export type Facing = 'up' | 'down' | 'left' | 'right';
+
+type LoadState = 'loading' | 'loaded' | 'missing';
+
+interface Entry {
+  img: HTMLImageElement;
+  state: LoadState;
+}
+
+const cache = new Map<string, Entry>();
+
+function key(category: SpriteCategory, id: string): string {
+  return `${category}/${id}`;
+}
+
+function load(category: SpriteCategory, id: string) {
+  const k = key(category, id);
+  if (cache.has(k)) return;
+  const img = new Image();
+  const entry: Entry = { img, state: 'loading' };
+  cache.set(k, entry);
+  img.onload = () => { entry.state = 'loaded'; };
+  img.onerror = () => { entry.state = 'missing'; };
+  img.src = `/sprites/${category}/${id}.png`;
+}
+
+/** Returns a loaded image ready to draw, or null if missing/not loaded yet (fall back to procedural rendering). */
+export function getSprite(category: SpriteCategory, id: string): HTMLImageElement | null {
+  const entry = cache.get(key(category, id));
+  return entry && entry.state === 'loaded' ? entry.img : null;
+}
+
+export function getPlayerSprite(facing: Facing): HTMLImageElement | null {
+  return getSprite('player', facing) ?? getSprite('player', 'down');
+}
+
+const TILE_TYPES: TileType[] = [
+  'deep_water', 'water', 'beach', 'grass', 'plains', 'forest', 'taiga',
+  'mountain', 'snow', 'desert', 'swamp', 'path', 'rubble',
+];
+const RESOURCE_TYPES: ResourceType[] = [
+  'tree_normal', 'tree_oak', 'tree_willow', 'tree_maple', 'tree_yew', 'tree_magic',
+  'rock_copper', 'rock_tin', 'rock_iron', 'rock_coal', 'rock_mithril', 'rock_adamant', 'rock_rune',
+  'rock_gold', 'rock_silver', 'rock_gem',
+  'fishing_shrimp', 'fishing_lobster', 'fishing_swordfish',
+  'farm_patch', 'herb_patch', 'flax_plant',
+];
+const STRUCTURE_TYPES: StructureType[] = [
+  'bank_chest', 'furnace', 'anvil', 'cooking_range', 'campfire', 'workbench',
+  'fence', 'wall', 'bed', 'storage_chest', 'tannery', 'loom', 'general_store',
+];
+const PLAYER_FACINGS: Facing[] = ['down', 'up', 'left', 'right'];
+
+/** Kicks off loading every known sprite once at startup. Missing files fail silently per-file. */
+export function preloadAllSprites() {
+  for (const t of TILE_TYPES) {
+    load('tiles', t);
+    // Optional extra ground-texture variants (tile_1.png, tile_2.png) for visual variety.
+    load('tiles', `${t}_1`);
+    load('tiles', `${t}_2`);
+  }
+  for (const r of RESOURCE_TYPES) load('resources', r);
+  for (const s of STRUCTURE_TYPES) load('structures', s);
+  for (const m of MONSTERS) load('monsters', m.id);
+  for (const f of PLAYER_FACINGS) load('player', f);
+}

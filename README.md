@@ -69,6 +69,18 @@ serve the folder with any static file server).
   planted crops, buildings) are stored, so saves stay small in an infinite
   world.
 
+## Adding your own pixel art
+
+Every tile, tree, ore, structure, monster and the player currently render
+as colored shapes/glyphs — that's a deliberate fallback, not a placeholder
+you need to strip out. Drop a correctly-named PNG into `public/sprites/`
+and it's picked up automatically on the next load, no code changes needed;
+anything you haven't drawn yet just keeps using the procedural look. Start
+at [`public/sprites/README.md`](public/sprites/README.md) for the exact
+file names, sizing rules and how tall art (like trees) is anchored to its
+tile — each subfolder (`tiles/`, `resources/`, `structures/`, `monsters/`,
+`player/`) has its own README listing precisely what it's looking for.
+
 ## Architecture
 
 Plain TypeScript + Vite, rendered with the 2D Canvas API (no game engine or
@@ -76,7 +88,7 @@ GPU framework dependency) with a DOM-based UI layer on top.
 
 ```
 src/
-  core/       game loop, camera/renderer, RNG, noise, tick-based engine
+  core/       game loop, camera/renderer, sprite loading, RNG, noise, tick-based engine
   world/      chunked procedural world, tile/resource/structure state
   data/       item, monster, recipe, skill and biome definitions (data-driven)
   entities/   Player and Monster models
