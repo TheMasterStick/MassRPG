@@ -7,7 +7,7 @@ import { addXp } from './Skills';
 import * as CM from './CombatMath';
 import { getItem, ITEMS } from '../data/items';
 import { bus, log } from '../core/EventBus';
-import { MONSTER_AGGRO_RANGE, MONSTER_LEASH_RANGE } from '../core/constants';
+import { MONSTER_AGGRO_RANGE, MONSTER_LEASH_RANGE, MONSTER_AGGRO_COOLDOWN_TICKS } from '../core/constants';
 
 function findBestArrow(player: Player): string | null {
   let best: string | null = null;
@@ -124,17 +124,23 @@ function grantLoot(player: Player, monster: Monster) {
 }
 
 export function combatTick(world: World, player: Player) {
-  // Aggro + wander for monsters
+  // Aggro + leash + wander for monsters
   for (const monster of world.monsters) {
     if (!monster.isAlive()) continue;
-    if (monster.targetId !== 'player' && monster.def().aggressive && player.isAlive()) {
+
+    if (
+      monster.targetId !== 'player' && monster.def().aggressive && player.isAlive() &&
+      world.tick >= monster.aggroCooldownUntilTick
+    ) {
       const dist = Math.max(Math.abs(monster.x - player.x), Math.abs(monster.y - player.y));
       if (dist <= MONSTER_AGGRO_RANGE) monster.targetId = 'player';
     }
+
     if (monster.targetId === 'player') {
       const leash = Math.max(Math.abs(monster.x - monster.spawnX), Math.abs(monster.y - monster.spawnY));
       if (!player.isAlive() || leash > MONSTER_LEASH_RANGE) {
         monster.targetId = null;
+        monster.aggroCooldownUntilTick = world.tick + MONSTER_AGGRO_COOLDOWN_TICKS;
         continue;
       }
       if (!isAdjacent({ x: monster.x, y: monster.y }, { x: player.x, y: player.y }) && monster.lastMoveTick !== world.tick) {
@@ -146,6 +152,13 @@ export function combatTick(world: World, player: Player) {
           resolveMonsterHit(player, monster);
           monster.lastAttackTick = world.tick;
         }
+      }
+    } else if (monster.lastMoveTick !== world.tick && (monster.x !== monster.spawnX || monster.y !== monster.spawnY)) {
+      // Not in combat and away from home: amble back, one step every other tick.
+      if (world.tick % 2 === 0) {
+        const next = stepToward(monster.x, monster.y, monster.spawnX, monster.spawnY, world);
+        monster.x = next.x; monster.y = next.y;
+        monster.lastMoveTick = world.tick;
       }
     }
   }

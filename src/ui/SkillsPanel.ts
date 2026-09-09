@@ -7,12 +7,8 @@ import { bus } from '../core/EventBus';
 export function buildSkillsPanel(root: HTMLElement, game: Game) {
   const { player } = game;
   const list = el('div', { attrs: { id: 'skills-list' } });
-  const panel = el('div', { className: 'panel hidden', attrs: { id: 'panel-skills' } }, [
-    el('h2', {}, ['Skills', el('span', { className: 'close-x', text: '✕', attrs: { id: 'skills-close' } })]),
-    list,
-  ]);
+  const panel = el('div', { className: 'tab-panel hidden', attrs: { id: 'panel-skills' } }, [list]);
   root.append(panel);
-  panel.querySelector('#skills-close')!.addEventListener('click', () => panel.classList.add('hidden'));
 
   function render() {
     clear(list);

@@ -15,6 +15,7 @@ export class Monster {
   targetId: string | null = null; // 'player' when engaged
   lastAttackTick = 0;
   lastMoveTick = 0;
+  aggroCooldownUntilTick = 0; // won't re-aggro before this tick, after giving up a chase
 
   constructor(defId: string, x: number, y: number, spawnLocalKey: string) {
     const def = getMonster(defId);

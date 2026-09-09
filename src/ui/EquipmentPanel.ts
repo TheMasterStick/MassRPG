@@ -13,12 +13,8 @@ const SLOT_LABEL: Record<EquipSlot, string> = {
 export function buildEquipmentPanel(root: HTMLElement, game: Game) {
   const { player } = game;
   const list = el('div', { attrs: { id: 'equip-list' } });
-  const panel = el('div', { className: 'panel hidden', attrs: { id: 'panel-equipment' } }, [
-    el('h2', {}, ['Equipment', el('span', { className: 'close-x', text: '✕', attrs: { id: 'equip-close' } })]),
-    list,
-  ]);
+  const panel = el('div', { className: 'tab-panel hidden', attrs: { id: 'panel-equipment' } }, [list]);
   root.append(panel);
-  panel.querySelector('#equip-close')!.addEventListener('click', () => panel.classList.add('hidden'));
 
   function render() {
     clear(list);

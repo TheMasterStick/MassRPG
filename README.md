@@ -23,14 +23,23 @@ serve the folder with any static file server).
 
 ## Controls
 
+The right-hand sidebar is a classic fixed RPG interface: a minimap (click
+it to walk toward that spot — it always stays centred on you and shows
+nearby towns/ruins), and a tab bar for Combat style, Skills, Quests
+(placeholder for now), Inventory, Equipment and Construction, plus Save.
+
 - **Click** a tile to walk there, click a resource/monster/structure to
-  interact with it (the game auto-walks you into range first).
-- **WASD / arrow keys** to walk directly; hold **Shift** to run.
-- **I** — Inventory, **K** — Skills, **B** — Construction/build menu.
-  Equipment and Save are in the top-right bar.
-- Pick a **combat style** (Melee / Ranged / Magic) in the top-right before
-  fighting — Ranged needs a bow and arrows equipped/carried, Magic works
-  from level 1 with no equipment needed.
+  interact with it (the game auto-walks you into range first). Click
+  anywhere on the **minimap** to walk there directly.
+- **WASD / arrow keys** to walk directly; hold **Shift** to run. Manual
+  movement always takes priority — pressing a direction key breaks off
+  combat/gathering the same as clicking away does, so you can always
+  choose to run.
+- **I** — Inventory, **K** — Skills, **B** — Construction, or just click
+  the matching sidebar tab.
+- Pick a **combat style** (Melee / Ranged / Magic) on the Combat tab
+  before fighting — Ranged needs a bow and arrows equipped/carried, Magic
+  works from level 1 with no equipment needed.
 - Click an inventory item for contextual actions (Equip, Eat, Drink, Light
   fire, Clean herb, Drop, Examine).
 
@@ -73,9 +82,13 @@ than the nearby area in memory).
   and craft leather armor; cut gems and set jewellery; clean and brew
   herblore potions.
 - **Combat**: OSRS-style accuracy/max-hit formulas for melee, ranged and
-  magic, monster aggro/leash/wander AI, loot tables, and 20 monster types
-  spanning level 1 to 95+. Tougher monsters only start appearing the
-  further you get from the nearest town.
+  magic, loot tables, and 20 monster types spanning level 1 to 95+.
+  Chickens, rats and cows are neutral (won't attack unless attacked);
+  everything else aggroes within a short range, gives up if you get more
+  than a few tiles from where it spawned, ambles back home, and won't
+  re-aggro for several seconds after giving up a chase — so you can
+  always run rather than being followed indefinitely. Tougher monsters
+  only start appearing the further you get from the nearest town.
 - **Construction**: place furnaces, anvils, cooking ranges, tanneries,
   looms, workbenches, storage chests, beds (sets your respawn point),
   fences and walls anywhere you've cleared space, using planks, stone and
@@ -113,9 +126,10 @@ src/
   entities/   Player and Monster models
   systems/    gathering, production, combat, construction, inventory,
               banking, shop, pathfinding, save/load — one file per concern
-  ui/         DOM panels (inventory, skills, equipment, build, station,
-              bank, shop, context menus) wired to game state via a small
-              event bus
+  ui/         Sidebar (minimap, tabs) and its embedded panels (combat
+              style, skills, inventory, equipment, build), plus floating
+              popups (station, bank, shop, context menus) - wired to game
+              state via a small event bus
 ```
 
 The simulation runs on fixed 600ms ticks (matching RuneScape's game tick)
@@ -141,3 +155,9 @@ swim mechanic yet to reach it (it renders correctly, it's just not
 reachable on foot); and the named-region shapes (mountains, forests, the
 lake, the desert) are this build's own interpretation of the reference
 maps it was designed from, not a pixel-exact reproduction.
+
+On the UI: the Quest tab is a placeholder (there's no quest system yet);
+WASD movement steps one tile at a time in whatever direction you're
+holding and won't slide around a single-tile obstacle like a tree, so if
+you get stuck fleeing in a straight line, angle around it or click
+elsewhere/on the minimap instead (that uses real pathfinding).

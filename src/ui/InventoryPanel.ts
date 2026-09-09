@@ -10,12 +10,8 @@ import { showContextPopup } from './ContextPopup';
 export function buildInventoryPanel(root: HTMLElement, game: Game) {
   const { player, world } = game;
   const grid = el('div', { attrs: { id: 'inventory-grid' } });
-  const panel = el('div', { className: 'panel hidden', attrs: { id: 'panel-inventory' } }, [
-    el('h2', {}, ['Inventory', el('span', { className: 'close-x', text: '✕', attrs: { id: 'inv-close' } })]),
-    grid,
-  ]);
+  const panel = el('div', { className: 'tab-panel hidden', attrs: { id: 'panel-inventory' } }, [grid]);
   root.append(panel);
-  panel.querySelector('#inv-close')!.addEventListener('click', () => panel.classList.add('hidden'));
 
   function actionsFor(slotIndex: number) {
     const slot = player.inventory[slotIndex];

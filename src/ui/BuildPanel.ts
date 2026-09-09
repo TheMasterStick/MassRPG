@@ -8,13 +8,8 @@ export function buildBuildPanel(root: HTMLElement, game: Game) {
   const { player } = game;
   const list = el('div', { attrs: { id: 'build-list' } });
   const hint = el('p', { className: 'tooltip-desc', text: 'Pick a structure, then click a nearby tile to place it.' });
-  const panel = el('div', { className: 'panel hidden', attrs: { id: 'panel-build' } }, [
-    el('h2', {}, ['Construction', el('span', { className: 'close-x', text: '✕', attrs: { id: 'build-close' } })]),
-    hint,
-    list,
-  ]);
+  const panel = el('div', { className: 'tab-panel hidden', attrs: { id: 'panel-build' } }, [hint, list]);
   root.append(panel);
-  panel.querySelector('#build-close')!.addEventListener('click', () => { panel.classList.add('hidden'); game.buildMode = null; });
 
   function render() {
     clear(list);

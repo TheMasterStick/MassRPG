@@ -30,6 +30,7 @@ export class Game {
   private keys = new Set<string>();
   private rafHandle = 0;
   paused = false;
+  onFrame: ((nowMs: number) => void) | null = null;
 
   constructor(world: World, player: Player, canvas: HTMLCanvasElement) {
     this.world = world;
@@ -53,6 +54,7 @@ export class Game {
       this.lastFrame = t;
       if (!this.paused) this.update(dt);
       this.renderer.render(this.world, this.player, this.world.monsters, this.hoverTile);
+      this.onFrame?.(t);
       this.rafHandle = requestAnimationFrame(loop);
     };
     this.rafHandle = requestAnimationFrame(loop);
@@ -67,6 +69,7 @@ export class Game {
   }
 
   private update(dt: number) {
+    this.handleKeyboardMovement();
     this.updateMovement(dt);
     this.tickAccumulator += dt * 1000;
     let iterations = 0;
@@ -110,7 +113,6 @@ export class Game {
 
   private tick() {
     this.world.tick++;
-    this.handleKeyboardMovement();
 
     const roundedPos = { x: Math.round(this.player.x), y: Math.round(this.player.y) };
     const active = this.world.activeChunksAround(roundedPos, SIM_RADIUS_CHUNKS);
@@ -130,7 +132,8 @@ export class Game {
   }
 
   private handleKeyboardMovement() {
-    if (this.player.action || this.player.combatTargetId) return;
+    if (this.player.action) return;
+    if (this.player.path.length > 0) return; // let the current queued step finish; refills next frame once empty
     let dx = 0, dy = 0;
     if (this.keys.has('w') || this.keys.has('arrowup')) dy -= 1;
     if (this.keys.has('s') || this.keys.has('arrowdown')) dy += 1;
@@ -140,6 +143,8 @@ export class Game {
     const cur = { x: Math.round(this.player.x), y: Math.round(this.player.y) };
     const next = { x: cur.x + dx, y: cur.y + dy };
     this.pendingInteraction = null;
+    // Manually steering (even mid-fight) disengages auto-pursuit, same as clicking away - you can always run.
+    this.player.combatTargetId = null;
     if (this.world.isWalkable(next.x, next.y)) {
       this.player.path = [next];
     } else if (dx !== 0 && this.world.isWalkable(cur.x + dx, cur.y)) {
