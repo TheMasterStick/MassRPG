@@ -22,6 +22,7 @@ function findBestArrow(player: Player): string | null {
 }
 
 export function playerAttack(player: Player, monster: Monster) {
+  if (player.combatTargetId === monster.instanceId) return; // already fighting it - clicking again is a no-op
   player.combatTargetId = monster.instanceId;
   monster.targetId = 'player';
   log(`You attack the ${monster.def().name}.`, 'combat');
