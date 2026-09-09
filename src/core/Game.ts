@@ -10,6 +10,7 @@ import { bus, log } from '../core/EventBus';
 import type { StructureType } from '../world/types';
 import { startAutosave, saveGame } from '../systems/Save';
 import { placeStructure } from '../systems/Construction';
+import { facingFromDelta } from '../systems/Facing';
 
 export type PendingInteraction =
   | { type: 'gather'; x: number; y: number }
@@ -107,8 +108,7 @@ export class Game {
   }
 
   private updateFacing(dx: number, dy: number) {
-    if (Math.abs(dx) > Math.abs(dy)) this.player.facing = dx > 0 ? 'right' : 'left';
-    else if (dy !== 0) this.player.facing = dy > 0 ? 'down' : 'up';
+    this.player.facing = facingFromDelta(dx, dy, this.player.facing);
   }
 
   private tick() {

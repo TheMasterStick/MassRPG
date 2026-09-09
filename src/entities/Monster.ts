@@ -16,6 +16,7 @@ export class Monster {
   lastAttackTick = 0;
   lastMoveTick = 0;
   aggroCooldownUntilTick = 0; // won't re-aggro before this tick, after giving up a chase
+  facing: 'left' | 'right' = 'right'; // monster art is drawn facing right and mirrored to face left
 
   constructor(defId: string, x: number, y: number, spawnLocalKey: string) {
     const def = getMonster(defId);

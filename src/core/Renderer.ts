@@ -171,11 +171,19 @@ export class Renderer {
     this.drawFloatingTexts(camX, camY);
   }
 
-  /** Draws an image anchored to the bottom-center of a tile, preserving its aspect ratio at a fixed tile-width. Lets tall art (trees, big monsters) rise above their own tile without distortion. */
-  private drawSpriteOnTile(img: HTMLImageElement, sx: number, sy: number, widthMul = 1) {
+  /** Draws an image anchored to the bottom-center of a tile, preserving its aspect ratio at a fixed tile-width. Lets tall art (trees, big monsters) rise above their own tile without distortion. `flip` mirrors art that's only drawn facing right (monsters) so it can face left too. */
+  private drawSpriteOnTile(img: HTMLImageElement, sx: number, sy: number, widthMul = 1, flip = false) {
     const dw = TILE_SIZE * widthMul;
     const dh = dw * (img.naturalHeight / img.naturalWidth);
-    this.ctx.drawImage(img, sx + TILE_SIZE / 2 - dw / 2, sy + TILE_SIZE - dh, dw, dh);
+    const dx = sx + TILE_SIZE / 2 - dw / 2;
+    const dy = sy + TILE_SIZE - dh;
+    if (!flip) { this.ctx.drawImage(img, dx, dy, dw, dh); return; }
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.translate(dx + dw, dy);
+    ctx.scale(-1, 1);
+    ctx.drawImage(img, 0, 0, dw, dh);
+    ctx.restore();
   }
 
   private getTilePattern(img: HTMLImageElement): CanvasPattern {
@@ -212,11 +220,13 @@ export class Renderer {
   private drawResource(sx: number, sy: number, res: ResourceType, tx: number, ty: number, world: World) {
     const ctx = this.ctx;
     if (res === 'farm_patch' || res === 'herb_patch') {
-      const sprite = getSprite('resources', res);
+      const crop = world.getCropState(tx, ty);
+      const stageId = crop ? (crop.ready ? 'bloom' : 'sown') : 'empty';
+      const sprite = (res === 'farm_patch' && getSprite('resources', `farm_patch_${stageId}`)) || getSprite('resources', res);
       if (sprite) ctx.drawImage(sprite, sx, sy, TILE_SIZE, TILE_SIZE);
       else { ctx.fillStyle = '#4a3323'; ctx.fillRect(sx + 3, sy + 3, TILE_SIZE - 6, TILE_SIZE - 6); }
-      const crop = world.getCropState(tx, ty);
-      if (crop) {
+      // Only needed as an overlay when no dedicated per-stage art exists for this patch type (e.g. herb_patch).
+      if (crop && !(res === 'farm_patch' && getSprite('resources', `farm_patch_${stageId}`))) {
         ctx.fillStyle = crop.ready ? '#5fbf4a' : '#3f7f3a';
         const size = 4 + crop.progress * 10;
         ctx.beginPath();
@@ -256,7 +266,7 @@ export class Renderer {
     const ctx = this.ctx;
     const def = m.def();
     const sprite = getSprite('monsters', m.defId);
-    if (sprite) this.drawSpriteOnTile(sprite, sx, sy, def.size);
+    if (sprite) this.drawSpriteOnTile(sprite, sx, sy, def.size, m.facing === 'left');
     else {
       const r = 8 * def.size;
       ctx.fillStyle = def.color;

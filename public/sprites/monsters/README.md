@@ -4,6 +4,11 @@ One image per monster type — not per instance, so a single `goblin.png`
 covers every goblin in the world. Any resolution, transparent background,
 bottom-anchored to its tile — see the [top-level rules](../README.md).
 
+Draw every monster **facing right**. There's no separate left-facing frame
+— the game mirrors the same image horizontally whenever a monster needs to
+face left (fleeing, wandering, or fighting a player standing to its west),
+so a single drawing covers both directions automatically.
+
 Draw all of these at the same canonical proportions (frame each the same
 way in its own canvas, whatever size you're working at). The game
 automatically draws bigger monsters wider — a dragon is drawn at roughly

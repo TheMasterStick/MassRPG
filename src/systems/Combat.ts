@@ -8,6 +8,13 @@ import * as CM from './CombatMath';
 import { getItem, ITEMS } from '../data/items';
 import { bus, log } from '../core/EventBus';
 import { MONSTER_AGGRO_RANGE, MONSTER_LEASH_RANGE, MONSTER_AGGRO_COOLDOWN_TICKS } from '../core/constants';
+import { facingFromDelta } from './Facing';
+
+/** Monster art only has a left/right orientation - only re-mirror it when there's a clear horizontal side to face. */
+function faceHorizontally(monster: Monster, dx: number) {
+  if (dx > 0) monster.facing = 'right';
+  else if (dx < 0) monster.facing = 'left';
+}
 
 function findBestArrow(player: Player): string | null {
   let best: string | null = null;
@@ -144,6 +151,7 @@ export function combatTick(world: World, player: Player) {
         monster.aggroCooldownUntilTick = world.tick + MONSTER_AGGRO_COOLDOWN_TICKS;
         continue;
       }
+      faceHorizontally(monster, player.x - monster.x);
       if (!isAdjacent({ x: monster.x, y: monster.y }, { x: player.x, y: player.y }) && monster.lastMoveTick !== world.tick) {
         const next = stepToward(monster.x, monster.y, Math.round(player.x), Math.round(player.y), world);
         monster.x = next.x; monster.y = next.y;
@@ -158,6 +166,7 @@ export function combatTick(world: World, player: Player) {
       // Not in combat and away from home: amble back, one step every other tick.
       if (world.tick % 2 === 0) {
         const next = stepToward(monster.x, monster.y, monster.spawnX, monster.spawnY, world);
+        faceHorizontally(monster, next.x - monster.x);
         monster.x = next.x; monster.y = next.y;
         monster.lastMoveTick = world.tick;
       }
@@ -173,6 +182,10 @@ export function combatTick(world: World, player: Player) {
       const ranged = player.combatStyle !== 'melee';
       const adjacent = isAdjacent({ x: player.x, y: player.y }, { x: monster.x, y: monster.y });
       const inRange = ranged ? Math.max(Math.abs(player.x - monster.x), Math.abs(player.y - monster.y)) <= 6 : adjacent;
+      if (inRange && player.path.length === 0) {
+        // Standing still and fighting: keep facing the target rather than whatever direction we last walked.
+        player.facing = facingFromDelta(monster.x - player.x, monster.y - player.y, player.facing);
+      }
       if (!inRange && player.path.length === 0) {
         const next = stepToward(Math.round(player.x), Math.round(player.y), monster.x, monster.y, world);
         player.path = [next];

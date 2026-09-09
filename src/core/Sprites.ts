@@ -75,6 +75,8 @@ export function preloadAllSprites() {
     load('tiles', `${t}_2`);
   }
   for (const r of RESOURCE_TYPES) load('resources', r);
+  // Growth-stage art for the farm patch (bare soil / growing / ready to harvest).
+  for (const stage of ['empty', 'sown', 'bloom']) load('resources', `farm_patch_${stage}`);
   for (const s of STRUCTURE_TYPES) load('structures', s);
   for (const m of MONSTERS) load('monsters', m.id);
   for (const f of PLAYER_FACINGS) {
