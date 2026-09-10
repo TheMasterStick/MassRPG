@@ -1,106 +1,141 @@
-# Claude handoff — authored progression and resource placement
+# Claude handoff — Twin Lands world expansion
 
-This note records user-directed corrections made after commit `901c258`.
-Please preserve these rules in future world-generation work unless the user
-explicitly changes them.
+This is the current user-directed world/settlement direction. Preserve these
+rules unless the user explicitly changes them.
 
-## Why the ore/town correction was needed
+## Current macro world
 
-The player tested `901c258` in Codespaces and still saw Copper/Tin inside the
-Capital walls and apparent ore carpeting in the desert. Inspection found a
-real ordering/location bug: `WorldGen.resourceAt()` checked
-`oreVeinResourceAt()` before checking whether the tile was inside a town, and
-the Capital Deposit itself was centered only `(+15,+6)` from the Capital even
-though the Capital safe/wall radius is 26. That made authored ore nodes able to
-bypass town safety by design.
+The old 15,000 x 15,000 Aeldor prototype has now been expanded to a
+**180,000 x 180,000** tile world. The new macro geography is based on the
+user's merged **Twin Lands** reference: Westerland and Estland are now one huge
+connected landmass rather than two continents separated by a sea strait.
 
-A second town-safety bug was also present: the perimeter walls are square, but
-`isVillage()` used circular `Math.hypot()` distance. That left four corner
-wedges *inside* each wall eligible for wilderness resource/monster spawns. The
-safe-zone geometry now matches the square wall footprint.
+`src/world/AeldorData.ts` keeps its old filename for compatibility, but now
+contains Twin Lands data. `AELDOR_SEED` is intentionally retained as an alias
+while new code should prefer `TWIN_LANDS_SEED`.
 
-The broader implementation also approximated the hand-drawn red level regions
-with one smooth `distanceFromCapital()` curve. The user explicitly wants the
-red overlapping regions themselves to be the normal progression bands.
+The intended continental character remains:
 
-## World-generation rules now intended
+- **Westerland / west:** wetter, greener, lake/river rich, extensive forests,
+  strong mountain barriers and broken coasts.
+- **Estland / east:** broader, drier, more open, major desert/steppe country,
+  long mountain systems and river lifelines.
+- The main capital is in central Westerland beside the large river/lake system.
 
-1. **Biome = terrain/appearance, not ore tier.** Mountain/desert/snow tiles do
-   not imply metal rocks. Generic biome resource tables must never reintroduce
-   Copper/Tin/Iron/Coal/Silver/Gold/Mithril/Adamantite/Runite/Dragonite.
-2. **Metal ore = authored mining sites only.** `ORE_VEINS` is the authoritative
-   source. Each site has roughly 3–5 nodes of each listed ore type.
-3. **Town and road safety wins over resource placement.** `resourceAt()` checks
-   `isVillage()` / roads before consulting authored ore veins. A mining site
-   must also be physically outside the settlement safe/wall footprint.
-4. **Town safety uses the same geometry as the walls.** Current town/capital
-   perimeter walls are square, so the protected area must also cover the whole
-   square interior, including the corners.
-5. **Depletion remains persistent and dimmed.** Do not make mined rocks vanish;
-   keep the existing grey/dim cooldown rendering from `901c258`.
-6. **Red ellipses = authored progression zones, not visible terrain.**
-   `PROGRESSION_ZONES` approximates the user's drawn 1–10, 10–19, 10–25,
-   20–35, 25–40, 35–50, 40–50 and 60–120 overlapping gameplay areas. Normal
-   monster selection uses those ranges rather than `distanceFromCapital()`.
-7. **Overlaps are deliberate.** A position inside more than one progression
-   zone can draw monsters valid for either zone. Do not turn them into hard
-   non-overlapping rings.
-8. **Out-of-band monsters should be authored exceptions later.** The user wants
-   occasional specific Moss Giant/Dragon/Lesser Demon/etc. locations despite a
-   local level band. Add those as explicit world data when specified/approved.
-9. **Trees/gatherables should respect progression and occur in pockets.** Tree
-   tiers are level-gated by the local progression range and rarer tree types use
-   grove noise rather than uniform salt-and-pepper placement.
-10. **Gemstones are deferred.** Random `rock_gem` biome spawning is disabled
-    for now. The user said gemstones and their full system will come later.
+The current coastline/biome polygons are a first implementation pass based on
+the merged visual reference. Refine them from the user's map rather than
+reverting to giant ellipses/circles.
 
-## Terrain fidelity correction (September 10)
+## Settlement design — important
 
-The player then tested the corrected ore build and confirmed the scattered ores
-were gone and the Capital was square, but reported that the world itself still
-looked far too circular and that the beaches were enormous. That was caused by
-visible terrain regions being represented as ellipses and by the old
-`continentValue()` beach threshold creating a coastline band hundreds of tiles
-wide.
+The user explicitly does **not** want the old "three houses = capital" model.
+Settlement scale now matters and is encoded in `Town.kind` / `Town.radius`:
 
-The original illustrated map **`Aeldor: Mahdollisuuksien maa.png` is now the
-visual terrain source of truth**. `AeldorData.ts` contains an irregular traced
-`CONTINENT_OUTLINE` and irregular polygon outlines for Embermere Lake,
-Frostpeak, Blackthorn, Stonehollow, Elderwood, Oakridge, Whispering Woods,
-Darkfen and the Gray Wastes. `WorldGen.ts` uses polygon membership plus only a
-small coherent edge warp. Do not replace these visible regions with circles or
-large ellipses again just because ellipses are simpler.
+- farmstead: ~28 tiles across, ~3 buildings
+- hamlet: ~50 tiles across, ~8 buildings
+- village: ~90 tiles across, ~18 buildings
+- town: ~170 tiles across, ~42 buildings
+- city: ~300 tiles across, ~78 buildings
+- capital: ~480 tiles across, ~130 buildings
 
-Beaches are now intentionally **very narrow and intermittent**: the normal
-outer-coast beach width is only six world tiles, and most shoreline is allowed
-to remain grass/cliff-like as in the painted map. Do not recreate a broad
-continuous sand belt.
+These are gameplay-compressed settlements, not literal real-world medieval
+population simulations. The design language discussed with the user is:
 
-The Gray Wastes also exposed a monster-roster gap: its normal 20–35 progression
-range had no desert-biome monster in that exact band, so strict filtering made
-the desert empty. Normal spawn selection now prefers the exact range but, when
-a biome has no candidate there, falls back to the strongest biome monster at or
-below the local maximum. This is a roster-gap fallback, not permission to ignore
-progression zones generally.
+**RuneScape function density + World of Warcraft district readability.**
 
-Ore nodes are now drawn as **black dots on the local minimap**, including while
-depleted, so authored mining sites become discoverable when the player gets
-near them. When the coastline trace moved some old approximate vein centers
-into water, those centers were nudged to nearby reachable land in the same
-part of the world. Do not silently put mining nodes back in ocean tiles.
+That means:
 
-## Cities and settlements
+1. Important services live in actual buildings, not loose utility objects on
+   grass. Banks, general stores, smithies, inns, workshops, etc. should be
+   recognizable destinations.
+2. Cities need ordinary houses, workshops, warehouses and non-critical
+   buildings around their services so they feel inhabited.
+3. Large settlements need multiple streets / blocks / districts instead of one
+   crossroad with everything in the middle.
+4. The capital and cities may have duplicate/secondary service nodes so the
+   entire city is not functionally one tiny hub inside a giant wall.
+5. Settlement shapes can become more organic later, but the current first-pass
+   layout intentionally establishes proper *scale and density* before detailed
+   hand-authoring.
+6. Do not shrink cities back down merely because a small radius is easier for
+   generation or pathfinding.
 
-Do **not** perform a broad redesign of cities yet. The user has said they want
-to expand on cities themselves next. Preserve the current square settlement
-safety/wall behavior and wait for the city-layout discussion rather than
-inventing a new settlement system during terrain work.
+`src/world/Buildings.ts` now defines `house_small_01`, `house_small_02`,
+`house_small_03`, `smithy_01`, `inn_01`, bank/store/workshop/tannery/weaver/
+warehouse/chapel prefabs and a deterministic settlement-layout generator.
+These are still reusable prototypes; future settlement-specific landmarks and
+unique city plans should layer on top of them rather than replacing the scale
+system with tiny identical hubs.
 
-## Debugging note
+The enlarged map currently contains the original settlement names plus new
+provisional settlements corresponding to the user's rough red-dot placement
+map. Names/positions can be revised during the upcoming map-layout pass.
 
-With the current code, `WorldGen.resourceAt()` has a defense-in-depth metal-ore
-block for generic biome rules. If a future test shows Mithril (or another metal)
-carpeted across an entire biome, do not tune the chance. First verify the
-running client is actually on the newest commit / Vite bundle, then inspect the
-runtime resource ID and sprite mapping. Generic biome spawning should be
-structurally incapable of returning a metal ore.
+## Progression direction
+
+The character maximum level remains **120**, but world danger/progression zones
+may extend from **1 through 300**. The user expects late-game equipment, food,
+potions/buffs and other preparation to allow a max-level character to challenge
+content well above 120.
+
+The current 1-300 zones in `AeldorData.ts` are explicitly a **first-pass macro
+layout**, not final balance. The user wants the final ranges to follow geography,
+settlements, travel corridors and POIs rather than perfect concentric circles.
+Two places equally far from the capital may have very different danger levels.
+
+Rare authored exceptions remain desirable: a dragon, moss giant grove, lesser
+demon, dangerous ruin, boss site, etc. may sit above the normal level range of
+its surrounding region.
+
+## Ore / gathering rules — preserve these
+
+1. **Biome does not determine metal ore.** Mountain/desert/snow terrain must not
+   create random carpets of metal rocks.
+2. **Metal ore comes from authored mining sites only.** `ORE_VEINS` is the
+   authoritative normal source of Copper, Tin, Iron, Coal, Silver, Gold,
+   Mithril, Adamantite, Runite and Dragonite.
+3. Each listed ore at a site has roughly **3-5 persistent nodes**.
+4. Depleted rocks stay visible but dim/grey while waiting to respawn.
+5. Authored mining sites are **public information**. The local minimap shows
+   individual rocks as black dots and the world map shows a mining-site icon.
+6. Town safety wins over resource placement. Never put authored ore inside a
+   settlement footprint.
+7. Trees/gatherables should occur in progression-appropriate pockets/groves,
+   not salt-and-pepper carpets across an entire biome.
+8. Gemstone expansion is still deferred; do not randomly re-enable gem rocks
+   until that system is deliberately introduced.
+9. Dragonite remains above Runite. Current smelting intent is **2 Dragonite Ore
+   + 2 Coal -> 1 Dragonite Bar**.
+
+## Terrain / coastline rules
+
+- Keep beaches narrow and intermittent. The old huge beach belt was a bug.
+- Visible terrain regions should use irregular polygons / organic boundaries,
+  not huge circles.
+- Rivers are real narrow water features locally and are separately overdrawn on
+  the world map so they remain visible at continental zoom.
+- Roads currently use a simple connected graph and are intentionally blocked
+  from converting ocean/lake tiles to paths. A future pass should make routes
+  terrain-aware and add explicit bridges/passes.
+
+## Save migration
+
+`WORLD_REVISION = 2` marks the 180k Twin Lands conversion. Old 15k-world saves
+retain character inventory/stats/bank, but obsolete chunk diffs are discarded
+and the character is moved to the new capital. Do not load old terrain diffs at
+their original coordinates into the new world.
+
+## Near-term work
+
+The user wants to continue refining the **map layout first**, then use that to
+settle:
+
+- final settlement hierarchy and unique city layouts
+- level-region shapes/ranges
+- mining/gathering locations
+- major roads, passes, bridges and ports
+- points of interest / dungeons / special encounters
+
+Do not rush into filling all 180k x 180k with random content. The point of the
+large world is to support authored destinations and meaningful travel, not to
+make procedural emptiness larger.
