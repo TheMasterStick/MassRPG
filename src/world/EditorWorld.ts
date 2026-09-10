@@ -1,6 +1,11 @@
 import type { ElevationLevel, ResourceType, StructureType, TileType, WorldPlane } from './types';
-
-export const EDITOR_WORLD_STORAGE_KEY = 'massrpg_editor_world_v5';
+import {
+  clearLegacyEditorLocalStorage,
+  readEditorWorldFromIndexedDb,
+  readLegacyEditorWorldRaw,
+  requestPersistentEditorStorage,
+  writeEditorWorldToIndexedDb,
+} from './EditorStorage';
 
 export type EditorMarkerType = 'settlement' | 'village' | 'town' | 'city' | 'castle' | 'mining_area';
 export type PlaneLinkKind = 'cave_entrance' | 'stairs' | 'ladder';
@@ -82,6 +87,7 @@ export interface EditorWorldData {
 }
 
 let cached: EditorWorldData | null = null;
+let initialized = false;
 
 export function cellKey(x: number, y: number): string {
   return `${x},${y}`;
@@ -126,7 +132,8 @@ function normalizeTerrainStroke(raw: unknown): TerrainStroke | null {
   if (kind !== 'square' && (!Number.isFinite(stroke.x2) || !Number.isFinite(stroke.y2))) return null;
   return {
     kind,
-    x: Number(stroke.x), y: Number(stroke.y),
+    x: Number(stroke.x),
+    y: Number(stroke.y),
     ...(kind !== 'square' ? { x2: Number(stroke.x2), y2: Number(stroke.y2) } : {}),
     size: Math.max(1, Math.round(Number(stroke.size))),
     tile: stroke.tile as TileType | null,
@@ -141,7 +148,8 @@ function normalizeElevationStroke(raw: unknown): ElevationStroke | null {
   if (kind !== 'square' && (!Number.isFinite(stroke.x2) || !Number.isFinite(stroke.y2))) return null;
   return {
     kind,
-    x: Number(stroke.x), y: Number(stroke.y),
+    x: Number(stroke.x),
+    y: Number(stroke.y),
     ...(kind !== 'square' ? { x2: Number(stroke.x2), y2: Number(stroke.y2) } : {}),
     size: Math.max(1, Math.round(Number(stroke.size))),
     mode: stroke.mode === 'delta' ? 'delta' : 'set',
@@ -162,8 +170,13 @@ function normalizePlaneData(raw: unknown): EditorPlaneData {
 function migrateParsedWorld(parsed: unknown, worldSize: number): EditorWorldData {
   if (!parsed || typeof parsed !== 'object') return blankEditorWorld(worldSize);
   const candidate = parsed as {
-    updatedAt?: unknown; cells?: unknown; terrainStrokes?: unknown; elevationStrokes?: unknown;
-    planes?: unknown; markers?: unknown; links?: unknown;
+    updatedAt?: unknown;
+    cells?: unknown;
+    terrainStrokes?: unknown;
+    elevationStrokes?: unknown;
+    planes?: unknown;
+    markers?: unknown;
+    links?: unknown;
   };
   if (!candidate.cells || typeof candidate.cells !== 'object') return blankEditorWorld(worldSize);
 
@@ -217,35 +230,67 @@ function migrateParsedWorld(parsed: unknown, worldSize: number): EditorWorldData
   };
 }
 
-export function loadEditorWorld(worldSize: number): EditorWorldData {
-  if (cached) return cached;
+/**
+ * Must run once during application bootstrap. The editor world lives in IndexedDB;
+ * old localStorage revisions are migrated once and deleted only after IndexedDB has
+ * accepted the migrated world, freeing the tiny localStorage quota permanently.
+ */
+export async function initializeEditorWorldStorage(worldSize: number): Promise<void> {
+  if (initialized) return;
+  initialized = true;
+  await requestPersistentEditorStorage();
   try {
-    const raw = localStorage.getItem(EDITOR_WORLD_STORAGE_KEY)
-      ?? localStorage.getItem('massrpg_editor_world_v4')
-      ?? localStorage.getItem('massrpg_editor_world_v3')
-      ?? localStorage.getItem('massrpg_editor_world_v2')
-      ?? localStorage.getItem('massrpg_editor_world_v1');
-    if (!raw) return (cached = blankEditorWorld(worldSize));
-    return (cached = migrateParsedWorld(JSON.parse(raw), worldSize));
+    const stored = await readEditorWorldFromIndexedDb();
+    if (stored) {
+      cached = migrateParsedWorld(stored, worldSize);
+      clearLegacyEditorLocalStorage();
+      return;
+    }
   } catch {
-    return (cached = blankEditorWorld(worldSize));
+    // Continue to the legacy/bootstrap path below. A later save will surface IDB errors.
+  }
+
+  const legacyRaw = readLegacyEditorWorldRaw();
+  if (legacyRaw) {
+    try {
+      cached = migrateParsedWorld(JSON.parse(legacyRaw), worldSize);
+    } catch {
+      cached = blankEditorWorld(worldSize);
+    }
+  } else {
+    cached = blankEditorWorld(worldSize);
+  }
+
+  try {
+    await writeEditorWorldToIndexedDb(cached);
+    clearLegacyEditorLocalStorage();
+  } catch {
+    // Keep the in-memory world. Export JSON remains available even if IDB is unavailable.
   }
 }
 
-export function saveEditorWorld(data: EditorWorldData): void {
+export function loadEditorWorld(worldSize: number): EditorWorldData {
+  if (cached) return cached;
+  // Bootstrap should initialize IndexedDB before runtime/editor construction. This
+  // fallback keeps tests and direct module consumers safe without touching storage.
+  return (cached = blankEditorWorld(worldSize));
+}
+
+export async function saveEditorWorld(data: EditorWorldData): Promise<void> {
   data.updatedAt = new Date().toISOString();
   cached = data;
-  localStorage.setItem(EDITOR_WORLD_STORAGE_KEY, JSON.stringify(data));
+  await writeEditorWorldToIndexedDb(data);
 }
 
 export function replaceEditorWorld(data: EditorWorldData): void {
   cached = data;
-  saveEditorWorld(data);
+  void saveEditorWorld(data);
 }
 
 export function clearEditorWorld(worldSize: number): EditorWorldData {
   const data = blankEditorWorld(worldSize);
-  replaceEditorWorld(data);
+  cached = data;
+  void saveEditorWorld(data);
   return data;
 }
 
