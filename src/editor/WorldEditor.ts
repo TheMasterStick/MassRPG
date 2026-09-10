@@ -1,1 +1,1 @@
-export { launchWorldEditor } from './WorldEditorV5';
+export { launchWorldEditor } from './WorldEditorV6';
