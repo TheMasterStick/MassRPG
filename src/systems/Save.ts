@@ -2,10 +2,12 @@ import { Player } from '../entities/Player';
 import { World } from '../world/World';
 import type { ChunkDiffs } from '../world/Chunk';
 import { log } from '../core/EventBus';
-import { CAPITAL, TWIN_LANDS_SEED, WORLD_REVISION } from '../world/AeldorData';
+import { TWIN_LANDS_SEED, WORLD_SIZE } from '../world/AeldorData';
 
 const SAVE_KEY = 'massrpg_save_v1';
 const AUTOSAVE_MS = 20000;
+const AUTHORED_WORLD_REVISION = 3;
+const WORLD_CENTER = Math.floor(WORLD_SIZE / 2);
 
 interface SaveData {
   version: 1 | 2;
@@ -29,7 +31,7 @@ interface SaveData {
 export function saveGame(world: World, player: Player) {
   const data: SaveData = {
     version: 2,
-    worldRevision: WORLD_REVISION,
+    worldRevision: AUTHORED_WORLD_REVISION,
     seed: world.seed,
     tick: world.tick,
     player: {
@@ -66,14 +68,10 @@ export function loadGame(): { world: World; player: Player } | null {
   if (!raw) return null;
   try {
     const data = JSON.parse(raw) as SaveData;
-    const migratedWorld = data.worldRevision !== WORLD_REVISION;
+    const migratedWorld = data.worldRevision !== AUTHORED_WORLD_REVISION;
     const world = new World(migratedWorld ? TWIN_LANDS_SEED : data.seed);
     world.tick = data.tick;
     world.bank = data.bank ?? [];
-
-    // Old 15k-world chunk coordinates do not describe the new Twin Lands.
-    // Preserve the character/bank, but deliberately discard obsolete terrain
-    // diffs rather than loading chopped trees/buildings into unrelated places.
     if (!migratedWorld) world.loadSavedDiffs(data.chunkDiffs ?? {});
 
     const player = new Player();
@@ -85,10 +83,10 @@ export function loadGame(): { world: World; player: Player } | null {
     player.equipment = data.player.equipment as Player['equipment'];
 
     if (migratedWorld) {
-      player.x = CAPITAL.x;
-      player.y = CAPITAL.y;
-      player.respawnPoint = { x: CAPITAL.x, y: CAPITAL.y };
-      log('The world has expanded into the Twin Lands. Your character was moved safely to Capital Town.', 'info');
+      player.x = WORLD_CENTER;
+      player.y = WORLD_CENTER;
+      player.respawnPoint = { x: WORLD_CENTER, y: WORLD_CENTER };
+      log('The procedural Twin Lands prototype was retired. Your character was moved to the centre of the new hand-authored world.', 'info');
     } else {
       player.x = data.player.x;
       player.y = data.player.y;
