@@ -1,10 +1,11 @@
 import { el } from './dom';
 import type { Game } from '../core/Game';
-import { TOWNS, RUINS } from '../world/AeldorData';
+import { WORLD_SIZE } from '../world/AeldorData';
+import { loadEditorWorld } from '../world/EditorWorld';
 import { TILE_MAP_COLORS } from './mapColors';
 
 const SIZE = 168;
-const SCALE = 3; // minimap pixels per world tile
+const SCALE = 3;
 
 export class MiniMap {
   private game: Game;
@@ -19,9 +20,9 @@ export class MiniMap {
     this.canvas = el('canvas', { className: 'minimap-canvas', attrs: { width: String(SIZE), height: String(SIZE) } }) as HTMLCanvasElement;
     const wrap = el('div', { className: 'minimap-wrap' }, [this.canvas]);
     container.append(wrap);
-    const ctx = this.canvas.getContext('2d');
-    if (!ctx) throw new Error('Minimap canvas 2D context unavailable');
-    this.ctx = ctx;
+    const context = this.canvas.getContext('2d');
+    if (!context) throw new Error('Minimap canvas 2D context unavailable');
+    this.ctx = context;
     this.canvas.addEventListener('click', (e) => this.handleClick(e));
   }
 
@@ -64,15 +65,11 @@ export class MiniMap {
         const sy = SIZE / 2 + ty * SCALE;
         ctx.fillStyle = TILE_MAP_COLORS[tile] ?? '#000';
         ctx.fillRect(sx - SCALE / 2, sy - SCALE / 2, SCALE, SCALE);
-
-        // Authored ore nodes are black dots on the local minimap. Depleted
-        // rocks remain marked because the node itself still exists/respawns.
         const resource = world.getResourceNode(wx, wy);
         if (resource?.startsWith('rock_')) oreDots.push({ x: sx, y: sy });
       }
     }
 
-    // Resources sit above terrain but below towns, creatures and the player.
     ctx.fillStyle = '#000000';
     for (const dot of oreDots) {
       ctx.beginPath();
@@ -81,31 +78,22 @@ export class MiniMap {
     }
 
     const worldRadius = SIZE / 2 / SCALE;
-    for (const t of TOWNS) {
-      const dx = t.x - px;
-      const dy = t.y - py;
+    for (const marker of loadEditorWorld(WORLD_SIZE).markers) {
+      const dx = marker.x - px;
+      const dy = marker.y - py;
       if (Math.abs(dx) > worldRadius || Math.abs(dy) > worldRadius) continue;
       const sx = SIZE / 2 + dx * SCALE;
       const sy = SIZE / 2 + dy * SCALE;
-      ctx.fillStyle = t.capital ? '#ffd700' : '#ffffff';
+      ctx.fillStyle = marker.type === 'mining_area' ? '#ff8a32'
+        : marker.type === 'castle' ? '#c391ff'
+        : marker.type === 'city' ? '#ff7777'
+        : '#ffffff';
       ctx.strokeStyle = '#000000';
       ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.arc(sx, sy, t.capital ? 3 : 2, 0, Math.PI * 2);
+      ctx.arc(sx, sy, marker.type === 'city' || marker.type === 'castle' ? 3 : 2.2, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
-    }
-
-    for (const r of RUINS) {
-      const dx = r.x - px;
-      const dy = r.y - py;
-      if (Math.abs(dx) > worldRadius || Math.abs(dy) > worldRadius) continue;
-      const sx = SIZE / 2 + dx * SCALE;
-      const sy = SIZE / 2 + dy * SCALE;
-      ctx.fillStyle = '#c04040';
-      ctx.beginPath();
-      ctx.arc(sx, sy, 2, 0, Math.PI * 2);
-      ctx.fill();
     }
 
     ctx.fillStyle = '#ff3030';
