@@ -1,7 +1,7 @@
 import { CHUNK_SIZE } from '../core/constants';
 import type { ResourceType, StructureType, TileType } from './types';
 import { WorldGen } from './WorldGen';
-import { getEditorCell, hasOwnEditorField } from './EditorWorld';
+import { getEditorCell, getEditorTerrainStrokeAt, hasOwnEditorField } from './EditorWorld';
 import { WORLD_SIZE } from './AeldorData';
 
 export interface InventorySlotData { itemId: string; qty: number }
@@ -36,9 +36,12 @@ export class Chunk {
     this.diffs = savedDiffs ?? emptyDiffs();
     this.tiles = new Array(CHUNK_SIZE * CHUNK_SIZE);
 
-    const getTile = (wx: number, wy: number) => {
-      const edited = getEditorCell(wx, wy, WORLD_SIZE);
-      return edited?.tile ?? gen.tileAt(wx, wy);
+    const getTile = (wx: number, wy: number): TileType => {
+      const edit = getEditorCell(wx, wy, WORLD_SIZE);
+      if (edit?.tile) return edit.tile;
+      const stroke = getEditorTerrainStrokeAt(wx, wy, WORLD_SIZE);
+      if (stroke) return stroke.tile ?? gen.tileAt(wx, wy);
+      return gen.tileAt(wx, wy);
     };
 
     for (let ly = 0; ly < CHUNK_SIZE; ly++) {
@@ -46,16 +49,18 @@ export class Chunk {
         const wx = cx * CHUNK_SIZE + lx;
         const wy = cy * CHUNK_SIZE + ly;
         const edit = getEditorCell(wx, wy, WORLD_SIZE);
-        const tile = edit?.tile ?? gen.tileAt(wx, wy);
+        const terrainStroke = edit?.tile ? undefined : getEditorTerrainStrokeAt(wx, wy, WORLD_SIZE);
+        const tile = edit?.tile ?? terrainStroke?.tile ?? gen.tileAt(wx, wy);
+        const suppressProcedural = edit?.suppressProcedural ?? terrainStroke?.suppressProcedural ?? false;
         this.tiles[ly * CHUNK_SIZE + lx] = tile;
         const key = localKey(lx, ly);
 
-        // Editor overrides are authoritative. Explicit null means suppress the
-        // generated object on that layer; this lets the editor erase existing
-        // procedural town props, resources and monster spawns as well as add new ones.
+        // Manual editor objects always win. If the terrain brush was painted
+        // with procedural generation disabled, un-authored structures,
+        // resources and monsters are suppressed for that tile.
         let structure: StructureType | null = null;
         if (hasOwnEditorField(edit, 'structure')) structure = edit?.structure ?? null;
-        else structure = gen.villageStructureAt(wx, wy);
+        else if (!suppressProcedural) structure = gen.villageStructureAt(wx, wy);
         if (structure) {
           this.naturalStructures.set(key, structure);
           continue;
@@ -63,7 +68,7 @@ export class Chunk {
 
         let resource: ResourceType | null = null;
         if (hasOwnEditorField(edit, 'resource')) resource = edit?.resource ?? null;
-        else resource = gen.resourceAt(wx, wy, getTile);
+        else if (!suppressProcedural) resource = gen.resourceAt(wx, wy, getTile);
         if (resource) {
           this.resources.set(key, resource);
           continue;
@@ -71,7 +76,7 @@ export class Chunk {
 
         let monsterId: string | null = null;
         if (hasOwnEditorField(edit, 'spawner')) monsterId = edit?.spawner ?? null;
-        else monsterId = gen.monsterSpawnAt(wx, wy, tile);
+        else if (!suppressProcedural) monsterId = gen.monsterSpawnAt(wx, wy, tile);
         if (monsterId) this.spawnPoints.push({ lx, ly, monsterId });
       }
     }
