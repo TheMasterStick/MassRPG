@@ -91,12 +91,46 @@ export function buildWorldMap(root: HTMLElement, game: Game) {
   }
 
   function drawStroke(octx: CanvasRenderingContext2D, stroke: TerrainStroke, c: { x: number; y: number }, span: number) {
+    const scale = CANVAS_SIZE / span;
+    const color = stroke.tile ? TILE_MAP_COLORS[stroke.tile] : TILE_MAP_COLORS.deep_water;
+    octx.fillStyle = color;
+    octx.strokeStyle = color;
+
+    if (stroke.kind === 'line') {
+      const a = worldToCanvas(stroke.x, stroke.y, c, span);
+      const b = worldToCanvas(stroke.x2 ?? stroke.x, stroke.y2 ?? stroke.y, c, span);
+      octx.lineCap = 'round';
+      octx.lineJoin = 'round';
+      octx.lineWidth = Math.max(1, stroke.size * scale);
+      octx.beginPath();
+      octx.moveTo(a.x, a.y);
+      octx.lineTo(b.x, b.y);
+      octx.stroke();
+      return;
+    }
+
+    if (stroke.kind === 'rect_fill' || stroke.kind === 'rect_outline') {
+      const x2 = stroke.x2 ?? stroke.x;
+      const y2 = stroke.y2 ?? stroke.y;
+      const left = Math.min(stroke.x, x2);
+      const top = Math.min(stroke.y, y2);
+      const right = Math.max(stroke.x, x2);
+      const bottom = Math.max(stroke.y, y2);
+      const p = worldToCanvas(left, top, c, span);
+      const width = Math.max(1, (right - left + 1) * scale);
+      const height = Math.max(1, (bottom - top + 1) * scale);
+      if (stroke.kind === 'rect_fill') octx.fillRect(p.x, p.y, width, height);
+      else {
+        octx.lineWidth = Math.max(1, stroke.size * scale);
+        octx.strokeRect(p.x, p.y, width, height);
+      }
+      return;
+    }
+
     const half = Math.floor(stroke.size / 2);
     const topLeft = worldToCanvas(stroke.x - half, stroke.y - half, c, span);
-    const scale = CANVAS_SIZE / span;
     const sizePx = stroke.size * scale;
     if (topLeft.x > CANVAS_SIZE || topLeft.y > CANVAS_SIZE || topLeft.x + sizePx < 0 || topLeft.y + sizePx < 0) return;
-    octx.fillStyle = stroke.tile ? TILE_MAP_COLORS[stroke.tile] : TILE_MAP_COLORS.deep_water;
     octx.fillRect(topLeft.x, topLeft.y, Math.max(1, sizePx), Math.max(1, sizePx));
   }
 
