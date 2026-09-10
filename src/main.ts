@@ -7,7 +7,9 @@ import { addItem, equip } from './systems/Inventory';
 import { hasSave, loadGame, deleteSave } from './systems/Save';
 import { el } from './ui/dom';
 import { TWIN_LANDS_SEED } from './world/AeldorData';
+import { launchWorldEditor } from './editor/WorldEditor';
 
+const app = document.getElementById('app')!;
 const startScreen = document.getElementById('start-screen')!;
 const uiRoot = document.getElementById('ui-root')!;
 const canvas = document.getElementById('game-canvas') as HTMLCanvasElement;
@@ -46,14 +48,23 @@ function continueGame() {
   launchGame(result.world, result.player);
 }
 
+function openEditor() {
+  const url = new URL(window.location.href);
+  url.searchParams.set('editor', '1');
+  window.location.href = url.toString();
+}
+
 function buildStartScreen() {
   const newBtn = el('button', { text: 'Begin Adventure' });
   newBtn.addEventListener('click', () => newGame());
+  const editorBtn = el('button', { className: 'secondary', text: 'World Editor' });
+  editorBtn.addEventListener('click', () => openEditor());
 
   const box = el('div', { className: 'start-box' }, [
     el('h1', { text: 'MassRPG' }),
     el('p', { className: 'tagline', text: 'The Twin Lands: a hand-shaped 180,000x180,000 tile world of settlements, wilderness, skills and adventure.' }),
     newBtn,
+    editorBtn,
   ]);
 
   if (hasSave()) {
@@ -67,10 +78,15 @@ function buildStartScreen() {
 
   box.append(el('div', {
     className: 'hint',
-    text: 'You begin in Capital Town in central Westerland. Click to move or interact. WASD/arrows to walk, hold Shift to run. I = Inventory, K = Skills, B = Build. Choose a combat style (Melee/Ranged/Magic) in the top-right before fighting.',
+    text: 'You begin in Capital Town in central Westerland. Click to move or interact. WASD/arrows to walk, hold Shift to run. I = Inventory, K = Skills, B = Build. The World Editor lets you hand-place terrain, structures, resources and monster spawners.',
   }));
 
   startScreen.append(box);
 }
 
-buildStartScreen();
+if (new URLSearchParams(window.location.search).get('editor') === '1') {
+  app.innerHTML = '';
+  launchWorldEditor(app);
+} else {
+  buildStartScreen();
+}
