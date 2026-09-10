@@ -4,33 +4,15 @@ import type { ResourceType, StructureType, TileType } from './types';
 import { RESOURCE_SPAWNS } from '../data/biomes';
 import { MONSTERS } from '../data/monsters';
 import {
-  WORLD_SIZE, CONTINENT_OUTLINE, REGIONS, REGION_BIOME, ROADS, RUINS,
-  nearestTown, oreVeinResourceAt, progressionLevelRangeAt, progressionZonesAt,
-  type Region, type Ruin, type WorldPoint,
+  WORLD_SIZE, LAND_OUTLINES, REGIONS, REGION_BIOME, RIVERS, ROADS, RUINS,
+  settlementAt, oreVeinResourceAt, progressionLevelRangeAt, progressionZonesAt,
+  type Region, type River, type Ruin, type Town, type WorldPoint,
 } from './AeldorData';
-import { TOWN_BUILDINGS, ALL_TOWN_BUILDINGS, type TownBuilding } from './Buildings';
+import { getSettlementBuildings, settlementStreetTile, type TownBuilding } from './Buildings';
 
-const VILLAGE_RADIUS = 15;
-const CAPITAL_RADIUS = 26;
-const CAPITAL_STREET_RADIUS = 22;
-const TOWN_WALL_RADIUS = VILLAGE_RADIUS;
-const CAPITAL_WALL_RADIUS = CAPITAL_RADIUS;
 const ROAD_HALF_WIDTH = 1.6;
-
-// The painted reference map mostly has grass/cliff coastline with occasional
-// small sandy pockets. The old continentValue() thresholds made a beach belt
-// hundreds of tiles wide. Six tiles keeps beaches local and readable.
 const BEACH_WIDTH = 6;
 const SHALLOW_WATER_WIDTH = 28;
-
-export interface VillageStructure { x: number; y: number; type: StructureType }
-
-const VILLAGE_STRUCTURES: VillageStructure[] = [
-  { x: 3, y: 0, type: 'bank_chest' },
-  { x: -3, y: 0, type: 'general_store' },
-  { x: -1, y: 3, type: 'cooking_range' },
-  { x: -2, y: -2, type: 'loom' },
-];
 
 interface BuildingCell {
   ch: string;
@@ -77,8 +59,8 @@ export class WorldGen {
     tree_magic: 75,
   };
 
-  // Defence in depth: metal ore is never a generic biome spawn. Authored
-  // ORE_VEINS are the only normal source of metal-rock world nodes.
+  // Metal ore remains authored-only. Adding an ore to a biome table must not
+  // accidentally repaint an entire mountain/desert with valuable rocks.
   private static readonly METAL_ORES = new Set<ResourceType>([
     'rock_copper', 'rock_tin', 'rock_iron', 'rock_coal', 'rock_silver',
     'rock_gold', 'rock_mithril', 'rock_adamant', 'rock_rune', 'rock_dragonite',
@@ -98,10 +80,10 @@ export class WorldGen {
     return requiredLevel <= progressionLevelRangeAt(x, y).maxLevel;
   }
 
+  // Historical method name retained because other systems may still call it.
+  // It now means "inside any authored settlement safe area".
   isVillage(x: number, y: number): boolean {
-    const town = nearestTown(x, y);
-    const radius = town.capital ? CAPITAL_RADIUS : VILLAGE_RADIUS;
-    return Math.max(Math.abs(x - town.x), Math.abs(y - town.y)) <= radius;
+    return settlementAt(x, y) !== null;
   }
 
   villageStructureAt(x: number, y: number): StructureType | null {
@@ -115,31 +97,29 @@ export class WorldGen {
       return furniture ? furniture.type : null;
     }
 
-    const wallCell = this.townWallCellAt(x, y);
-    if (wallCell) return wallCell;
-
-    const town = nearestTown(x, y);
-    const lx = x - town.x;
-    const ly = y - town.y;
-    const radius = town.capital ? CAPITAL_RADIUS : VILLAGE_RADIUS;
-    if (Math.abs(lx) > radius || Math.abs(ly) > radius) return null;
-    for (const s of VILLAGE_STRUCTURES) if (s.x === lx && s.y === ly) return s.type;
-    return null;
+    return this.townWallCellAt(x, y);
   }
 
   private townWallCellAt(x: number, y: number): StructureType | null {
-    const town = nearestTown(x, y);
-    const radius = town.capital ? CAPITAL_WALL_RADIUS : TOWN_WALL_RADIUS;
+    const town = settlementAt(x, y);
+    if (!town || !town.walled) return null;
     const lx = x - town.x;
     const ly = y - town.y;
-    if (Math.max(Math.abs(lx), Math.abs(ly)) !== radius) return null;
-    if (this.onRoad(x, y)) return null;
-    return town.capital ? 'wall_stone' : 'fence';
+    if (Math.max(Math.abs(lx), Math.abs(ly)) !== town.radius) return null;
+
+    // Four broad gates align with the settlement's main avenues. External road
+    // routing can later choose which gates are actually used.
+    if (Math.abs(lx) <= 3 || Math.abs(ly) <= 3) return null;
+
+    if (town.kind === 'capital' || town.kind === 'city' || town.style === 'stone') return 'wall_stone';
+    if (town.style === 'desert') return 'wall_brick';
+    return 'fence';
   }
 
   private buildingCellAt(x: number, y: number): BuildingCell | null {
-    const town = nearestTown(x, y);
-    const list = town.capital ? ALL_TOWN_BUILDINGS : TOWN_BUILDINGS;
+    const town = settlementAt(x, y);
+    if (!town) return null;
+    const list = getSettlementBuildings(town);
     for (const b of list) {
       const originX = town.x + b.dx;
       const originY = town.y + b.dy;
@@ -180,6 +160,12 @@ export class WorldGen {
     return b ? { originX: b.originX, originY: b.originY } : null;
   }
 
+  private settlementGround(town: Town): TileType {
+    if (town.style === 'desert') return 'desert';
+    if (town.style === 'stone') return 'plains';
+    return 'grass';
+  }
+
   private onRoad(x: number, y: number): boolean {
     for (const r of ROADS) {
       const abx = r.bx - r.ax;
@@ -197,14 +183,12 @@ export class WorldGen {
       t = Math.max(0, Math.min(1, t));
       const px = r.ax + t * abx;
       const py = r.ay + t * aby;
-      const wiggle = this.edgeWarp.fbm(x / 200, y / 200, 2) * 1.2;
+      const wiggle = this.edgeWarp.fbm(x / 220, y / 220, 2) * 1.2;
       if (Math.hypot(x - px, y - py) + wiggle <= ROAD_HALF_WIDTH) return true;
     }
     return false;
   }
 
-  // Apply a subtle coherent displacement before polygon tests. This keeps the
-  // traced outlines natural without turning them back into noisy blobs.
   private warpedPoint(x: number, y: number, scale: number, amount: number): WorldPoint {
     const dx = this.edgeWarp.fbm(x / scale + 17.3, y / scale - 31.7, 2) * amount;
     const dy = this.edgeWarp.fbm(x / scale - 47.1, y / scale + 73.9, 2) * amount;
@@ -216,42 +200,73 @@ export class WorldGen {
     return pointInPolygon(p.x, p.y, region.points);
   }
 
-  private continentPoint(x: number, y: number): WorldPoint {
-    return this.warpedPoint(x, y, 360, 45);
+  private landPoint(x: number, y: number): WorldPoint {
+    return this.warpedPoint(x, y, 1800, 110);
+  }
+
+  private landOutlineAt(x: number, y: number): WorldPoint[] | null {
+    const p = this.landPoint(x, y);
+    for (const outline of LAND_OUTLINES) {
+      if (pointInPolygon(p.x, p.y, outline)) return outline;
+    }
+    return null;
+  }
+
+  private nearestCoastDistance(x: number, y: number): number {
+    const p = this.landPoint(x, y);
+    let best = Infinity;
+    for (const outline of LAND_OUTLINES) {
+      best = Math.min(best, distanceToPolygonEdges(p.x, p.y, outline));
+    }
+    return best;
+  }
+
+  private riverAt(x: number, y: number): River | null {
+    for (const river of RIVERS) {
+      const minX = Math.min(...river.points.map((p) => p.x)) - river.width - 1;
+      const maxX = Math.max(...river.points.map((p) => p.x)) + river.width + 1;
+      const minY = Math.min(...river.points.map((p) => p.y)) - river.width - 1;
+      const maxY = Math.max(...river.points.map((p) => p.y)) + river.width + 1;
+      if (x < minX || x > maxX || y < minY || y > maxY) continue;
+      if (distanceToPolyline(x, y, river.points) <= river.width) return river;
+    }
+    return null;
   }
 
   private fields(x: number, y: number): { moisture: number; temperature: number } {
-    const moisture = this.moistureNoise.fbm(x / 40 + 100, y / 40 + 100, 4);
-    const temperature = this.temperatureNoise.fbm(x / 90 - 200, y / 90 - 200, 3);
+    // Macro-scale filler fields: authored regions control the broad map while
+    // these fields stop the remaining grasslands from becoming one flat colour.
+    const moisture = this.moistureNoise.fbm(x / 1100 + 100, y / 1100 + 100, 4);
+    const temperature = this.temperatureNoise.fbm(x / 2600 - 200, y / 2600 - 200, 3);
     return { moisture, temperature };
   }
 
   private fillerBiome(x: number, y: number): TileType {
     const { moisture: m, temperature: t } = this.fields(x, y);
-    if (m > 0.34) return 'swamp';
-    if (m > 0.12) return 'forest';
-    if (t < -0.1) return 'taiga';
-    if (m < -0.22) return 'plains';
+    if (m > 0.43) return 'swamp';
+    if (m > 0.19) return 'forest';
+    if (t < -0.2) return 'taiga';
+    if (m < -0.2) return 'plains';
     return 'grass';
   }
 
   tileAt(x: number, y: number): TileType {
     if (x < 0 || y < 0 || x >= WORLD_SIZE || y >= WORLD_SIZE) return 'deep_water';
 
-    const building = this.buildingCellAt(x, y);
-    if (building) {
-      if (building.ch === '.') return building.instance.prefab.floor;
-      if (building.ch === 'D') return 'path';
-    }
+    // Settlements are intentionally authored game spaces. Their buildings and
+    // streets win over underlying wilderness so a lakeside town does not have
+    // random water/forest tiles cutting through its interior.
+    const town = settlementAt(x, y);
+    if (town) {
+      const building = this.buildingCellAt(x, y);
+      if (building) return building.ch === 'D' ? 'path' : building.instance.prefab.floor;
 
-    if (this.isVillage(x, y)) {
-      const town = nearestTown(x, y);
-      const squareDist = Math.max(Math.abs(x - town.x), Math.abs(y - town.y));
-      if (town.capital) return squareDist < CAPITAL_STREET_RADIUS ? 'floor_cobble' : 'grass';
-      return squareDist < 6 ? 'path' : 'grass';
+      const lx = x - town.x;
+      const ly = y - town.y;
+      const street = settlementStreetTile(town, lx, ly);
+      if (street) return street;
+      return this.settlementGround(town);
     }
-
-    if (this.onRoad(x, y)) return 'path';
 
     const ruin = ruinMembership(x, y);
     const applyRuin = (biome: TileType): TileType => {
@@ -263,20 +278,23 @@ export class WorldGen {
       return hash2D(this.seed, x, y, 6000) < 0.45 ? 'rubble' : biome;
     };
 
-    // The central lake/inlet is an authored water shape and therefore wins
-    // over the continent's land polygon.
+    // Authored inland seas/lakes cut into the merged supercontinent.
     for (const r of LAKE_REGIONS) {
       if (this.inRegion(x, y, r)) return applyRuin('water');
     }
 
-    const coastPoint = this.continentPoint(x, y);
-    const onLand = pointInPolygon(coastPoint.x, coastPoint.y, CONTINENT_OUTLINE);
-    const coastDistance = distanceToPolygonEdges(coastPoint.x, coastPoint.y, CONTINENT_OUTLINE);
-    if (!onLand) {
-      return applyRuin(coastDistance <= SHALLOW_WATER_WIDTH ? 'water' : 'deep_water');
-    }
+    const landOutline = this.landOutlineAt(x, y);
+    const coastDistance = this.nearestCoastDistance(x, y);
+    if (!landOutline) return applyRuin(coastDistance <= SHALLOW_WATER_WIDTH ? 'water' : 'deep_water');
 
-    // Snow sits on top of the mountain range.
+    // Rivers are true local water tiles. They are additionally overdrawn on
+    // the continental map so their narrow gameplay width remains readable.
+    if (this.riverAt(x, y)) return applyRuin('water');
+
+    // Roads are only allowed to become path terrain once we already know the
+    // tile is land. This prevents the simple road graph from paving the sea.
+    if (this.onRoad(x, y)) return 'path';
+
     for (const r of SNOWCAP_REGIONS) {
       if (this.inRegion(x, y, r)) return applyRuin(REGION_BIOME[r.kind]!);
     }
@@ -284,8 +302,6 @@ export class WorldGen {
       if (this.inRegion(x, y, r)) return applyRuin(REGION_BIOME[r.kind]!);
     }
 
-    // Only occasional, very narrow sandy shore pockets. Most of the painted
-    // Aeldor shoreline is grass or cliff directly against the sea.
     if (coastDistance <= BEACH_WIDTH) {
       const sandyPatch = this.edgeWarp.fbm(x / 180 + 9, y / 180 - 13, 2);
       if (sandyPatch > -0.05) return applyRuin('beach');
@@ -306,7 +322,6 @@ export class WorldGen {
     if (this.isVillage(x, y) || this.onRoad(x, y)) return null;
 
     const tile = getTile(x, y);
-
     const vein = oreVeinResourceAt(x, y);
     if (vein && this.isLandWalkable(tile)) return vein;
 
@@ -348,7 +363,7 @@ export class WorldGen {
 
     for (let i = 0; i < rules.length; i++) {
       const resource = rules[i].resource;
-      if (WorldGen.METAL_ORES.has(resource)) continue;
+      if (WorldGen.METAL_ORES.has(resource) || resource === 'rock_gem') continue;
       if (!this.resourceAllowedByProgression(resource, x, y)) continue;
       if (!this.groveEligible(resource, x, y)) continue;
       const roll = hash2D(this.seed, x, y, 1000 + i);
@@ -367,15 +382,13 @@ export class WorldGen {
     const zones = progressionZonesAt(x, y);
     const biomeMonsters = MONSTERS.filter((monster) => monster.biomes.includes(tile));
 
-    // Prefer the exact authored level ranges.
     let candidates = biomeMonsters.filter((monster) =>
       zones.some((zone) => monster.level >= zone.minLevel && monster.level <= zone.maxLevel),
     );
 
-    // Some biomes currently have gaps in the monster roster. Gray Wastes is
-    // the clearest case: its 20-35 band had no desert monster at all, so the
-    // strict filter made the entire desert empty. If a biome has no exact-band
-    // candidate, use the strongest suitable monster not above the local cap.
+    // The present monster roster is much smaller than the new 1-300 world
+    // progression. Until higher-tier creatures are authored, a biome with no
+    // exact candidate falls back to its strongest suitable existing monster.
     if (candidates.length === 0) {
       const maxLevel = Math.max(...zones.map((zone) => zone.maxLevel));
       const belowCap = biomeMonsters.filter((monster) => monster.level <= maxLevel);
@@ -408,19 +421,29 @@ function pointInPolygon(x: number, y: number, points: WorldPoint[]): boolean {
 function distanceToPolygonEdges(x: number, y: number, points: WorldPoint[]): number {
   let best = Infinity;
   for (let i = 0; i < points.length; i++) {
-    const a = points[i];
-    const b = points[(i + 1) % points.length];
-    const abx = b.x - a.x;
-    const aby = b.y - a.y;
-    const len2 = abx * abx + aby * aby;
-    if (len2 === 0) continue;
-    let t = ((x - a.x) * abx + (y - a.y) * aby) / len2;
-    t = Math.max(0, Math.min(1, t));
-    const px = a.x + t * abx;
-    const py = a.y + t * aby;
-    best = Math.min(best, Math.hypot(x - px, y - py));
+    best = Math.min(best, distanceToSegment(x, y, points[i], points[(i + 1) % points.length]));
   }
   return best;
+}
+
+function distanceToPolyline(x: number, y: number, points: WorldPoint[]): number {
+  let best = Infinity;
+  for (let i = 0; i < points.length - 1; i++) {
+    best = Math.min(best, distanceToSegment(x, y, points[i], points[i + 1]));
+  }
+  return best;
+}
+
+function distanceToSegment(x: number, y: number, a: WorldPoint, b: WorldPoint): number {
+  const abx = b.x - a.x;
+  const aby = b.y - a.y;
+  const len2 = abx * abx + aby * aby;
+  if (len2 === 0) return Math.hypot(x - a.x, y - a.y);
+  let t = ((x - a.x) * abx + (y - a.y) * aby) / len2;
+  t = Math.max(0, Math.min(1, t));
+  const px = a.x + t * abx;
+  const py = a.y + t * aby;
+  return Math.hypot(x - px, y - py);
 }
 
 function ruinMembership(x: number, y: number): Ruin | null {
