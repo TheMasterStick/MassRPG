@@ -1,33 +1,42 @@
 import type { ResourceType, StructureType, TileType } from './types';
 
-export const EDITOR_WORLD_STORAGE_KEY = 'massrpg_editor_world_v2';
+export const EDITOR_WORLD_STORAGE_KEY = 'massrpg_editor_world_v3';
+
+export type EditorMarkerType = 'settlement' | 'village' | 'town' | 'city' | 'castle' | 'mining_area';
+
+export interface EditorMarker {
+  id: string;
+  type: EditorMarkerType;
+  name: string;
+  x: number;
+  y: number;
+  notes?: string;
+}
 
 export interface EditorCell {
   tile?: TileType;
   resource?: ResourceType | null;
   structure?: StructureType | null;
   spawner?: string | null;
-  /** When true, procedural structures/resources/spawns are suppressed on this tile. */
-  suppressProcedural?: boolean;
 }
 
 export interface TerrainStroke {
   x: number;
   y: number;
   size: number;
-  /** null means reveal the procedural/base terrain beneath older editor strokes. */
+  /** null reveals the blank ocean/base beneath older editor strokes. */
   tile: TileType | null;
-  /** When true, procedural structures/resources/spawns are suppressed under this stroke. */
-  suppressProcedural: boolean;
 }
 
 export interface EditorWorldData {
-  version: 2;
+  version: 3;
   worldSize: number;
   updatedAt: string;
   cells: Record<string, EditorCell>;
-  /** Large terrain brushes are stored as sparse square dabs instead of millions of cells. */
+  /** Large terrain brushes are compact square dabs rather than millions of cells. */
   terrainStrokes: TerrainStroke[];
+  /** Authored reference markers exported with the world so AI/tools can read them later. */
+  markers: EditorMarker[];
 }
 
 let cached: EditorWorldData | null = null;
@@ -37,16 +46,23 @@ export function cellKey(x: number, y: number): string {
 }
 
 export function blankEditorWorld(worldSize: number): EditorWorldData {
-  return { version: 2, worldSize, updatedAt: new Date().toISOString(), cells: {}, terrainStrokes: [] };
+  return {
+    version: 3,
+    worldSize,
+    updatedAt: new Date().toISOString(),
+    cells: {},
+    terrainStrokes: [],
+    markers: [],
+  };
 }
 
 function migrateParsedWorld(parsed: unknown, worldSize: number): EditorWorldData {
   if (!parsed || typeof parsed !== 'object') return blankEditorWorld(worldSize);
   const candidate = parsed as {
-    version?: number;
     updatedAt?: unknown;
     cells?: unknown;
     terrainStrokes?: unknown;
+    markers?: unknown;
   };
   if (!candidate.cells || typeof candidate.cells !== 'object') return blankEditorWorld(worldSize);
 
@@ -54,19 +70,37 @@ function migrateParsedWorld(parsed: unknown, worldSize: number): EditorWorldData
   const terrainStrokes = Array.isArray(candidate.terrainStrokes)
     ? candidate.terrainStrokes.filter((s): s is TerrainStroke => {
         if (!s || typeof s !== 'object') return false;
-        const stroke = s as Partial<TerrainStroke>;
+        const stroke = s as Partial<TerrainStroke> & { suppressProcedural?: unknown };
         return Number.isFinite(stroke.x) && Number.isFinite(stroke.y) && Number.isFinite(stroke.size)
-          && typeof stroke.suppressProcedural === 'boolean'
           && (stroke.tile === null || typeof stroke.tile === 'string');
-      })
+      }).map((s) => ({ x: s.x, y: s.y, size: s.size, tile: s.tile }))
     : [];
 
+  const markerTypes = new Set<EditorMarkerType>(['settlement', 'village', 'town', 'city', 'castle', 'mining_area']);
+  const markers = Array.isArray(candidate.markers)
+    ? candidate.markers.filter((m): m is EditorMarker => {
+        if (!m || typeof m !== 'object') return false;
+        const marker = m as Partial<EditorMarker>;
+        return typeof marker.id === 'string'
+          && typeof marker.type === 'string' && markerTypes.has(marker.type as EditorMarkerType)
+          && typeof marker.name === 'string'
+          && Number.isFinite(marker.x) && Number.isFinite(marker.y);
+      }).map((m) => ({ ...m }))
+    : [];
+
+  // v2 stored suppressProcedural flags. Procedural world generation no longer
+  // exists, so those flags are intentionally discarded during migration.
+  for (const cell of Object.values(cells)) {
+    delete (cell as EditorCell & { suppressProcedural?: boolean }).suppressProcedural;
+  }
+
   return {
-    version: 2,
+    version: 3,
     worldSize,
     updatedAt: typeof candidate.updatedAt === 'string' ? candidate.updatedAt : new Date().toISOString(),
     cells,
     terrainStrokes,
+    markers,
   };
 }
 
@@ -74,6 +108,7 @@ export function loadEditorWorld(worldSize: number): EditorWorldData {
   if (cached) return cached;
   try {
     const raw = localStorage.getItem(EDITOR_WORLD_STORAGE_KEY)
+      ?? localStorage.getItem('massrpg_editor_world_v2')
       ?? localStorage.getItem('massrpg_editor_world_v1');
     if (!raw) return (cached = blankEditorWorld(worldSize));
     return (cached = migrateParsedWorld(JSON.parse(raw), worldSize));
@@ -113,6 +148,16 @@ export function getEditorTerrainStrokeAt(x: number, y: number, worldSize: number
     }
   }
   return undefined;
+}
+
+export function getEditorTileAt(x: number, y: number, worldSize: number): TileType | undefined {
+  const cell = getEditorCell(x, y, worldSize);
+  if (cell?.tile) return cell.tile;
+  return getEditorTerrainStrokeAt(x, y, worldSize)?.tile ?? undefined;
+}
+
+export function getEditorMarkers(worldSize: number): readonly EditorMarker[] {
+  return loadEditorWorld(worldSize).markers;
 }
 
 export function hasOwnEditorField(cell: EditorCell | undefined, field: keyof EditorCell): boolean {
