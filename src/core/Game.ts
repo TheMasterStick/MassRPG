@@ -7,7 +7,7 @@ import { combatTick, playerAttack } from '../systems/Combat';
 import { canGather, startGathering, processGatherTick, harvest } from '../systems/Gathering';
 import { processProduceTick } from '../systems/Production';
 import { bus, log } from '../core/EventBus';
-import type { StructureType } from '../world/types';
+import { TILE_VISUALS, type StructureType } from '../world/types';
 import { startAutosave, saveGame } from '../systems/Save';
 import { placeStructure } from '../systems/Construction';
 import { facingFromDelta } from '../systems/Facing';
@@ -16,7 +16,8 @@ export type PendingInteraction =
   | { type: 'gather'; x: number; y: number }
   | { type: 'harvest'; x: number; y: number }
   | { type: 'plant_menu'; x: number; y: number }
-  | { type: 'structure'; x: number; y: number; structureType: StructureType };
+  | { type: 'structure'; x: number; y: number; structureType: StructureType }
+  | { type: 'plane_link'; x: number; y: number };
 
 export class Game {
   world: World;
@@ -36,6 +37,7 @@ export class Game {
   constructor(world: World, player: Player, canvas: HTMLCanvasElement) {
     this.world = world;
     this.player = player;
+    this.world.setActivePlane(player.plane);
     this.canvas = canvas;
     this.renderer = new Renderer(canvas);
     this.bindInput();
@@ -61,13 +63,8 @@ export class Game {
     this.rafHandle = requestAnimationFrame(loop);
   }
 
-  stop() {
-    cancelAnimationFrame(this.rafHandle);
-  }
-
-  manualSave() {
-    saveGame(this.world, this.player);
-  }
+  stop() { cancelAnimationFrame(this.rafHandle); }
+  manualSave() { saveGame(this.world, this.player); }
 
   private update(dt: number) {
     this.handleKeyboardMovement();
@@ -83,8 +80,7 @@ export class Game {
 
   private updateMovement(dt: number) {
     const player = this.player;
-    if (player.action) return;
-    if (player.path.length === 0) return;
+    if (player.action || player.path.length === 0) return;
     const speed = player.running ? PLAYER_RUN_SPEED : PLAYER_WALK_SPEED;
     let remaining = speed * dt;
     while (remaining > 0 && player.path.length > 0) {
@@ -113,11 +109,9 @@ export class Game {
 
   private tick() {
     this.world.tick++;
-
     const roundedPos = { x: Math.round(this.player.x), y: Math.round(this.player.y) };
     const active = this.world.activeChunksAround(roundedPos, SIM_RADIUS_CHUNKS);
     this.world.ensureSpawns(active);
-
     combatTick(this.world, this.player);
 
     if (this.player.action) {
@@ -127,13 +121,11 @@ export class Game {
         else if (this.player.action.type === 'produce') processProduceTick(this.player);
       }
     }
-
     this.checkArrival();
   }
 
   private handleKeyboardMovement() {
-    if (this.player.action) return;
-    if (this.player.path.length > 0) return; // let the current queued step finish; refills next frame once empty
+    if (this.player.action || this.player.path.length > 0) return;
     let dx = 0, dy = 0;
     if (this.keys.has('w') || this.keys.has('arrowup')) dy -= 1;
     if (this.keys.has('s') || this.keys.has('arrowdown')) dy += 1;
@@ -143,20 +135,18 @@ export class Game {
     const cur = { x: Math.round(this.player.x), y: Math.round(this.player.y) };
     const next = { x: cur.x + dx, y: cur.y + dy };
     this.pendingInteraction = null;
-    // Manually steering (even mid-fight) disengages auto-pursuit, same as clicking away - you can always run.
     this.player.combatTargetId = null;
-    if (this.world.isWalkable(next.x, next.y)) {
+    if (this.world.canStep(cur.x, cur.y, next.x, next.y)) {
       this.player.path = [next];
-    } else if (dx !== 0 && this.world.isWalkable(cur.x + dx, cur.y)) {
+    } else if (dx !== 0 && this.world.canStep(cur.x, cur.y, cur.x + dx, cur.y)) {
       this.player.path = [{ x: cur.x + dx, y: cur.y }];
-    } else if (dy !== 0 && this.world.isWalkable(cur.x, cur.y + dy)) {
+    } else if (dy !== 0 && this.world.canStep(cur.x, cur.y, cur.x, cur.y + dy)) {
       this.player.path = [{ x: cur.x, y: cur.y + dy }];
     }
   }
 
   private checkArrival() {
-    if (!this.pendingInteraction) return;
-    if (this.player.path.length > 0) return;
+    if (!this.pendingInteraction || this.player.path.length > 0) return;
     const pi = this.pendingInteraction;
     const pos = { x: Math.round(this.player.x), y: Math.round(this.player.y) };
     if (!isSameOrAdjacent(pos, { x: pi.x, y: pi.y })) {
@@ -181,7 +171,28 @@ export class Game {
       this.onOpenPlantMenu?.(pi.x, pi.y);
     } else if (pi.type === 'structure') {
       this.onOpenStructure?.(pi.x, pi.y, pi.structureType);
+    } else if (pi.type === 'plane_link') {
+      this.usePlaneLink(pi.x, pi.y);
     }
+  }
+
+  private usePlaneLink(x: number, y: number) {
+    const endpoint = this.world.getPlaneLink(x, y);
+    if (!endpoint) return;
+    const { destination, link } = endpoint;
+    const destinationTile = this.world.getTile(destination.x, destination.y, destination.plane);
+    if (!TILE_VISUALS[destinationTile].walkable) {
+      log(`The ${link.kind.replace('_', ' ')} has no walkable destination yet.`, 'warning');
+      return;
+    }
+    this.player.action = null;
+    this.player.path = [];
+    this.player.combatTargetId = null;
+    this.player.plane = destination.plane;
+    this.world.setActivePlane(destination.plane);
+    this.player.x = destination.x;
+    this.player.y = destination.y;
+    log(destination.plane === 0 ? 'You return to the surface.' : `You enter underground plane ${destination.plane}.`, 'info');
   }
 
   onOpenPlantMenu: ((x: number, y: number) => void) | null = null;
@@ -223,9 +234,13 @@ export class Game {
       return;
     }
 
-    const monster = this.world.monsters.find(
-      (m) => m.isAlive() && Math.round(m.x) === tile.x && Math.round(m.y) === tile.y,
-    );
+    const link = this.world.getPlaneLink(tile.x, tile.y);
+    if (link) {
+      this.moveAdjacentThen({ type: 'plane_link', x: tile.x, y: tile.y });
+      return;
+    }
+
+    const monster = this.world.monsters.find((m) => m.isAlive() && Math.round(m.x) === tile.x && Math.round(m.y) === tile.y);
     if (monster) {
       this.player.action = null;
       const start = { x: Math.round(this.player.x), y: Math.round(this.player.y) };
@@ -253,7 +268,6 @@ export class Game {
       }
       return;
     }
-
     this.moveTo(tile);
   }
 
