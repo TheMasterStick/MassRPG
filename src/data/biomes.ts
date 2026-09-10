@@ -8,6 +8,11 @@ export interface ResourceSpawnRule {
 // Land-based resource spawns keyed by tile type. Water-adjacency resources
 // (fishing spots, willows) are handled separately in WorldGen since they
 // depend on neighbouring tiles.
+//
+// IMPORTANT: rocks/metal ores do NOT belong in this table. Metal ores are
+// authored world POIs in ORE_VEINS (AeldorData.ts), and gemstone rocks are
+// intentionally disabled until the later gemstone pass. This keeps biome
+// terrain from turning into a continent-wide mine by accident.
 export const RESOURCE_SPAWNS: Partial<Record<TileType, ResourceSpawnRule[]>> = {
   forest: [
     { resource: 'tree_normal', chance: 0.14 },
@@ -35,19 +40,11 @@ export const RESOURCE_SPAWNS: Partial<Record<TileType, ResourceSpawnRule[]>> = {
     { resource: 'tree_willow', chance: 0.05 },
     { resource: 'herb_patch', chance: 0.012 },
   ],
-  // Ore no longer spawns from this per-tile roll (see ORE_VEINS in
-  // AeldorData.ts) - metal rocks are placed as authored clumped veins
-  // instead of scattered across every mountain tile in the world. Gems stay
-  // as a genuine rare wilderness find rather than a vein-bound resource.
-  mountain: [
-    { resource: 'rock_gem', chance: 0.004 },
-  ],
+  mountain: [],
   snow: [
     { resource: 'tree_normal', chance: 0.015 },
   ],
-  desert: [
-    { resource: 'rock_gem', chance: 0.006 },
-  ],
+  desert: [],
   beach: [],
   path: [],
   rubble: [],
