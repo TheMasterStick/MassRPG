@@ -6,7 +6,7 @@ import { initUI } from './ui/UI';
 import { addItem, equip } from './systems/Inventory';
 import { hasSave, loadGame, deleteSave } from './systems/Save';
 import { el } from './ui/dom';
-import { AELDOR_SEED } from './world/AeldorData';
+import { TWIN_LANDS_SEED } from './world/AeldorData';
 
 const startScreen = document.getElementById('start-screen')!;
 const uiRoot = document.getElementById('ui-root')!;
@@ -34,7 +34,7 @@ function launchGame(world: World, player: Player) {
 }
 
 function newGame() {
-  const world = new World(AELDOR_SEED);
+  const world = new World(TWIN_LANDS_SEED);
   const player = new Player();
   giveStarterKit(player);
   launchGame(world, player);
@@ -52,7 +52,7 @@ function buildStartScreen() {
 
   const box = el('div', { className: 'start-box' }, [
     el('h1', { text: 'MassRPG' }),
-    el('p', { className: 'tagline', text: 'Aeldor: a hand-mapped 15,000x15,000 tile world of exploration, skills and adventure.' }),
+    el('p', { className: 'tagline', text: 'The Twin Lands: a hand-shaped 180,000x180,000 tile world of settlements, wilderness, skills and adventure.' }),
     newBtn,
   ]);
 
@@ -67,7 +67,7 @@ function buildStartScreen() {
 
   box.append(el('div', {
     className: 'hint',
-    text: 'You begin in Capital Town. Click to move or interact. WASD/arrows to walk, hold Shift to run. I = Inventory, K = Skills, B = Build. Choose a combat style (Melee/Ranged/Magic) in the top-right before fighting.',
+    text: 'You begin in Capital Town in central Westerland. Click to move or interact. WASD/arrows to walk, hold Shift to run. I = Inventory, K = Skills, B = Build. Choose a combat style (Melee/Ranged/Magic) in the top-right before fighting.',
   }));
 
   startScreen.append(box);
