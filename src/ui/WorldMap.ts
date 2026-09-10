@@ -1,6 +1,6 @@
 import { el } from './dom';
 import type { Game } from '../core/Game';
-import { TOWNS, RUINS, WORLD_SIZE } from '../world/AeldorData';
+import { TOWNS, RUINS, ORE_VEINS, WORLD_SIZE } from '../world/AeldorData';
 import { TILE_MAP_COLORS } from './mapColors';
 import { findNearestWalkable } from '../systems/Pathfinding';
 import { log } from '../core/EventBus';
@@ -27,7 +27,7 @@ export function buildWorldMap(root: HTMLElement, game: Game) {
     el('div', { className: 'worldmap-canvas-wrap' }, [canvas]),
     el('div', { className: 'worldmap-controls' }, [
       zoomOutBtn, zoomLabel, zoomInBtn,
-      el('span', { className: 'worldmap-hint', text: 'Click anywhere to travel there instantly' }),
+      el('span', { className: 'worldmap-hint', text: 'Click anywhere to travel there instantly · ⚒ mining sites are public' }),
     ]),
   ]);
   root.append(panel);
@@ -93,6 +93,29 @@ export function buildWorldMap(root: HTMLElement, game: Game) {
     return off;
   }
 
+  function drawMiningMarker(sx: number, sy: number) {
+    // RuneScape-style public map cue: a compact dark disc with a bright
+    // pickaxe glyph. Kept as canvas geometry so no new sprite asset is needed.
+    ctx.fillStyle = '#111111';
+    ctx.strokeStyle = '#d8d8d8';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(sx, sy, 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.strokeStyle = '#f3f3f3';
+    ctx.lineWidth = 1.5;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(sx - 2.7, sy + 3.0);
+    ctx.lineTo(sx + 2.5, sy - 2.7);
+    ctx.moveTo(sx - 1.8, sy - 2.3);
+    ctx.quadraticCurveTo(sx + 0.8, sy - 4.2, sx + 3.6, sy - 1.7);
+    ctx.stroke();
+    ctx.lineCap = 'butt';
+  }
+
   function draw() {
     const c = center();
     const span = ZOOM_SPANS[zoomIndex];
@@ -102,6 +125,24 @@ export function buildWorldMap(root: HTMLElement, game: Game) {
       const { x: sx, y: sy } = worldToCanvas(wx, wy, c, span);
       if (sx < -8 || sx > CANVAS_SIZE + 8 || sy < -8 || sy > CANVAS_SIZE + 8) return;
       paint(sx, sy);
+    }
+
+    // Mining sites are intentionally public knowledge, like RuneScape mining
+    // icons. Draw the site center rather than every individual rock so the
+    // whole-map view remains legible.
+    for (const vein of ORE_VEINS) {
+      marker(vein.x, vein.y, (sx, sy) => {
+        drawMiningMarker(sx, sy);
+        if (zoomIndex >= 2) {
+          ctx.fillStyle = '#ffffff';
+          ctx.strokeStyle = '#000000';
+          ctx.lineWidth = 3;
+          ctx.font = '10px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.strokeText(vein.name, sx, sy - 9);
+          ctx.fillText(vein.name, sx, sy - 9);
+        }
+      });
     }
 
     for (const r of RUINS) {
