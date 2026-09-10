@@ -2,12 +2,14 @@ import { Player } from '../entities/Player';
 import { World } from '../world/World';
 import type { ChunkDiffs } from '../world/Chunk';
 import { log } from '../core/EventBus';
+import { CAPITAL, TWIN_LANDS_SEED, WORLD_REVISION } from '../world/AeldorData';
 
 const SAVE_KEY = 'massrpg_save_v1';
 const AUTOSAVE_MS = 20000;
 
 interface SaveData {
-  version: 1;
+  version: 1 | 2;
+  worldRevision?: number;
   seed: number;
   tick: number;
   player: {
@@ -26,7 +28,8 @@ interface SaveData {
 
 export function saveGame(world: World, player: Player) {
   const data: SaveData = {
-    version: 1,
+    version: 2,
+    worldRevision: WORLD_REVISION,
     seed: world.seed,
     tick: world.tick,
     player: {
@@ -63,21 +66,35 @@ export function loadGame(): { world: World; player: Player } | null {
   if (!raw) return null;
   try {
     const data = JSON.parse(raw) as SaveData;
-    const world = new World(data.seed);
+    const migratedWorld = data.worldRevision !== WORLD_REVISION;
+    const world = new World(migratedWorld ? TWIN_LANDS_SEED : data.seed);
     world.tick = data.tick;
     world.bank = data.bank ?? [];
-    world.loadSavedDiffs(data.chunkDiffs ?? {});
+
+    // Old 15k-world chunk coordinates do not describe the new Twin Lands.
+    // Preserve the character/bank, but deliberately discard obsolete terrain
+    // diffs rather than loading chopped trees/buildings into unrelated places.
+    if (!migratedWorld) world.loadSavedDiffs(data.chunkDiffs ?? {});
 
     const player = new Player();
     player.name = data.player.name;
-    player.x = data.player.x;
-    player.y = data.player.y;
     player.skillsXp = { ...player.skillsXp, ...data.player.skillsXp };
     player.currentHp = data.player.currentHp;
     player.combatStyle = data.player.combatStyle as Player['combatStyle'];
     player.inventory = data.player.inventory;
     player.equipment = data.player.equipment as Player['equipment'];
-    player.respawnPoint = data.player.respawnPoint;
+
+    if (migratedWorld) {
+      player.x = CAPITAL.x;
+      player.y = CAPITAL.y;
+      player.respawnPoint = { x: CAPITAL.x, y: CAPITAL.y };
+      log('The world has expanded into the Twin Lands. Your character was moved safely to Capital Town.', 'info');
+    } else {
+      player.x = data.player.x;
+      player.y = data.player.y;
+      player.respawnPoint = data.player.respawnPoint;
+    }
+
     return { world, player };
   } catch {
     log('Save file was corrupted and could not be loaded.', 'warning');
