@@ -1,12 +1,11 @@
 import './editor.css';
 import { MONSTERS } from '../data/monsters';
 import { TILE_MAP_COLORS } from '../ui/mapColors';
-import { TWIN_LANDS_SEED, WORLD_SIZE } from '../world/AeldorData';
+import { WORLD_SIZE } from '../world/AeldorData';
 import {
   cellKey, clearEditorWorld, loadEditorWorld, replaceEditorWorld, saveEditorWorld,
   type EditorCell, type EditorMarker, type EditorMarkerType, type EditorWorldData, type TerrainStroke,
 } from '../world/EditorWorld';
-import { WorldGen } from '../world/WorldGen';
 import type { ResourceType, StructureType, TileType } from '../world/types';
 import { createEditorNavigator, type EditorNavigatorHandle } from './EditorNavigator';
 
@@ -39,7 +38,7 @@ const MARKER_TYPES: { id: EditorMarkerType; label: string }[] = [
   { id: 'mining_area', label: 'Mining Area' },
 ];
 
-// 0.005 px/tile fits the entire 180k world on a typical desktop canvas.
+// 0.005 px/tile fits the whole 180k world on a normal desktop canvas.
 const TILE_SIZES = [0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 4, 8, 12, 16, 24, 32, 48];
 const BRUSH_SIZES = [
   1, 3, 5, 9, 17, 33, 65, 129, 257, 513, 1025, 2049, 4097, 8193,
@@ -106,7 +105,6 @@ export function launchWorldEditor(root: HTMLElement): void {
   document.body.classList.add('editor-mode');
   root.innerHTML = '';
 
-  const gen = new WorldGen(TWIN_LANDS_SEED);
   let data = loadEditorWorld(WORLD_SIZE);
   let category: PaletteCategory = 'terrain';
   let selection: Selection = { kind: 'tile', id: 'grass' };
@@ -831,8 +829,8 @@ export function launchWorldEditor(root: HTMLElement): void {
   }
 
   function drawMacroTerrain(width: number, height: number, tilePx: number): void {
-    // Crucial for editing a 180k world: do not sample millions of virtual tiles.
-    // Paint the blank ocean once, then draw only the sparse authored strokes/cells.
+    // Never sample millions of virtual tiles. The base is one ocean fill, then
+    // only sparse authored strokes/cells are composited over it.
     ctx.fillStyle = TILE_MAP_COLORS[BASE_TILE];
     ctx.fillRect(0, 0, width, height);
 
@@ -955,7 +953,12 @@ export function launchWorldEditor(root: HTMLElement): void {
       if (p.x < -30 || p.y < -30 || p.x > width + 30 || p.y > height + 30) continue;
       ctx.strokeStyle = '#111';
       ctx.lineWidth = 2;
-      ctx.fillStyle = marker.type === 'mining_area' ? '#ff8a32' : marker.type === 'castle' ? '#c391ff' : marker.type === 'city' ? '#ff7777' : '#f4f4f4';
+      ctx.fillStyle = marker.type === 'mining_area' ? '#ff8a32'
+        : marker.type === 'castle' ? '#c391ff'
+        : marker.type === 'city' ? '#ff7777'
+        : marker.type === 'village' ? '#8ee28e'
+        : marker.type === 'town' ? '#f1d56b'
+        : '#f4f4f4';
       ctx.beginPath();
       ctx.arc(p.x, p.y, tilePx < 2 ? 4 : Math.max(4, Math.min(8, tilePx * 0.24)), 0, Math.PI * 2);
       ctx.fill();
