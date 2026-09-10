@@ -71,6 +71,45 @@ The enlarged map currently contains the original settlement names plus new
 provisional settlements corresponding to the user's rough red-dot placement
 map. Names/positions can be revised during the upcoming map-layout pass.
 
+## Hand-authored world editor — now preferred for local layouts
+
+The user explicitly asked for a tile editor because authored mining sites were
+still hard to locate in live testing and because towns/cities now need to be
+laid out deliberately rather than inferred from procedural rules.
+
+The game now exposes a **World Editor** from the start screen (`?editor=1`).
+It supports:
+
+- painting all current terrain/floor tile types with 1x1, 3x3, 5x5 or 9x9 brushes
+- placing/removing structures such as furnaces, beds, anvils, walls, banks,
+  storage, looms and general-store objects
+- placing trees, ores, fishing spots, farm/herb/flax resources
+- placing monster spawners from the existing monster roster
+- jumping directly to known settlements and authored mining-site centers
+- zooming and panning a local tile view using the actual current world generator
+- undo/redo
+- local browser autosave
+- JSON import/export (`twinlands-world-edits.json`)
+
+Editor changes are a **sparse override layer** (`src/world/EditorWorld.ts`).
+`Chunk.ts` applies those overrides ahead of normal generated structures,
+resources and spawns. Explicit `null` values suppress generated objects, so the
+editor can genuinely erase procedural content rather than merely drawing over
+it. Returning from the editor reloads the game and immediately applies the
+locally saved layout.
+
+This is intentionally a local/location editor, not an attempt to paint all
+180,000 x 180,000 tiles individually. Use the procedural macro geography for
+continental landform and use the editor to hand-build settlements, mines,
+dungeons, roads, POIs and other meaningful areas. Large finished edits should
+be exported to JSON and committed/canonicalized later instead of relying only
+on browser storage.
+
+**Future direction:** once the user has hand-built representative settlements,
+the procedural settlement generator should become a fallback/template source,
+not overwrite those authored layouts. The editor data should ultimately be
+promoted into canonical world data in Git.
+
 ## Progression direction
 
 The character maximum level remains **120**, but world danger/progression zones
@@ -91,15 +130,16 @@ its surrounding region.
 
 1. **Biome does not determine metal ore.** Mountain/desert/snow terrain must not
    create random carpets of metal rocks.
-2. **Metal ore comes from authored mining sites only.** `ORE_VEINS` is the
-   authoritative normal source of Copper, Tin, Iron, Coal, Silver, Gold,
-   Mithril, Adamantite, Runite and Dragonite.
-3. Each listed ore at a site has roughly **3-5 persistent nodes**.
+2. **Metal ore comes from authored mining sites only.** `ORE_VEINS` remains the
+   macro/public map list, while the new editor can be used to place the exact
+   individual rock nodes by hand.
+3. Each listed ore at a site should normally have roughly **3-5 persistent
+   nodes** unless the user deliberately designs a larger/smaller mine.
 4. Depleted rocks stay visible but dim/grey while waiting to respawn.
 5. Authored mining sites are **public information**. The local minimap shows
    individual rocks as black dots and the world map shows a mining-site icon.
 6. Town safety wins over resource placement. Never put authored ore inside a
-   settlement footprint.
+   settlement footprint unless the user explicitly places it there in the editor.
 7. Trees/gatherables should occur in progression-appropriate pockets/groves,
    not salt-and-pepper carpets across an entire biome.
 8. Gemstone expansion is still deferred; do not randomly re-enable gem rocks
@@ -127,14 +167,14 @@ their original coordinates into the new world.
 
 ## Near-term work
 
-The user wants to continue refining the **map layout first**, then use that to
-settle:
+The user now wants to use the editor to begin authoring real locations. The
+next useful development cycle is:
 
-- final settlement hierarchy and unique city layouts
-- level-region shapes/ranges
-- mining/gathering locations
-- major roads, passes, bridges and ports
-- points of interest / dungeons / special encounters
+- verify one mining site by hand-placing its ore nodes and testing them in-game
+- hand-build the capital as the first genuinely city-sized authored settlement
+- then build representative town/village/hamlet layouts
+- after geography and settlements read well, refine level-region shapes/ranges
+- add terrain-aware roads, passes, bridges, ports and major POIs
 
 Do not rush into filling all 180k x 180k with random content. The point of the
 large world is to support authored destinations and meaningful travel, not to
