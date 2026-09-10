@@ -3,8 +3,9 @@ import { MONSTERS } from '../data/monsters';
 import { TILE_MAP_COLORS } from '../ui/mapColors';
 import { WORLD_SIZE } from '../world/AeldorData';
 import {
-  cellKey, clearEditorWorld, loadEditorWorld, replaceEditorWorld, saveEditorWorld,
-  type EditorCell, type EditorMarker, type EditorMarkerType, type EditorWorldData, type TerrainStroke,
+  cellKey, clearEditorWorld, loadEditorWorld, replaceEditorWorld, saveEditorWorld, terrainStrokeContains,
+  type EditorCell, type EditorMarker, type EditorMarkerType,
+  type TerrainStroke, type TerrainStrokeKind,
 } from '../world/EditorWorld';
 import type { ResourceType, StructureType, TileType } from '../world/types';
 import { createEditorNavigator, type EditorNavigatorHandle } from './EditorNavigator';
@@ -38,13 +39,15 @@ const MARKER_TYPES: { id: EditorMarkerType; label: string }[] = [
   { id: 'mining_area', label: 'Mining Area' },
 ];
 
-// 0.005 px/tile fits the whole 180k world on a normal desktop canvas.
 const TILE_SIZES = [0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 4, 8, 12, 16, 24, 32, 48];
 const BRUSH_SIZES = [
   1, 3, 5, 9, 17, 33, 65, 129, 257, 513, 1025, 2049, 4097, 8193,
   16385, 32769, 65535,
 ];
 const MACRO_BRUSH_THRESHOLD = 33;
+const MAX_DETAILED_SHAPE_CELLS = 50000;
+const MAX_COPY_SIDE = 256;
+const MAX_COPY_CELLS = MAX_COPY_SIDE * MAX_COPY_SIDE;
 const TREE_RESOURCES = new Set<ResourceType>([
   'tree_normal', 'tree_oak', 'tree_willow', 'tree_maple', 'tree_yew', 'tree_magic',
 ]);
@@ -52,6 +55,7 @@ const BASE_TILE: TileType = 'deep_water';
 
 type PaletteCategory = 'terrain' | 'structures' | 'resources' | 'spawners' | 'markers' | 'erase';
 type TreeMode = 'single' | 'scatter';
+type ToolMode = 'brush' | 'line' | 'rect_fill' | 'rect_outline' | 'select' | 'stamp';
 type Selection =
   | { kind: 'tile'; id: TileType }
   | { kind: 'structure'; id: StructureType }
@@ -62,6 +66,17 @@ type Selection =
   | { kind: 'eraseObjects' }
   | { kind: 'revertTile' }
   | { kind: 'revertAll' };
+
+interface WorldPoint { x: number; y: number }
+interface SelectionBox { left: number; top: number; right: number; bottom: number }
+interface ClipboardRun { dy: number; startX: number; length: number; tile: TileType }
+interface ClipboardCell { dx: number; dy: number; cell: EditorCell }
+interface EditorClipboard {
+  width: number;
+  height: number;
+  terrainRuns: ClipboardRun[];
+  cells: ClipboardCell[];
+}
 
 interface HistoryEntry {
   beforeCells: Map<string, EditorCell | undefined>;
@@ -101,6 +116,15 @@ function isFormTarget(target: EventTarget | null): boolean {
   return target instanceof HTMLInputElement || target instanceof HTMLSelectElement || target instanceof HTMLTextAreaElement;
 }
 
+function normalizeBox(a: WorldPoint, b: WorldPoint): SelectionBox {
+  return {
+    left: Math.min(a.x, b.x),
+    top: Math.min(a.y, b.y),
+    right: Math.max(a.x, b.x),
+    bottom: Math.max(a.y, b.y),
+  };
+}
+
 export function launchWorldEditor(root: HTMLElement): void {
   document.body.classList.add('editor-mode');
   root.innerHTML = '';
@@ -108,6 +132,7 @@ export function launchWorldEditor(root: HTMLElement): void {
   let data = loadEditorWorld(WORLD_SIZE);
   let category: PaletteCategory = 'terrain';
   let selection: Selection = { kind: 'tile', id: 'grass' };
+  let toolMode: ToolMode = 'brush';
   let treeMode: TreeMode = 'single';
   let treeDensity = 0.04;
   let markerName = '';
@@ -125,7 +150,11 @@ export function launchWorldEditor(root: HTMLElement): void {
   let strokeBefore = new Map<string, EditorCell | undefined>();
   let strokeTerrainStart = data.terrainStrokes.length;
   let strokeMarkersBefore = cloneMarkers(data.markers);
-  let lastPaintPoint: { x: number; y: number } | null = null;
+  let lastPaintPoint: WorldPoint | null = null;
+  let dragStart: WorldPoint | null = null;
+  let dragCurrent: WorldPoint | null = null;
+  let selectedArea: SelectionBox | null = null;
+  let clipboard: EditorClipboard | null = null;
   let hoverX = centerX;
   let hoverY = centerY;
   let saveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -150,7 +179,7 @@ export function launchWorldEditor(root: HTMLElement): void {
   const ctx: CanvasRenderingContext2D = context;
   const help = document.createElement('div');
   help.className = 'editor-overlay-help';
-  help.textContent = 'Blank 180k ocean base · Left-drag paints · Right-drag pans · Wheel zooms · M opens world map · Ctrl+Z/Y undo/redo · Ctrl+S saves.';
+  help.textContent = 'Blank 180k ocean · Brush/Line/Rectangle tools · Select then Copy/Paste Stamp · Right-drag pans · Wheel zooms · M world map · Ctrl+Z/Y undo/redo.';
   const status = document.createElement('div');
   status.className = 'editor-status';
   const statusLeft = document.createElement('span');
@@ -173,6 +202,8 @@ export function launchWorldEditor(root: HTMLElement): void {
     data = clearEditorWorld(WORLD_SIZE);
     undoStack.length = 0;
     redoStack.length = 0;
+    selectedArea = null;
+    clipboard = null;
     refreshMarkerJumpSelect();
     navigator?.markEditsDirty();
     draw();
@@ -196,6 +227,19 @@ export function launchWorldEditor(root: HTMLElement): void {
     const marker = data.markers.find((item) => item.id === markerJumpSelect.value);
     markerJumpSelect.value = '';
     if (marker) jumpCamera(marker.x, marker.y);
+  });
+
+  const toolSelect = document.createElement('select');
+  addOption(toolSelect, 'brush', 'Tool: Brush');
+  addOption(toolSelect, 'line', 'Tool: Line / road / river');
+  addOption(toolSelect, 'rect_fill', 'Tool: Filled rectangle');
+  addOption(toolSelect, 'rect_outline', 'Tool: Rectangle outline');
+  addOption(toolSelect, 'select', 'Tool: Select area');
+  addOption(toolSelect, 'stamp', 'Tool: Paste stamp');
+  toolSelect.value = toolMode;
+  toolSelect.addEventListener('change', () => {
+    toolMode = toolSelect.value as ToolMode;
+    draw();
   });
 
   const brushSelect = document.createElement('select');
@@ -230,6 +274,22 @@ export function launchWorldEditor(root: HTMLElement): void {
   treeDensitySelect.value = String(treeDensity);
   treeDensitySelect.addEventListener('change', () => { treeDensity = Number(treeDensitySelect.value); });
 
+  const copyBtn = button('Copy selection', () => copySelection());
+  const stampBtn = button('Paste/Stamp', () => {
+    if (!clipboard) {
+      updateStatus('Select an area and copy it first.', true);
+      return;
+    }
+    toolMode = 'stamp';
+    toolSelect.value = toolMode;
+    draw();
+  });
+  const fillBtn = button('Fill selection', () => fillSelectedArea());
+  const clearSelectionBtn = button('Clear selection', () => {
+    selectedArea = null;
+    draw();
+  });
+
   const title = document.createElement('span');
   title.className = 'editor-title';
   title.textContent = 'Twin Lands World Editor';
@@ -239,8 +299,10 @@ export function launchWorldEditor(root: HTMLElement): void {
   yLabel.textContent = 'Y';
   toolbar.append(
     title, backBtn, saveBtn, exportBtn, importBtn, clearBtn, mapBtn,
-    markerJumpSelect, xLabel, xInput, yLabel, yInput, goBtn,
-    brushSelect, zoomSelect, treeModeSelect, treeDensitySelect, importInput,
+    markerJumpSelect, toolSelect, brushSelect, zoomSelect,
+    copyBtn, stampBtn, fillBtn, clearSelectionBtn,
+    xLabel, xInput, yLabel, yInput, goBtn,
+    treeModeSelect, treeDensitySelect, importInput,
   );
 
   navigator = createEditorNavigator({
@@ -278,19 +340,59 @@ export function launchWorldEditor(root: HTMLElement): void {
       return;
     }
     if (e.button !== 0) return;
+    const point = mouseWorld(e);
+
+    if (toolMode === 'stamp') {
+      beginHistory();
+      pasteClipboardAt(point.x, point.y);
+      finishStroke();
+      scheduleSave();
+      navigator?.markEditsDirty();
+      draw();
+      return;
+    }
+
     isPainting = true;
-    strokeBefore = new Map();
-    strokeTerrainStart = data.terrainStrokes.length;
-    strokeMarkersBefore = cloneMarkers(data.markers);
-    lastPaintPoint = null;
-    paintAtMouse(e, true);
+    if (toolMode === 'select') {
+      dragStart = point;
+      dragCurrent = point;
+      draw();
+      return;
+    }
+
+    beginHistory();
+    if (toolMode === 'brush') {
+      lastPaintPoint = null;
+      paintAtMouse(e, true);
+    } else {
+      dragStart = point;
+      dragCurrent = point;
+      draw();
+    }
   });
+
   window.addEventListener('mouseup', (e) => {
     if (e.button === 2 || e.button === 1) isPanning = false;
-    if (e.button === 0 && isPainting) finishStroke();
+    if (e.button !== 0 || !isPainting) return;
+
+    if (toolMode === 'brush') {
+      finishStroke();
+    } else if (toolMode === 'select') {
+      if (dragStart && dragCurrent) selectedArea = normalizeBox(dragStart, dragCurrent);
+    } else if (dragStart && dragCurrent) {
+      commitDragShape(toolMode, dragStart, dragCurrent);
+      finishStroke();
+      scheduleSave();
+      navigator?.markEditsDirty();
+    }
+
     isPainting = false;
     lastPaintPoint = null;
+    dragStart = null;
+    dragCurrent = null;
+    draw();
   });
+
   canvas.addEventListener('mousemove', (e) => {
     const p = mouseWorld(e);
     hoverX = p.x;
@@ -301,12 +403,16 @@ export function launchWorldEditor(root: HTMLElement): void {
       centerY = clampCoord(panCenterY - (e.clientY - panStartY) / tilePx);
       syncCoordInputs();
       draw();
-    } else if (isPainting) {
+    } else if (isPainting && toolMode === 'brush') {
       paintAtMouse(e, false);
+    } else if (isPainting && dragStart) {
+      dragCurrent = p;
+      draw();
     } else {
       draw();
     }
   });
+
   canvas.addEventListener('wheel', (e) => {
     e.preventDefault();
     const before = mouseWorld(e);
@@ -320,16 +426,27 @@ export function launchWorldEditor(root: HTMLElement): void {
   }, { passive: false });
 
   window.addEventListener('keydown', (e) => {
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+    const key = e.key.toLowerCase();
+    if ((e.ctrlKey || e.metaKey) && key === 's') {
       e.preventDefault();
       persistNow();
-    } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+    } else if ((e.ctrlKey || e.metaKey) && key === 'z') {
       e.preventDefault();
       undo();
-    } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+    } else if ((e.ctrlKey || e.metaKey) && key === 'y') {
       e.preventDefault();
       redo();
-    } else if (!e.ctrlKey && !e.metaKey && e.key.toLowerCase() === 'm' && !isFormTarget(e.target)) {
+    } else if ((e.ctrlKey || e.metaKey) && key === 'c' && !isFormTarget(e.target)) {
+      e.preventDefault();
+      copySelection();
+    } else if ((e.ctrlKey || e.metaKey) && key === 'v' && !isFormTarget(e.target)) {
+      e.preventDefault();
+      if (clipboard) {
+        toolMode = 'stamp';
+        toolSelect.value = toolMode;
+        draw();
+      }
+    } else if (!e.ctrlKey && !e.metaKey && key === 'm' && !isFormTarget(e.target)) {
       e.preventDefault();
       navigator?.toggleLarge();
     }
@@ -413,11 +530,12 @@ export function launchWorldEditor(root: HTMLElement): void {
 
     const note = document.createElement('div');
     note.className = 'editor-palette-note';
-    if (category === 'terrain') note.textContent = 'The base world is pure deep water. Everything you paint is authored terrain; there is no procedural terrain or random world population underneath it.';
-    else if (category === 'resources') note.textContent = 'Trees can place one at a time or scatter a grove through the current brush. Ores place as exact hand-authored nodes.';
-    else if (category === 'spawners') note.textContent = 'Monster spawners are entirely hand-authored now.';
-    else if (category === 'markers') note.textContent = 'Markers are exported in world JSON with type, name, notes and exact coordinates, so they can be read later when building references, layouts and POIs.';
-    else if (category === 'erase') note.textContent = 'Revert terrain reveals the blank deep-water base. Revert whole tile removes detailed terrain/objects from that exact tile.';
+    if (category === 'terrain') note.textContent = 'Select Path/Water/Beach and use Line for roads, rivers and coastlines. Filled Rectangle and Fill Selection create huge areas as compact shapes rather than millions of cells.';
+    else if (category === 'structures') note.textContent = 'Brush places single structures. Line and Rectangle Outline are useful for fences and city walls.';
+    else if (category === 'resources') note.textContent = 'Trees can place one at a time or scatter a randomized grove. Ores are exact hand-authored nodes.';
+    else if (category === 'spawners') note.textContent = 'Monster spawners are entirely hand-authored.';
+    else if (category === 'markers') note.textContent = 'Markers export with type, name, notes and coordinates so they can later become canonical city/mine/castle references.';
+    else if (category === 'erase') note.textContent = 'Revert terrain paints the blank ocean base over existing authored terrain. Erase objects removes placed resources/structures/spawners.';
     if (note.textContent) palette.append(note);
 
     if (category === 'markers') {
@@ -449,8 +567,8 @@ export function launchWorldEditor(root: HTMLElement): void {
       grid.append(paletteButton({ kind: 'eraseMarker' }, '', 'Delete nearest marker'));
     } else {
       grid.append(paletteButton({ kind: 'eraseObjects' }, '', 'Erase objects'));
-      grid.append(paletteButton({ kind: 'revertTile' }, '', 'Revert terrain'));
-      grid.append(paletteButton({ kind: 'revertAll' }, '', 'Revert whole tile'));
+      grid.append(paletteButton({ kind: 'revertTile' }, '', 'Revert terrain to ocean'));
+      grid.append(paletteButton({ kind: 'revertAll' }, '', 'Clear detailed cell'));
     }
     palette.append(grid);
 
@@ -502,7 +620,7 @@ export function launchWorldEditor(root: HTMLElement): void {
     return true;
   }
 
-  function mouseWorld(e: MouseEvent | WheelEvent): { x: number; y: number } {
+  function mouseWorld(e: MouseEvent | WheelEvent): WorldPoint {
     const rect = canvas.getBoundingClientRect();
     const tilePx = TILE_SIZES[zoomIndex];
     const x = centerX + (e.clientX - rect.left - rect.width / 2) / tilePx;
@@ -511,9 +629,16 @@ export function launchWorldEditor(root: HTMLElement): void {
   }
 
   function effectiveBrushSize(): number {
-    if (selection.kind === 'tile' || selection.kind === 'eraseObjects' || selection.kind === 'revertTile' || selection.kind === 'revertAll') return brushSize;
+    if (selection.kind === 'tile' || selection.kind === 'revertTile') return brushSize;
+    if (selection.kind === 'eraseObjects' || selection.kind === 'revertAll') return Math.min(brushSize, 129);
     if (selection.kind === 'resource' && TREE_RESOURCES.has(selection.id) && treeMode === 'scatter') return brushSize;
     return 1;
+  }
+
+  function beginHistory(): void {
+    strokeBefore = new Map();
+    strokeTerrainStart = data.terrainStrokes.length;
+    strokeMarkersBefore = cloneMarkers(data.markers);
   }
 
   function paintAtMouse(e: MouseEvent, force: boolean): void {
@@ -558,7 +683,10 @@ export function launchWorldEditor(root: HTMLElement): void {
       return;
     }
     if ((selection.kind === 'tile' || selection.kind === 'revertTile') && brushSize >= MACRO_BRUSH_THRESHOLD) {
-      data.terrainStrokes.push({ x, y, size: brushSize, tile: selection.kind === 'tile' ? selection.id : null });
+      data.terrainStrokes.push({
+        kind: 'square', x, y, size: brushSize,
+        tile: selection.kind === 'tile' ? selection.id : null,
+      });
       return;
     }
 
@@ -567,6 +695,186 @@ export function launchWorldEditor(root: HTMLElement): void {
     for (let oy = -half; oy <= half; oy++) {
       for (let ox = -half; ox <= half; ox++) applySelection(clampCoord(x + ox), clampCoord(y + oy));
     }
+  }
+
+  function commitDragShape(mode: ToolMode, start: WorldPoint, end: WorldPoint): void {
+    if (mode !== 'line' && mode !== 'rect_fill' && mode !== 'rect_outline') return;
+    const terrainTile = selectedTerrainTile();
+    if (terrainTile !== undefined) {
+      data.terrainStrokes.push({
+        kind: mode,
+        x: start.x,
+        y: start.y,
+        x2: end.x,
+        y2: end.y,
+        size: Math.max(1, brushSize),
+        tile: terrainTile,
+      });
+      return;
+    }
+
+    if (selection.kind === 'marker' || selection.kind === 'eraseMarker') {
+      updateStatus('Markers use the Brush tool so each marker has one exact coordinate.', true);
+      return;
+    }
+
+    if (mode === 'line') rasterLine(start, end);
+    else rasterRectangle(start, end, mode === 'rect_fill');
+  }
+
+  function selectedTerrainTile(): TileType | null | undefined {
+    if (selection.kind === 'tile') return selection.id;
+    if (selection.kind === 'revertTile') return null;
+    return undefined;
+  }
+
+  function rasterLine(start: WorldPoint, end: WorldPoint): void {
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    const steps = Math.max(Math.abs(dx), Math.abs(dy));
+    if (steps + 1 > MAX_DETAILED_SHAPE_CELLS) {
+      updateStatus(`That detailed line would place ${(steps + 1).toLocaleString()} cells. Keep detailed lines below ${MAX_DETAILED_SHAPE_CELLS.toLocaleString()} cells.`, true);
+      return;
+    }
+    for (let i = 0; i <= steps; i++) {
+      const t = steps === 0 ? 0 : i / steps;
+      applySelection(clampCoord(start.x + dx * t), clampCoord(start.y + dy * t));
+    }
+  }
+
+  function rasterRectangle(start: WorldPoint, end: WorldPoint, filled: boolean): void {
+    const box = normalizeBox(start, end);
+    const width = box.right - box.left + 1;
+    const height = box.bottom - box.top + 1;
+    const count = filled ? width * height : Math.max(1, width * 2 + height * 2 - 4);
+    if (count > MAX_DETAILED_SHAPE_CELLS) {
+      updateStatus(`That detailed rectangle would place ${count.toLocaleString()} cells. Use terrain shapes for very large areas.`, true);
+      return;
+    }
+    for (let y = box.top; y <= box.bottom; y++) {
+      for (let x = box.left; x <= box.right; x++) {
+        if (filled || x === box.left || x === box.right || y === box.top || y === box.bottom) applySelection(x, y);
+      }
+    }
+  }
+
+  function fillSelectedArea(): void {
+    if (!selectedArea) {
+      updateStatus('Use Tool: Select area and drag a rectangle first.', true);
+      return;
+    }
+    const tile = selectedTerrainTile();
+    if (tile === undefined) {
+      updateStatus('Fill Selection works with a terrain tile or Revert terrain selected.', true);
+      return;
+    }
+    beginHistory();
+    data.terrainStrokes.push({
+      kind: 'rect_fill',
+      x: selectedArea.left,
+      y: selectedArea.top,
+      x2: selectedArea.right,
+      y2: selectedArea.bottom,
+      size: 1,
+      tile,
+    });
+    finishStroke();
+    scheduleSave();
+    navigator?.markEditsDirty();
+    draw();
+  }
+
+  function copySelection(): void {
+    if (!selectedArea) {
+      updateStatus('Use Tool: Select area and drag around the area you want to copy.', true);
+      return;
+    }
+    const width = selectedArea.right - selectedArea.left + 1;
+    const height = selectedArea.bottom - selectedArea.top + 1;
+    const area = width * height;
+    if (width > MAX_COPY_SIDE || height > MAX_COPY_SIDE || area > MAX_COPY_CELLS) {
+      updateStatus(`Copy/paste stamps are limited to ${MAX_COPY_SIDE}×${MAX_COPY_SIDE} tiles so city blocks stay fast.`, true);
+      return;
+    }
+
+    const terrainRuns: ClipboardRun[] = [];
+    const cells: ClipboardCell[] = [];
+    for (let dy = 0; dy < height; dy++) {
+      const y = selectedArea.top + dy;
+      let runTile = effectiveTile(selectedArea.left, y);
+      let runStart = 0;
+      for (let dx = 0; dx <= width; dx++) {
+        const nextTile = dx < width ? effectiveTile(selectedArea.left + dx, y) : null;
+        if (dx === width || nextTile !== runTile) {
+          terrainRuns.push({ dy, startX: runStart, length: dx - runStart, tile: runTile });
+          if (dx < width && nextTile) {
+            runTile = nextTile;
+            runStart = dx;
+          }
+        }
+
+        if (dx < width) {
+          const source = data.cells[cellKey(selectedArea.left + dx, y)];
+          if (source?.structure || source?.resource || source?.spawner) {
+            const detail: EditorCell = {};
+            if (source.structure) detail.structure = source.structure;
+            if (source.resource) detail.resource = source.resource;
+            if (source.spawner) detail.spawner = source.spawner;
+            cells.push({ dx, dy, cell: detail });
+          }
+        }
+      }
+    }
+
+    clipboard = { width, height, terrainRuns, cells };
+    updateStatus(`Copied ${width}×${height} stamp with ${cells.length} detailed objects.`);
+  }
+
+  function pasteClipboardAt(cx: number, cy: number): void {
+    if (!clipboard) {
+      updateStatus('Nothing has been copied yet.', true);
+      return;
+    }
+    const left = cx - Math.floor(clipboard.width / 2);
+    const top = cy - Math.floor(clipboard.height / 2);
+
+    for (const run of clipboard.terrainRuns) {
+      const x1 = left + run.startX;
+      const x2 = x1 + run.length - 1;
+      const y = top + run.dy;
+      if (y < 0 || y >= WORLD_SIZE || x2 < 0 || x1 >= WORLD_SIZE) continue;
+      data.terrainStrokes.push({
+        kind: 'rect_fill',
+        x: clampCoord(x1), y,
+        x2: clampCoord(x2), y2: y,
+        size: 1,
+        tile: run.tile,
+      });
+    }
+
+    for (const item of clipboard.cells) {
+      const x = left + item.dx;
+      const y = top + item.dy;
+      if (x < 0 || y < 0 || x >= WORLD_SIZE || y >= WORLD_SIZE) continue;
+      const key = cellKey(x, y);
+      rememberBefore(key);
+      const cell = ensureCell(key);
+      if (item.cell.structure) {
+        cell.structure = item.cell.structure;
+        cell.resource = null;
+        cell.spawner = null;
+      } else if (item.cell.resource) {
+        cell.resource = item.cell.resource;
+        cell.structure = null;
+        cell.spawner = null;
+      } else if (item.cell.spawner) {
+        cell.spawner = item.cell.spawner;
+        cell.structure = null;
+        cell.resource = null;
+      }
+      cleanupCell(key);
+    }
+    updateStatus(`Stamped ${clipboard.width}×${clipboard.height} selection at ${cx}, ${cy}.`);
   }
 
   function placeMarker(x: number, y: number, type: EditorMarkerType): void {
@@ -610,10 +918,10 @@ export function launchWorldEditor(root: HTMLElement): void {
     const size = Math.max(1, brushSize);
     const half = Math.floor(size / 2);
     const area = size * size;
-    const target = Math.max(1, Math.min(1000, Math.round(area * treeDensity)));
+    const target = Math.max(1, Math.min(800, Math.round(area * treeDensity)));
     const used = new Set<string>();
     let attempts = 0;
-    while (used.size < target && attempts < target * 12) {
+    while (used.size < target && attempts < target * 10) {
       attempts++;
       const x = clampCoord(cx + Math.floor(Math.random() * size) - half);
       const y = clampCoord(cy + Math.floor(Math.random() * size) - half);
@@ -672,7 +980,7 @@ export function launchWorldEditor(root: HTMLElement): void {
       cell.resource = null;
       cell.spawner = null;
     } else if (selection.kind === 'revertTile') {
-      delete cell.tile;
+      cell.tile = BASE_TILE;
     }
     cleanupCell(key);
   }
@@ -768,14 +1076,15 @@ export function launchWorldEditor(root: HTMLElement): void {
       if (!parsed || typeof parsed !== 'object' || !parsed.cells || typeof parsed.cells !== 'object') {
         throw new Error('Unsupported editor file');
       }
+      const importedStrokes: TerrainStroke[] = Array.isArray(parsed.terrainStrokes)
+        ? parsed.terrainStrokes.flatMap((raw): TerrainStroke[] => normalizeImportedStroke(raw))
+        : [];
       data = {
-        version: 3,
+        version: 4,
         worldSize: WORLD_SIZE,
         updatedAt: typeof parsed.updatedAt === 'string' ? parsed.updatedAt : new Date().toISOString(),
         cells: { ...(parsed.cells as Record<string, EditorCell>) },
-        terrainStrokes: Array.isArray(parsed.terrainStrokes)
-          ? (parsed.terrainStrokes as TerrainStroke[]).map((s) => ({ x: s.x, y: s.y, size: s.size, tile: s.tile }))
-          : [],
+        terrainStrokes: importedStrokes,
         markers: Array.isArray(parsed.markers)
           ? (parsed.markers as EditorMarker[]).map((marker) => ({ ...marker }))
           : [],
@@ -783,11 +1092,13 @@ export function launchWorldEditor(root: HTMLElement): void {
       replaceEditorWorld(data);
       undoStack.length = 0;
       redoStack.length = 0;
+      selectedArea = null;
+      clipboard = null;
       refreshMarkerJumpSelect();
       if (category === 'markers') renderPalette();
       navigator?.markEditsDirty();
       draw();
-      updateStatus(`Imported ${Object.keys(data.cells).length.toLocaleString()} detailed cells, ${data.terrainStrokes.length.toLocaleString()} terrain strokes and ${data.markers.length} markers.`);
+      updateStatus(`Imported ${Object.keys(data.cells).length.toLocaleString()} detailed cells, ${data.terrainStrokes.length.toLocaleString()} terrain shapes and ${data.markers.length} markers.`);
     } catch {
       updateStatus('Could not import that file. Expected a MassRPG world-editor JSON file.', true);
     } finally {
@@ -795,11 +1106,27 @@ export function launchWorldEditor(root: HTMLElement): void {
     }
   }
 
+  function normalizeImportedStroke(raw: unknown): TerrainStroke[] {
+    if (!raw || typeof raw !== 'object') return [];
+    const stroke = raw as Partial<TerrainStroke>;
+    if (!Number.isFinite(stroke.x) || !Number.isFinite(stroke.y) || !Number.isFinite(stroke.size)) return [];
+    if (!(stroke.tile === null || typeof stroke.tile === 'string')) return [];
+    const kind: TerrainStrokeKind = stroke.kind === 'line' || stroke.kind === 'rect_fill' || stroke.kind === 'rect_outline'
+      ? stroke.kind
+      : 'square';
+    if (kind !== 'square' && (!Number.isFinite(stroke.x2) || !Number.isFinite(stroke.y2))) return [];
+    return [{
+      kind,
+      x: Number(stroke.x), y: Number(stroke.y),
+      ...(kind !== 'square' ? { x2: Number(stroke.x2), y2: Number(stroke.y2) } : {}),
+      size: Math.max(1, Math.round(Number(stroke.size))),
+      tile: stroke.tile as TileType | null,
+    }];
+  }
+
   function terrainStrokeAt(x: number, y: number): TerrainStroke | undefined {
     for (let i = data.terrainStrokes.length - 1; i >= 0; i--) {
-      const stroke = data.terrainStrokes[i];
-      const half = Math.floor(stroke.size / 2);
-      if (x >= stroke.x - half && x <= stroke.x + half && y >= stroke.y - half && y <= stroke.y + half) return stroke;
+      if (terrainStrokeContains(data.terrainStrokes[i], x, y)) return data.terrainStrokes[i];
     }
     return undefined;
   }
@@ -807,8 +1134,7 @@ export function launchWorldEditor(root: HTMLElement): void {
   function effectiveTile(x: number, y: number): TileType {
     const cell = data.cells[cellKey(x, y)];
     if (cell?.tile) return cell.tile;
-    const stroke = terrainStrokeAt(x, y);
-    return stroke?.tile ?? BASE_TILE;
+    return terrainStrokeAt(x, y)?.tile ?? BASE_TILE;
   }
 
   function draw(): void {
@@ -823,25 +1149,16 @@ export function launchWorldEditor(root: HTMLElement): void {
     else drawDetailedTerrain(width, height, tilePx);
 
     drawReferenceMarkers(width, height, tilePx);
-    drawBrushPreview(width, height, tilePx);
+    drawInteractionPreview(width, height, tilePx);
     updateStatus();
     navigator?.redraw();
   }
 
   function drawMacroTerrain(width: number, height: number, tilePx: number): void {
-    // Never sample millions of virtual tiles. The base is one ocean fill, then
-    // only sparse authored strokes/cells are composited over it.
     ctx.fillStyle = TILE_MAP_COLORS[BASE_TILE];
     ctx.fillRect(0, 0, width, height);
 
-    for (const stroke of data.terrainStrokes) {
-      const half = Math.floor(stroke.size / 2);
-      const topLeft = worldToScreen(stroke.x - half, stroke.y - half, width, height, tilePx);
-      const sizePx = stroke.size * tilePx;
-      if (topLeft.x > width || topLeft.y > height || topLeft.x + sizePx < 0 || topLeft.y + sizePx < 0) continue;
-      ctx.fillStyle = stroke.tile ? TILE_MAP_COLORS[stroke.tile] : TILE_MAP_COLORS[BASE_TILE];
-      ctx.fillRect(topLeft.x, topLeft.y, Math.max(1, sizePx), Math.max(1, sizePx));
-    }
+    for (const stroke of data.terrainStrokes) drawTerrainStrokeOnEditor(stroke, width, height, tilePx);
 
     for (const [key, cell] of Object.entries(data.cells)) {
       if (!cell.tile) continue;
@@ -851,6 +1168,47 @@ export function launchWorldEditor(root: HTMLElement): void {
       ctx.fillStyle = TILE_MAP_COLORS[cell.tile];
       ctx.fillRect(p.x, p.y, Math.max(1, tilePx), Math.max(1, tilePx));
     }
+  }
+
+  function drawTerrainStrokeOnEditor(stroke: TerrainStroke, width: number, height: number, tilePx: number): void {
+    const color = stroke.tile ? TILE_MAP_COLORS[stroke.tile] : TILE_MAP_COLORS[BASE_TILE];
+    ctx.fillStyle = color;
+    ctx.strokeStyle = color;
+
+    if (stroke.kind === 'line') {
+      const a = worldToScreen(stroke.x, stroke.y, width, height, tilePx);
+      const b = worldToScreen(stroke.x2 ?? stroke.x, stroke.y2 ?? stroke.y, width, height, tilePx);
+      ctx.lineWidth = Math.max(1, stroke.size * tilePx);
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.stroke();
+      return;
+    }
+
+    if (stroke.kind === 'rect_fill' || stroke.kind === 'rect_outline') {
+      const box = normalizeBox(
+        { x: stroke.x, y: stroke.y },
+        { x: stroke.x2 ?? stroke.x, y: stroke.y2 ?? stroke.y },
+      );
+      const a = worldToScreen(box.left, box.top, width, height, tilePx);
+      const w = Math.max(1, (box.right - box.left + 1) * tilePx);
+      const h = Math.max(1, (box.bottom - box.top + 1) * tilePx);
+      if (stroke.kind === 'rect_fill') ctx.fillRect(a.x, a.y, w, h);
+      else {
+        ctx.lineWidth = Math.max(1, stroke.size * tilePx);
+        ctx.strokeRect(a.x, a.y, w, h);
+      }
+      return;
+    }
+
+    const half = Math.floor(stroke.size / 2);
+    const a = worldToScreen(stroke.x - half, stroke.y - half, width, height, tilePx);
+    const sizePx = stroke.size * tilePx;
+    if (a.x > width || a.y > height || a.x + sizePx < 0 || a.y + sizePx < 0) return;
+    ctx.fillRect(a.x, a.y, Math.max(1, sizePx), Math.max(1, sizePx));
   }
 
   function drawDetailedTerrain(width: number, height: number, tilePx: number): void {
@@ -940,7 +1298,7 @@ export function launchWorldEditor(root: HTMLElement): void {
     }
   }
 
-  function worldToScreen(wx: number, wy: number, width: number, height: number, tilePx: number): { x: number; y: number } {
+  function worldToScreen(wx: number, wy: number, width: number, height: number, tilePx: number): WorldPoint {
     return {
       x: width / 2 + (wx - centerX) * tilePx,
       y: height / 2 + (wy - centerY) * tilePx,
@@ -975,18 +1333,63 @@ export function launchWorldEditor(root: HTMLElement): void {
     }
   }
 
-  function drawBrushPreview(width: number, height: number, tilePx: number): void {
+  function drawInteractionPreview(width: number, height: number, tilePx: number): void {
+    if (selectedArea) {
+      drawBoxPreview(selectedArea, width, height, tilePx, 'rgba(80,190,255,0.10)', 'rgba(105,205,255,0.95)', 2);
+    }
+
+    if (isPainting && dragStart && dragCurrent) {
+      if (toolMode === 'line') {
+        const a = worldToScreen(dragStart.x, dragStart.y, width, height, tilePx);
+        const b = worldToScreen(dragCurrent.x, dragCurrent.y, width, height, tilePx);
+        ctx.strokeStyle = 'rgba(92,255,114,0.95)';
+        ctx.lineWidth = Math.max(3, brushSize * tilePx);
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+        return;
+      }
+      const box = normalizeBox(dragStart, dragCurrent);
+      if (toolMode === 'select') {
+        drawBoxPreview(box, width, height, tilePx, 'rgba(80,190,255,0.12)', 'rgba(105,205,255,0.95)', 2);
+        return;
+      }
+      if (toolMode === 'rect_fill') {
+        drawBoxPreview(box, width, height, tilePx, 'rgba(72,255,103,0.18)', 'rgba(92,255,114,0.95)', 2);
+        return;
+      }
+      if (toolMode === 'rect_outline') {
+        drawBoxPreview(box, width, height, tilePx, 'rgba(72,255,103,0.04)', 'rgba(92,255,114,0.95)', Math.max(2, brushSize * tilePx));
+        return;
+      }
+    }
+
+    if (toolMode === 'stamp' && clipboard) {
+      const halfW = Math.floor(clipboard.width / 2);
+      const halfH = Math.floor(clipboard.height / 2);
+      drawBoxPreview({
+        left: hoverX - halfW,
+        top: hoverY - halfH,
+        right: hoverX - halfW + clipboard.width - 1,
+        bottom: hoverY - halfH + clipboard.height - 1,
+      }, width, height, tilePx, 'rgba(72,255,103,0.15)', 'rgba(92,255,114,0.95)', 2);
+      return;
+    }
+
+    if (toolMode !== 'brush') return;
     if (selection.kind === 'marker' || selection.kind === 'eraseMarker') {
       const p = worldToScreen(hoverX, hoverY, width, height, tilePx);
-      ctx.fillStyle = 'rgba(72,255,103,0.22)';
-      ctx.strokeStyle = 'rgba(92,255,114,0.98)';
+      ctx.fillStyle = 'rgba(72,255,103,0.25)';
+      ctx.strokeStyle = 'rgba(92,255,114,0.95)';
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.arc(p.x, p.y, 7, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
+      ctx.fill(); ctx.stroke();
       return;
     }
+
     const size = effectiveBrushSize();
     const half = Math.floor(size / 2);
     const topLeft = worldToScreen(hoverX - half, hoverY - half, width, height, tilePx);
@@ -1001,11 +1404,27 @@ export function launchWorldEditor(root: HTMLElement): void {
     ctx.strokeRect(x, y, visualSize, visualSize);
   }
 
+  function drawBoxPreview(box: SelectionBox, width: number, height: number, tilePx: number, fill: string, stroke: string, lineWidth: number): void {
+    const a = worldToScreen(box.left, box.top, width, height, tilePx);
+    const w = Math.max(3, (box.right - box.left + 1) * tilePx);
+    const h = Math.max(3, (box.bottom - box.top + 1) * tilePx);
+    ctx.fillStyle = fill;
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = lineWidth;
+    ctx.fillRect(a.x, a.y, w, h);
+    ctx.strokeRect(a.x, a.y, w, h);
+  }
+
   function updateStatus(message?: string, warning = false): void {
     const selected = 'id' in selection ? `${selection.kind}: ${displayName(selection.id)}` : selection.kind;
-    statusLeft.textContent = message ?? `Cursor ${hoverX}, ${hoverY} · Center ${centerX}, ${centerY} · ${selected} · blank-ocean authored world`;
+    const areaText = selectedArea
+      ? ` · selection ${selectedArea.right - selectedArea.left + 1}×${selectedArea.bottom - selectedArea.top + 1}`
+      : '';
+    const clipboardText = clipboard ? ` · stamp ${clipboard.width}×${clipboard.height}` : '';
+    statusLeft.textContent = message ?? `Cursor ${hoverX}, ${hoverY} · Center ${centerX}, ${centerY} · ${toolMode} · ${selected}${areaText}${clipboardText}`;
     statusLeft.className = warning ? 'warn' : '';
-    statusRight.textContent = `${Object.keys(data.cells).length.toLocaleString()} detailed cells · ${data.terrainStrokes.length.toLocaleString()} terrain strokes · ${data.markers.length} markers · Undo ${undoStack.length}`;
+    const cellCount = Object.keys(data.cells).length;
+    statusRight.textContent = `${cellCount.toLocaleString()} detailed cells · ${data.terrainStrokes.length.toLocaleString()} terrain shapes · ${data.markers.length} markers · Undo ${undoStack.length}`;
   }
 
   function parseCellKey(key: string): [number, number] {
