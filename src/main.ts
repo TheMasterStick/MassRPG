@@ -62,7 +62,7 @@ function buildStartScreen() {
 
   const box = el('div', { className: 'start-box' }, [
     el('h1', { text: 'MassRPG' }),
-    el('p', { className: 'tagline', text: 'The Twin Lands: a hand-shaped 180,000x180,000 tile world of settlements, wilderness, skills and adventure.' }),
+    el('p', { className: 'tagline', text: 'The Twin Lands: a 180,000x180,000 hand-authored RPG world.' }),
     newBtn,
     editorBtn,
   ]);
@@ -78,7 +78,7 @@ function buildStartScreen() {
 
   box.append(el('div', {
     className: 'hint',
-    text: 'You begin in Capital Town in central Westerland. Click to move or interact. WASD/arrows to walk, hold Shift to run. I = Inventory, K = Skills, B = Build. The World Editor lets you hand-place terrain, structures, resources and monster spawners.',
+    text: 'The base world is now a blank 180,000x180,000 ocean. Build the terrain, settlements, mines, structures and monster spawns yourself in World Editor, then return here to play-test the authored world.',
   }));
 
   startScreen.append(box);
