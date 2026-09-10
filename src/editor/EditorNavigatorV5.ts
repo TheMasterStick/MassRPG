@@ -23,6 +23,7 @@ export interface EditorNavigatorHandle {
 
 const MINI_SIZE = 220;
 const LARGE_SIZE = 760;
+const MAP_EDIT_REFRESH_MS = 120;
 const MARKER_COLORS: Record<EditorMarkerType, string> = {
   settlement: '#f2f2f2', village: '#8ee28e', town: '#f1d56b', city: '#ff7777', castle: '#c391ff', mining_area: '#ff8a32',
 };
@@ -60,6 +61,8 @@ export function createEditorNavigatorV5(options: NavigatorOptions): EditorNaviga
   let miniCache: { key: string; canvas: HTMLCanvasElement } | null = null;
   let largeCache: { key: string; canvas: HTMLCanvasElement } | null = null;
   let framePending = false;
+  let dirtyPending = false;
+  let dirtyTimer: ReturnType<typeof setTimeout> | null = null;
 
   function planeName(plane: WorldPlane): string {
     return plane === 0 ? 'Surface' : `Underground ${plane}`;
@@ -137,8 +140,37 @@ export function createEditorNavigatorV5(options: NavigatorOptions): EditorNaviga
 
   function redrawNow() { framePending = false; drawMap(mini, false); if (!modal.classList.contains('hidden')) drawMap(large, true); }
   function redraw() { if (framePending) return; framePending = true; requestAnimationFrame(redrawNow); }
-  function markEditsDirty() { revision++; miniCache = null; largeCache = null; }
-  function toggleLarge() { modal.classList.toggle('hidden'); redraw(); }
+
+  /**
+   * Painting can generate many mouse events. Rebuilding the entire miniature map
+   * on every event was the main editor hitch. Keep the existing cache while the
+   * user is drawing and refresh it at most ~8 times/second instead.
+   */
+  function markEditsDirty() {
+    dirtyPending = true;
+    if (dirtyTimer) return;
+    dirtyTimer = setTimeout(() => {
+      dirtyTimer = null;
+      if (!dirtyPending) return;
+      dirtyPending = false;
+      revision++;
+      miniCache = null;
+      largeCache = null;
+      redraw();
+    }, MAP_EDIT_REFRESH_MS);
+  }
+
+  function toggleLarge() {
+    modal.classList.toggle('hidden');
+    if (!modal.classList.contains('hidden') && dirtyPending) {
+      dirtyPending = false;
+      if (dirtyTimer) { clearTimeout(dirtyTimer); dirtyTimer = null; }
+      revision++;
+      miniCache = null;
+      largeCache = null;
+    }
+    redraw();
+  }
   function closeLarge() { modal.classList.add('hidden'); }
   function jump(e: MouseEvent, canvas: HTMLCanvasElement) { const r=canvas.getBoundingClientRect(); options.onJump(Math.round((e.clientX-r.left)/r.width*(WORLD_SIZE-1)), Math.round((e.clientY-r.top)/r.height*(WORLD_SIZE-1))); redraw(); }
 
