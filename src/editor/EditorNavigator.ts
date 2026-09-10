@@ -1,6 +1,5 @@
-import { ORE_VEINS, TOWNS, WORLD_SIZE } from '../world/AeldorData';
-import type { EditorWorldData, TerrainStroke } from '../world/EditorWorld';
-import type { WorldGen } from '../world/WorldGen';
+import { WORLD_SIZE } from '../world/AeldorData';
+import type { EditorMarker, EditorMarkerType, EditorWorldData, TerrainStroke } from '../world/EditorWorld';
 import { TILE_MAP_COLORS } from '../ui/mapColors';
 
 interface ViewportState {
@@ -11,7 +10,6 @@ interface ViewportState {
 }
 
 interface NavigatorOptions {
-  gen: WorldGen;
   getData: () => EditorWorldData;
   getViewport: () => ViewportState;
   onJump: (x: number, y: number) => void;
@@ -30,9 +28,18 @@ interface StaticMapCache {
   canvas: HTMLCanvasElement;
 }
 
-const BASE_SAMPLE = 256;
 const MINI_SIZE = 220;
 const LARGE_SIZE = 760;
+const BASE_COLOR = TILE_MAP_COLORS.deep_water;
+
+const MARKER_COLORS: Record<EditorMarkerType, string> = {
+  settlement: '#f2f2f2',
+  village: '#8ee28e',
+  town: '#f1d56b',
+  city: '#ff7777',
+  castle: '#c391ff',
+  mining_area: '#ff8a32',
+};
 
 export function createEditorNavigator(options: NavigatorOptions): EditorNavigatorHandle {
   const panel = document.createElement('aside');
@@ -55,7 +62,7 @@ export function createEditorNavigator(options: NavigatorOptions): EditorNavigato
 
   const legend = document.createElement('div');
   legend.className = 'editor-map-legend';
-  legend.innerHTML = '<span>□ viewport</span><span class="town-dot">● towns</span><span class="mine-dot">● mines</span><span class="edit-dot">● manual objects</span>';
+  legend.innerHTML = '<span>□ viewport</span><span class="town-dot">● settlements</span><span class="mine-dot">● mining</span><span class="edit-dot">● manual objects</span>';
   panel.append(header, mini, legend);
 
   const modal = document.createElement('div');
@@ -65,7 +72,7 @@ export function createEditorNavigator(options: NavigatorOptions): EditorNavigato
   const modalHeader = document.createElement('div');
   modalHeader.className = 'editor-map-modal-header';
   const modalTitle = document.createElement('strong');
-  modalTitle.textContent = 'Twin Lands — Editor World Map';
+  modalTitle.textContent = 'Twin Lands — Hand-authored World Map';
   const modalHint = document.createElement('span');
   modalHint.textContent = 'Click anywhere to move the editor camera · M closes';
   const close = document.createElement('button');
@@ -80,34 +87,10 @@ export function createEditorNavigator(options: NavigatorOptions): EditorNavigato
   modal.append(modalBox);
   document.body.append(modal);
 
-  let baseMap: HTMLCanvasElement | null = null;
   let editRevision = 0;
   let miniStatic: StaticMapCache | null = null;
   let largeStatic: StaticMapCache | null = null;
-
-  function ensureBaseMap(): HTMLCanvasElement {
-    if (baseMap) return baseMap;
-    const c = document.createElement('canvas');
-    c.width = BASE_SAMPLE;
-    c.height = BASE_SAMPLE;
-    const ctx = c.getContext('2d')!;
-    const img = ctx.createImageData(BASE_SAMPLE, BASE_SAMPLE);
-    for (let py = 0; py < BASE_SAMPLE; py++) {
-      const wy = Math.round(((py + 0.5) / BASE_SAMPLE) * (WORLD_SIZE - 1));
-      for (let px = 0; px < BASE_SAMPLE; px++) {
-        const wx = Math.round(((px + 0.5) / BASE_SAMPLE) * (WORLD_SIZE - 1));
-        const rgb = hexToRgb(TILE_MAP_COLORS[options.gen.tileAt(wx, wy)] ?? '#000000');
-        const i = (py * BASE_SAMPLE + px) * 4;
-        img.data[i] = rgb[0];
-        img.data[i + 1] = rgb[1];
-        img.data[i + 2] = rgb[2];
-        img.data[i + 3] = 255;
-      }
-    }
-    ctx.putImageData(img, 0, 0);
-    baseMap = c;
-    return c;
-  }
+  let framePending = false;
 
   function staticMap(size: number, largeMode: boolean): HTMLCanvasElement {
     const existing = largeMode ? largeStatic : miniStatic;
@@ -116,15 +99,16 @@ export function createEditorNavigator(options: NavigatorOptions): EditorNavigato
     const canvas = document.createElement('canvas');
     canvas.width = size;
     canvas.height = size;
-    const ctx = canvas.getContext('2d')!;
-    const base = ensureBaseMap();
-    ctx.imageSmoothingEnabled = true;
-    ctx.drawImage(base, 0, 0, size, size);
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('Editor world map requires Canvas 2D.');
+    const ctx: CanvasRenderingContext2D = context;
+    ctx.fillStyle = BASE_COLOR;
+    ctx.fillRect(0, 0, size, size);
 
     const data = options.getData();
-    for (const stroke of data.terrainStrokes) drawTerrainStroke(ctx, base, stroke, size, size);
+    for (const stroke of data.terrainStrokes) drawTerrainStroke(ctx, stroke, size, size);
 
-    // Cell-level terrain edits sit above broad terrain strokes.
+    // Detailed cell terrain edits sit above broad terrain strokes.
     for (const [key, cell] of Object.entries(data.cells)) {
       if (!cell.tile) continue;
       const [x, y] = parseKey(key);
@@ -143,41 +127,17 @@ export function createEditorNavigator(options: NavigatorOptions): EditorNavigato
       const sy = (y / WORLD_SIZE) * size;
       if (cell.resource) {
         ctx.fillStyle = cell.resource.startsWith('rock_') ? '#101010' : '#1f8c3f';
-        mapDot(ctx, sx, sy, largeMode ? 2.4 : 1.5);
+        mapDot(ctx, sx, sy, largeMode ? 2.4 : 1.4);
       } else if (cell.structure) {
         ctx.fillStyle = '#f1c15a';
-        mapDot(ctx, sx, sy, largeMode ? 2.2 : 1.35);
+        mapDot(ctx, sx, sy, largeMode ? 2.2 : 1.3);
       } else if (cell.spawner) {
         ctx.fillStyle = '#d84b4b';
-        mapDot(ctx, sx, sy, largeMode ? 2.2 : 1.35);
+        mapDot(ctx, sx, sy, largeMode ? 2.2 : 1.3);
       }
     }
 
-    // Existing generated reference points are navigation aids, not secrets.
-    for (const town of TOWNS) {
-      const sx = (town.x / WORLD_SIZE) * size;
-      const sy = (town.y / WORLD_SIZE) * size;
-      ctx.fillStyle = town.capital ? '#ffe35a' : '#f5f5f5';
-      ctx.strokeStyle = '#111';
-      ctx.lineWidth = largeMode ? 1.5 : 1;
-      mapDot(ctx, sx, sy, town.capital ? (largeMode ? 4 : 2.7) : (largeMode ? 3 : 2));
-      ctx.stroke();
-      if (largeMode && size >= 600) {
-        ctx.font = '10px system-ui, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillStyle = '#fff';
-        ctx.strokeStyle = '#111';
-        ctx.lineWidth = 3;
-        ctx.strokeText(town.name, sx, sy - 7);
-        ctx.fillText(town.name, sx, sy - 7);
-      }
-    }
-    for (const mine of ORE_VEINS) {
-      const sx = (mine.x / WORLD_SIZE) * size;
-      const sy = (mine.y / WORLD_SIZE) * size;
-      ctx.fillStyle = '#ff8a32';
-      mapDot(ctx, sx, sy, largeMode ? 3.2 : 2.1);
-    }
+    for (const marker of data.markers) drawMarker(ctx, marker, size, largeMode);
 
     const next = { revision: editRevision, canvas };
     if (largeMode) largeStatic = next;
@@ -186,19 +146,15 @@ export function createEditorNavigator(options: NavigatorOptions): EditorNavigato
   }
 
   function drawMap(canvas: HTMLCanvasElement, largeMode: boolean): void {
-    const ctx = canvas.getContext('2d')!;
+    const context = canvas.getContext('2d');
+    if (!context) return;
+    const ctx: CanvasRenderingContext2D = context;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(staticMap(canvas.width, largeMode), 0, 0);
     drawViewport(ctx, canvas.width, canvas.height);
   }
 
-  function drawTerrainStroke(
-    ctx: CanvasRenderingContext2D,
-    base: HTMLCanvasElement,
-    stroke: TerrainStroke,
-    width: number,
-    height: number,
-  ): void {
+  function drawTerrainStroke(ctx: CanvasRenderingContext2D, stroke: TerrainStroke, width: number, height: number): void {
     const half = Math.floor(stroke.size / 2);
     const left = Math.max(0, stroke.x - half);
     const top = Math.max(0, stroke.y - half);
@@ -208,16 +164,30 @@ export function createEditorNavigator(options: NavigatorOptions): EditorNavigato
     const dy = (top / WORLD_SIZE) * height;
     const dw = Math.max(1, ((right - left) / WORLD_SIZE) * width);
     const dh = Math.max(1, ((bottom - top) / WORLD_SIZE) * height);
+    ctx.fillStyle = stroke.tile ? TILE_MAP_COLORS[stroke.tile] : BASE_COLOR;
+    ctx.fillRect(dx, dy, dw, dh);
+  }
 
-    if (stroke.tile === null) {
-      const sx = (left / WORLD_SIZE) * base.width;
-      const sy = (top / WORLD_SIZE) * base.height;
-      const sw = Math.max(1, ((right - left) / WORLD_SIZE) * base.width);
-      const sh = Math.max(1, ((bottom - top) / WORLD_SIZE) * base.height);
-      ctx.drawImage(base, sx, sy, sw, sh, dx, dy, dw, dh);
-    } else {
-      ctx.fillStyle = TILE_MAP_COLORS[stroke.tile];
-      ctx.fillRect(dx, dy, dw, dh);
+  function drawMarker(ctx: CanvasRenderingContext2D, marker: EditorMarker, size: number, largeMode: boolean): void {
+    const x = (marker.x / WORLD_SIZE) * size;
+    const y = (marker.y / WORLD_SIZE) * size;
+    ctx.fillStyle = MARKER_COLORS[marker.type];
+    ctx.strokeStyle = '#111';
+    ctx.lineWidth = largeMode ? 1.5 : 1;
+    const radius = marker.type === 'city' || marker.type === 'castle'
+      ? (largeMode ? 4.3 : 2.7)
+      : (largeMode ? 3.4 : 2.2);
+    mapDot(ctx, x, y, radius);
+    ctx.stroke();
+
+    if (largeMode) {
+      ctx.font = marker.type === 'city' ? 'bold 10px system-ui, sans-serif' : '10px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#fff';
+      ctx.strokeStyle = '#111';
+      ctx.lineWidth = 3;
+      ctx.strokeText(marker.name, x, y - radius - 4);
+      ctx.fillText(marker.name, x, y - radius - 4);
     }
   }
 
@@ -248,9 +218,16 @@ export function createEditorNavigator(options: NavigatorOptions): EditorNavigato
     redraw();
   }
 
-  function redraw(): void {
+  function redrawNow(): void {
+    framePending = false;
     drawMap(mini, false);
     if (!modal.classList.contains('hidden')) drawMap(large, true);
+  }
+
+  function redraw(): void {
+    if (framePending) return;
+    framePending = true;
+    requestAnimationFrame(redrawNow);
   }
 
   function markEditsDirty(): void {
@@ -261,7 +238,7 @@ export function createEditorNavigator(options: NavigatorOptions): EditorNavigato
 
   function toggleLarge(): void {
     modal.classList.toggle('hidden');
-    if (!modal.classList.contains('hidden')) drawMap(large, true);
+    redraw();
   }
 
   function closeLarge(): void {
@@ -276,19 +253,11 @@ export function createEditorNavigator(options: NavigatorOptions): EditorNavigato
     if (e.target === modal) closeLarge();
   });
 
+  redraw();
   return { element: panel, redraw, markEditsDirty, toggleLarge, closeLarge };
 }
 
 function parseKey(key: string): [number, number] {
   const comma = key.indexOf(',');
   return [Number(key.slice(0, comma)), Number(key.slice(comma + 1))];
-}
-
-function hexToRgb(hex: string): [number, number, number] {
-  const value = hex.startsWith('#') ? hex.slice(1) : hex;
-  return [
-    parseInt(value.slice(0, 2), 16) || 0,
-    parseInt(value.slice(2, 4), 16) || 0,
-    parseInt(value.slice(4, 6), 16) || 0,
-  ];
 }
