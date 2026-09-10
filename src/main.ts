@@ -6,7 +6,8 @@ import { initUI } from './ui/UI';
 import { addItem, equip } from './systems/Inventory';
 import { hasSave, loadGame, deleteSave } from './systems/Save';
 import { el } from './ui/dom';
-import { TWIN_LANDS_SEED } from './world/AeldorData';
+import { TWIN_LANDS_SEED, WORLD_SIZE } from './world/AeldorData';
+import { initializeEditorWorldStorage } from './world/EditorWorld';
 import { launchWorldEditor } from './editor/WorldEditor';
 
 const app = document.getElementById('app')!;
@@ -78,15 +79,20 @@ function buildStartScreen() {
 
   box.append(el('div', {
     className: 'hint',
-    text: 'The base world is now a blank 180,000x180,000 ocean. Build the terrain, settlements, mines, structures and monster spawns yourself in World Editor, then return here to play-test the authored world.',
+    text: 'The base world is a blank 180,000x180,000 ocean. Build terrain, elevation, settlements, mines, caves, structures and monster spawns in World Editor, then return here to play-test it.',
   }));
 
   startScreen.append(box);
 }
 
-if (new URLSearchParams(window.location.search).get('editor') === '1') {
-  app.innerHTML = '';
-  launchWorldEditor(app);
-} else {
-  buildStartScreen();
+async function bootstrap() {
+  await initializeEditorWorldStorage(WORLD_SIZE);
+  if (new URLSearchParams(window.location.search).get('editor') === '1') {
+    app.innerHTML = '';
+    launchWorldEditor(app);
+  } else {
+    buildStartScreen();
+  }
 }
+
+void bootstrap();
