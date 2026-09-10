@@ -7,10 +7,10 @@ import { WORLD_SIZE } from './AeldorData';
 export interface InventorySlotData { itemId: string; qty: number }
 
 export interface ChunkDiffs {
-  depletedResources: Record<string, number>; // localKey -> tick when available again
-  plantedCrops: Record<string, { cropId: string; plantedAtTick: number }>; // localKey
-  structures: Record<string, { type: StructureType; storage?: InventorySlotData[] }>; // player-built, localKey
-  monsterCooldowns: Record<string, number>; // localKey -> tick when spawn point can respawn
+  depletedResources: Record<string, number>;
+  plantedCrops: Record<string, { cropId: string; plantedAtTick: number }>;
+  structures: Record<string, { type: StructureType; storage?: InventorySlotData[] }>;
+  monsterCooldowns: Record<string, number>;
 }
 
 export function emptyDiffs(): ChunkDiffs {
@@ -40,8 +40,7 @@ export class Chunk {
       const edit = getEditorCell(wx, wy, WORLD_SIZE);
       if (edit?.tile) return edit.tile;
       const stroke = getEditorTerrainStrokeAt(wx, wy, WORLD_SIZE);
-      if (stroke) return stroke.tile ?? gen.tileAt(wx, wy);
-      return gen.tileAt(wx, wy);
+      return stroke?.tile ?? gen.tileAt(wx, wy);
     };
 
     for (let ly = 0; ly < CHUNK_SIZE; ly++) {
@@ -51,16 +50,15 @@ export class Chunk {
         const edit = getEditorCell(wx, wy, WORLD_SIZE);
         const terrainStroke = edit?.tile ? undefined : getEditorTerrainStrokeAt(wx, wy, WORLD_SIZE);
         const tile = edit?.tile ?? terrainStroke?.tile ?? gen.tileAt(wx, wy);
-        const suppressProcedural = edit?.suppressProcedural ?? terrainStroke?.suppressProcedural ?? false;
         this.tiles[ly * CHUNK_SIZE + lx] = tile;
         const key = localKey(lx, ly);
 
-        // Manual editor objects always win. If the terrain brush was painted
-        // with procedural generation disabled, un-authored structures,
-        // resources and monsters are suppressed for that tile.
+        // The hand-authored editor layer is authoritative. WorldGen now returns
+        // only blank ocean/no objects, but the fallback calls stay here to keep
+        // the runtime API stable for future explicitly authored base layers.
         let structure: StructureType | null = null;
         if (hasOwnEditorField(edit, 'structure')) structure = edit?.structure ?? null;
-        else if (!suppressProcedural) structure = gen.villageStructureAt(wx, wy);
+        else structure = gen.villageStructureAt(wx, wy);
         if (structure) {
           this.naturalStructures.set(key, structure);
           continue;
@@ -68,7 +66,7 @@ export class Chunk {
 
         let resource: ResourceType | null = null;
         if (hasOwnEditorField(edit, 'resource')) resource = edit?.resource ?? null;
-        else if (!suppressProcedural) resource = gen.resourceAt(wx, wy, getTile);
+        else resource = gen.resourceAt(wx, wy, getTile);
         if (resource) {
           this.resources.set(key, resource);
           continue;
@@ -76,7 +74,7 @@ export class Chunk {
 
         let monsterId: string | null = null;
         if (hasOwnEditorField(edit, 'spawner')) monsterId = edit?.spawner ?? null;
-        else if (!suppressProcedural) monsterId = gen.monsterSpawnAt(wx, wy, tile);
+        else monsterId = gen.monsterSpawnAt(wx, wy, tile);
         if (monsterId) this.spawnPoints.push({ lx, ly, monsterId });
       }
     }
