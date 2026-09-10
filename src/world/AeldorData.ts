@@ -66,10 +66,10 @@ function settlement(
 // much larger world. Sizes are deliberately varied: a city is a real city-sized
 // game space, while villages/hamlets stay compact.
 export const TOWNS: Town[] = [
-  settlement('capital-town', 'Capital Town', 57000, 88000, 'capital', 'mixed', true),
+  settlement('capital-town', 'Capital Town', 59000, 96000, 'capital', 'mixed', true),
 
   // Westerland heartland / lakes
-  settlement('lakeside', 'Lakeside', 50500, 75000, 'town', 'timber'),
+  settlement('lakeside', 'Lakeside', 56500, 72000, 'town', 'timber'),
   settlement('highfield', 'Highfield', 40500, 92500, 'town', 'mixed'),
   settlement('rivermeet', 'Rivermeet', 68000, 86500, 'city', 'mixed', true),
   settlement('redvale', 'Redvale', 74500, 74500, 'town', 'mixed'),
@@ -107,7 +107,7 @@ export const TOWNS: Town[] = [
   // Estland river belt / wastes
   settlement('brightwater', 'Brightwater', 130000, 61000, 'town', 'mixed'),
   settlement('eastwatch', 'Eastwatch', 158000, 62000, 'city', 'coastal', true),
-  settlement('emberford', 'Emberford', 118500, 84500, 'town', 'mixed'),
+  settlement('emberford', 'Emberford', 139000, 76000, 'town', 'mixed'),
   settlement('marshhaven', 'Marshhaven', 106000, 94500, 'village', 'timber'),
   settlement('sunfield', 'Sunfield', 138000, 87500, 'town', 'desert'),
   settlement('dustmere', 'Dustmere', 151000, 79000, 'town', 'desert', true),
@@ -121,7 +121,7 @@ export const TOWNS: Town[] = [
   // Small lived-in satellite sites near the developed heartland.
   settlement('willow-farm', 'Willow Farm', 52500, 95000, 'farmstead', 'timber'),
   settlement('eastfield', 'Eastfield', 64000, 96500, 'hamlet', 'timber'),
-  settlement('lake-hamlet', 'Lake Hamlet', 47000, 83500, 'hamlet', 'timber'),
+  settlement('lake-hamlet', 'Lake Hamlet', 46000, 90000, 'hamlet', 'timber'),
 ];
 
 export const CAPITAL = TOWNS.find((t) => t.capital)!;
@@ -179,9 +179,6 @@ export const RUINS: Ruin[] = [
 
 export interface WorldPoint { x: number; y: number }
 
-// Main merged Twin Lands coastline. It is intentionally broad and irregular,
-// with Westerland's broken western/southern coasts flowing into Estland's wider
-// eastern body instead of two continents separated by a strait.
 export const CONTINENT_OUTLINE: WorldPoint[] = [
   { x: 18000, y: 40000 }, { x: 24500, y: 28500 }, { x: 35500, y: 22500 },
   { x: 46500, y: 23500 }, { x: 56500, y: 30000 }, { x: 66000, y: 40000 },
@@ -200,9 +197,6 @@ export const CONTINENT_OUTLINE: WorldPoint[] = [
   { x: 9000, y: 63500 }, { x: 12500, y: 52000 },
 ];
 
-// Major islands only. Tiny skerries remain visual-map decoration for now; this
-// keeps local generation useful without turning the coast into thousands of
-// one-tile land flecks.
 export const ISLAND_OUTLINES: WorldPoint[][] = [
   [
     { x: 20500, y: 151000 }, { x: 23500, y: 146500 }, { x: 27000, y: 149000 },
@@ -238,9 +232,6 @@ export interface Region {
   edgeWarpTiles: number;
 }
 
-// Large biome/terrain anchors taken from the merged map. Filler terrain fills
-// the spaces between these authored regions, so the world remains detailed at
-// local scale without losing the recognizable macro geography.
 export const REGIONS: Region[] = [
   {
     name: 'Twinmere Lakes', kind: 'lake', edgeWarpScale: 1600, edgeWarpTiles: 90,
@@ -372,8 +363,6 @@ export interface River {
   points: WorldPoint[];
 }
 
-// Rivers are locally narrow (single/double digit world tiles) but are drawn as
-// overlays on the world map so they remain visible at continental zoom.
 export const RIVERS: River[] = [
   {
     name: 'Capital River', width: 7,
@@ -414,10 +403,8 @@ export const RIVERS: River[] = [
   },
 ];
 
-// ---- Progression zones ----
-// First-pass macro progression based on the user's 1-300 concept. These are
-// deliberately provisional now that the new map exists; settlement/POI review
-// can refine boundaries without rebuilding terrain.
+// First-pass 1-300 macro progression. These boundaries are intentionally
+// provisional until the enlarged settlement/POI network has been playtested.
 export interface ProgressionZone {
   name: string;
   cx: number;
@@ -429,7 +416,7 @@ export interface ProgressionZone {
 }
 
 export const PROGRESSION_ZONES: ProgressionZone[] = [
-  { name: 'Capital Heartland', cx: 57000, cy: 88000, rx: 17500, ry: 14500, minLevel: 1, maxLevel: 20 },
+  { name: 'Capital Heartland', cx: 59000, cy: 96000, rx: 17500, ry: 14500, minLevel: 1, maxLevel: 20 },
   { name: 'Westerland Marches', cx: 52000, cy: 67500, rx: 28000, ry: 22000, minLevel: 20, maxLevel: 50 },
   { name: 'Central Frontier', cx: 82000, cy: 79000, rx: 25500, ry: 23000, minLevel: 50, maxLevel: 90 },
   { name: 'Estland Approaches', cx: 109000, cy: 76000, rx: 25500, ry: 23500, minLevel: 90, maxLevel: 130 },
@@ -473,15 +460,10 @@ export function progressionLevelRangeAt(x: number, y: number): { minLevel: numbe
   };
 }
 
-// ---- Roads ----
-// This remains a simple settlement-connectivity graph for now. The next pass
-// can replace straight segments with terrain-aware routes and bridges.
 export interface RoadSegment { ax: number; ay: number; bx: number; by: number }
 export const ROADS: RoadSegment[] = buildRoadNetwork();
 
 function buildRoadNetwork(): RoadSegment[] {
-  // Islands intentionally have no settlements yet, so a simple MST keeps the
-  // continental network connected without creating ocean roads.
   const segments: RoadSegment[] = [];
   const connected = new Set<number>([0]);
   const remaining = new Set<number>(TOWNS.map((_, i) => i).filter((i) => i !== 0));
@@ -520,7 +502,6 @@ export function distanceFromCapital(x: number, y: number): number {
   return Math.hypot(x - CAPITAL.x, y - CAPITAL.y);
 }
 
-// ---- Authored ore sites ----
 export interface OreVein {
   name: string;
   x: number;
@@ -528,11 +509,8 @@ export interface OreVein {
   ores: { type: ResourceType; count: number }[];
 }
 
-// First-pass positions follow the user's orange-dot reference. Every listed ore
-// gets 3-5 permanent rock nodes. The exact tiering can be adjusted alongside
-// the revised progression map without changing the node system.
 export const ORE_VEINS: OreVein[] = [
-  { name: 'Capital Mine', x: 53500, y: 94500, ores: [
+  { name: 'Capital Mine', x: 61500, y: 97000, ores: [
     { type: 'rock_copper', count: 5 }, { type: 'rock_tin', count: 5 },
   ] },
   { name: 'Highfield Cut', x: 39500, y: 87000, ores: [
