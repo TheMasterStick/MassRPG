@@ -306,15 +306,15 @@ export interface OreVein {
 }
 
 export const ORE_VEINS: OreVein[] = [
-  { name: 'Dragonite Peaks', x: 6390, y: 485, ores: [{ type: 'rock_dragonite', count: 4 }] },
+  { name: 'Dragonite Peaks', x: 6600, y: 700, ores: [{ type: 'rock_dragonite', count: 4 }] },
   { name: 'Runite Ridge', x: 11315, y: 880, ores: [{ type: 'rock_rune', count: 4 }] },
   { name: 'Stormwatch Deposit', x: 1670, y: 2490, ores: [
     { type: 'rock_adamant', count: 4 }, { type: 'rock_mithril', count: 4 }, { type: 'rock_coal', count: 5 },
   ] },
-  { name: 'Ravenpoint Deposit', x: 1020, y: 5180, ores: [
+  { name: 'Ravenpoint Deposit', x: 1300, y: 5200, ores: [
     { type: 'rock_adamant', count: 3 }, { type: 'rock_gold', count: 4 }, { type: 'rock_silver', count: 4 },
   ] },
-  { name: 'Eastwatch Deposit', x: 14555, y: 5215, ores: [
+  { name: 'Eastwatch Deposit', x: 14200, y: 5300, ores: [
     { type: 'rock_mithril', count: 4 }, { type: 'rock_adamant', count: 4 },
   ] },
   { name: 'Darkfen Deposit', x: 4515, y: 8110, ores: [
@@ -323,16 +323,16 @@ export const ORE_VEINS: OreVein[] = [
   { name: 'Lakeside Deposit', x: 8880, y: 8265, ores: [
     { type: 'rock_iron', count: 5 }, { type: 'rock_coal', count: 5 },
   ] },
-  { name: 'Southpoint Deposit', x: 12855, y: 12400, ores: [
+  { name: 'Southpoint Deposit', x: 12600, y: 12450, ores: [
     { type: 'rock_silver', count: 4 }, { type: 'rock_gold', count: 4 }, { type: 'rock_mithril', count: 3 },
   ] },
-  { name: 'Capital Deposit', x: 8265, y: 12685, ores: [
+  { name: 'Capital Deposit', x: 8160, y: 12090, ores: [
     { type: 'rock_tin', count: 4 }, { type: 'rock_copper', count: 4 },
   ] },
   { name: 'Highfield Deposit', x: 4040, y: 11995, ores: [
     { type: 'rock_iron', count: 4 }, { type: 'rock_coal', count: 4 },
   ] },
-  { name: 'Far South Deposit', x: 11900, y: 14390, ores: [{ type: 'rock_silver', count: 4 }] },
+  { name: 'Far South Deposit', x: 11650, y: 12960, ores: [{ type: 'rock_silver', count: 4 }] },
 ];
 
 const ORE_NODE_MAP = new Map<string, ResourceType>();
