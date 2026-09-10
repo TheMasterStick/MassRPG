@@ -2,10 +2,11 @@ import { SimplexNoise } from '../core/Noise';
 import { hash2D } from '../core/Random';
 import type { ResourceType, StructureType, TileType } from './types';
 import { RESOURCE_SPAWNS } from '../data/biomes';
-import { monstersForBiomeNearOrigin } from '../data/monsters';
+import { MONSTERS } from '../data/monsters';
 import {
   WORLD_SIZE, REGIONS, REGION_BIOME, ROADS, RUINS,
-  nearestTown, distanceFromCapital, oreVeinResourceAt, type Region, type Ruin,
+  nearestTown, oreVeinResourceAt, progressionLevelRangeAt, progressionZonesAt,
+  type Region, type Ruin,
 } from './AeldorData';
 import { TOWN_BUILDINGS, ALL_TOWN_BUILDINGS, type TownBuilding } from './Buildings';
 
@@ -55,21 +56,46 @@ export class WorldGen {
     this.groveNoise = new SimplexNoise(this.seed ^ 0x6666);
   }
 
-  // Rarer tree tiers (oak/yew/magic) are only rolled for inside their own
-  // low-frequency noise patches, instead of being mixed uniformly across
-  // every forest/taiga tile - the common tier (tree_normal, ungated here)
-  // fills the rest, so a forest reads as mostly-normal-trees with distinct
-  // oak/yew/magic groves dotted through it rather than a random salt-and-
-  // pepper mix of every tier everywhere.
+  // Rarer tree tiers are only rolled inside their own low-frequency patches,
+  // and are also gated by the authored progression zones below. That keeps a
+  // forest from turning into a salt-and-pepper field of every tree tier.
   private static readonly GROVE_THRESHOLD: Partial<Record<ResourceType, number>> = {
-    tree_oak: 0.15, tree_yew: 0.4, tree_magic: 0.55,
+    tree_oak: 0.15,
+    tree_willow: 0.22,
+    tree_maple: 0.28,
+    tree_yew: 0.4,
+    tree_magic: 0.55,
   };
+
+  private static readonly RESOURCE_TIER_LEVEL: Partial<Record<ResourceType, number>> = {
+    tree_normal: 1,
+    tree_oak: 15,
+    tree_willow: 30,
+    tree_maple: 45,
+    tree_yew: 60,
+    tree_magic: 75,
+  };
+
+  // Defence-in-depth: even if a metal rock is accidentally re-added to a
+  // biome spawn table later, it still cannot become a random wilderness
+  // spawn. Metal ore only comes from ORE_VEINS.
+  private static readonly METAL_ORES = new Set<ResourceType>([
+    'rock_copper', 'rock_tin', 'rock_iron', 'rock_coal', 'rock_silver',
+    'rock_gold', 'rock_mithril', 'rock_adamant', 'rock_rune', 'rock_dragonite',
+  ]);
+
   private groveEligible(resource: ResourceType, x: number, y: number): boolean {
     const threshold = WorldGen.GROVE_THRESHOLD[resource];
     if (threshold === undefined) return true;
     const offset = resource.length * 41;
     const n = this.groveNoise.fbm(x / 140 + offset, y / 140 - offset, 2);
     return n > threshold;
+  }
+
+  private resourceAllowedByProgression(resource: ResourceType, x: number, y: number): boolean {
+    const requiredLevel = WorldGen.RESOURCE_TIER_LEVEL[resource];
+    if (requiredLevel === undefined) return true;
+    return requiredLevel <= progressionLevelRangeAt(x, y).maxLevel;
   }
 
   isVillage(x: number, y: number): boolean {
@@ -271,11 +297,18 @@ export class WorldGen {
   // Resource placement needs to see neighbouring tiles for water-adjacency
   // rules (fishing spots, willows), so it takes a tile lookup callback.
   resourceAt(x: number, y: number, getTile: (x: number, y: number) => TileType): ResourceType | null {
-    const vein = oreVeinResourceAt(x, y);
-    if (vein) return vein;
-
+    // Town safety must win before authored resources. The previous ordering
+    // checked the ore map first, which is why the Capital Deposit could appear
+    // inside the city even though isVillage() otherwise suppresses resources.
     if (this.isVillage(x, y) || this.onRoad(x, y)) return null;
+
     const tile = getTile(x, y);
+
+    // Authored ore sites are the ONLY source of metal-rock world nodes. A site
+    // node must also land on walkable land; an approximate reference-map
+    // coordinate should never punch a mine through a lake/ocean tile.
+    const vein = oreVeinResourceAt(x, y);
+    if (vein && this.isLandWalkable(tile)) return vein;
 
     if (this.isWaterTile(tile)) {
       let adjacentLand = false;
@@ -298,37 +331,52 @@ export class WorldGen {
 
     if (!this.isLandWalkable(tile)) return null;
 
-    // Willows favour water-adjacent fertile ground.
-    if ((tile === 'swamp' || tile === 'grass' || tile === 'plains')) {
+    // Willows favour water-adjacent fertile ground, but only in progression
+    // regions high enough to support their tier and only inside a willow grove.
+    if (tile === 'swamp' || tile === 'grass' || tile === 'plains') {
       let nearWater = false;
       for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
         if (this.isWaterTile(getTile(x + dx, y + dy))) { nearWater = true; break; }
       }
-      if (nearWater && hash2D(this.seed, x, y, 901) < 0.1) return 'tree_willow';
+      if (
+        nearWater &&
+        this.resourceAllowedByProgression('tree_willow', x, y) &&
+        this.groveEligible('tree_willow', x, y) &&
+        hash2D(this.seed, x, y, 901) < 0.06
+      ) return 'tree_willow';
     }
 
     const rules = RESOURCE_SPAWNS[tile];
     if (!rules || rules.length === 0) return null;
     for (let i = 0; i < rules.length; i++) {
-      if (!this.groveEligible(rules[i].resource, x, y)) continue;
+      const resource = rules[i].resource;
+      if (WorldGen.METAL_ORES.has(resource)) continue;
+      if (!this.resourceAllowedByProgression(resource, x, y)) continue;
+      if (!this.groveEligible(resource, x, y)) continue;
       const roll = hash2D(this.seed, x, y, 1000 + i);
-      if (roll < rules[i].chance) return rules[i].resource;
+      if (roll < rules[i].chance) return resource;
     }
     return null;
   }
 
-  // A sparse set of tiles per chunk become monster spawn points.
+  // A sparse set of tiles per chunk become monster spawn points. Normal
+  // spawns now follow the authored red-circle progression regions rather than
+  // a smooth distance-from-capital formula. Deliberate out-of-band encounters
+  // (a dragon lair, moss giant grove, lesser-demon site, etc.) should be added
+  // later as explicit POIs, not leaked everywhere through the normal pool.
   monsterSpawnAt(x: number, y: number, tile: TileType): string | null {
     if (this.isVillage(x, y) || this.onRoad(x, y)) return null;
     if (!this.isLandWalkable(tile)) return null;
     const roll = hash2D(this.seed, x, y, 5000);
     if (roll > 0.02) return null;
-    // Difficulty scales from the capital outward, not from whichever town
-    // happens to be nearest - otherwise a distant frontier town would carry
-    // its own low-level safe bubble instead of sitting in dangerous territory.
-    const distance = distanceFromCapital(x, y);
-    const candidates = monstersForBiomeNearOrigin(tile, distance);
+
+    const zones = progressionZonesAt(x, y);
+    const candidates = MONSTERS.filter((monster) =>
+      monster.biomes.includes(tile) &&
+      zones.some((zone) => monster.level >= zone.minLevel && monster.level <= zone.maxLevel),
+    );
     if (candidates.length === 0) return null;
+
     const idx = Math.floor(hash2D(this.seed, x, y, 5001) * candidates.length);
     return candidates[Math.min(idx, candidates.length - 1)].id;
   }
