@@ -35,26 +35,17 @@ export const RESOURCE_SPAWNS: Partial<Record<TileType, ResourceSpawnRule[]>> = {
     { resource: 'tree_willow', chance: 0.05 },
     { resource: 'herb_patch', chance: 0.012 },
   ],
+  // Ore no longer spawns from this per-tile roll (see ORE_VEINS in
+  // AeldorData.ts) - metal rocks are placed as authored clumped veins
+  // instead of scattered across every mountain tile in the world. Gems stay
+  // as a genuine rare wilderness find rather than a vein-bound resource.
   mountain: [
-    { resource: 'rock_copper', chance: 0.05 },
-    { resource: 'rock_tin', chance: 0.05 },
-    { resource: 'rock_iron', chance: 0.035 },
-    { resource: 'rock_coal', chance: 0.03 },
-    { resource: 'rock_silver', chance: 0.012 },
-    { resource: 'rock_gold', chance: 0.008 },
-    { resource: 'rock_mithril', chance: 0.012 },
-    { resource: 'rock_adamant', chance: 0.006 },
-    { resource: 'rock_rune', chance: 0.0025 },
     { resource: 'rock_gem', chance: 0.004 },
   ],
   snow: [
     { resource: 'tree_normal', chance: 0.015 },
-    { resource: 'rock_mithril', chance: 0.02 },
-    { resource: 'rock_adamant', chance: 0.012 },
-    { resource: 'rock_rune', chance: 0.004 },
   ],
   desert: [
-    { resource: 'rock_gold', chance: 0.01 },
     { resource: 'rock_gem', chance: 0.006 },
   ],
   beach: [],
@@ -69,7 +60,7 @@ export const RESOURCE_NAMES: Record<ResourceType, string> = {
   tree_yew: 'Yew tree', tree_magic: 'Magic tree',
   rock_copper: 'Copper rock', rock_tin: 'Tin rock', rock_iron: 'Iron rock', rock_coal: 'Coal rock',
   rock_mithril: 'Mithril rock', rock_adamant: 'Adamantite rock', rock_rune: 'Runite rock',
-  rock_gold: 'Gold rock', rock_silver: 'Silver rock', rock_gem: 'Gem rock',
+  rock_gold: 'Gold rock', rock_silver: 'Silver rock', rock_gem: 'Gem rock', rock_dragonite: 'Dragonite rock',
   fishing_shrimp: 'Fishing spot', fishing_lobster: 'Deep fishing spot', fishing_swordfish: 'Harpoon fishing spot',
   farm_patch: 'Farming patch', herb_patch: 'Herb patch', flax_plant: 'Flax',
 };

@@ -33,7 +33,7 @@ export const TILE_VISUALS: Record<TileType, TileVisual> = {
 export type ResourceType =
   | 'tree_normal' | 'tree_oak' | 'tree_willow' | 'tree_maple' | 'tree_yew' | 'tree_magic'
   | 'rock_copper' | 'rock_tin' | 'rock_iron' | 'rock_coal' | 'rock_mithril' | 'rock_adamant' | 'rock_rune'
-  | 'rock_gold' | 'rock_silver' | 'rock_gem'
+  | 'rock_gold' | 'rock_silver' | 'rock_gem' | 'rock_dragonite'
   | 'fishing_shrimp' | 'fishing_lobster' | 'fishing_swordfish'
   | 'farm_patch' | 'herb_patch' | 'flax_plant';
 

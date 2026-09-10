@@ -34,6 +34,7 @@ reg({ id: 'smelt_adamant_bar', name: 'Adamant bar', skill: 'smithing', levelRequ
 reg({ id: 'smelt_rune_bar', name: 'Rune bar', skill: 'smithing', levelRequired: 85, inputs: [{ item: 'rune_ore', qty: 1 }, { item: 'coal', qty: 8 }], outputItem: 'rune_bar', outputQty: 1, xp: 50, station: 'furnace', ticks: 3, category: 'smelting' });
 reg({ id: 'smelt_gold_bar', name: 'Gold bar', skill: 'smithing', levelRequired: 40, inputs: [{ item: 'gold_ore', qty: 1 }], outputItem: 'gold_bar', outputQty: 1, xp: 23, station: 'furnace', ticks: 2, category: 'smelting' });
 reg({ id: 'smelt_silver_bar', name: 'Silver bar', skill: 'smithing', levelRequired: 20, inputs: [{ item: 'silver_ore', qty: 1 }], outputItem: 'silver_bar', outputQty: 1, xp: 14, station: 'furnace', ticks: 2, category: 'smelting' });
+reg({ id: 'smelt_dragonite_bar', name: 'Dragonite bar', skill: 'smithing', levelRequired: 92, inputs: [{ item: 'dragonite_ore', qty: 2 }, { item: 'coal', qty: 2 }], outputItem: 'dragonite_bar', outputQty: 1, xp: 75, station: 'furnace', ticks: 3, category: 'smelting' });
 
 // ---- Smithing: bars into equipment (anvil + hammer) ----
 const SMITH_PIECES: { suffix: string; label: string; bars: number }[] = [

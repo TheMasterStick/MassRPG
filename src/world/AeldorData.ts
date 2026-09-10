@@ -6,7 +6,7 @@
 // layout, then filled in with noise so it reads as natural terrain
 // rather than hard vector polygons.
 
-import type { TileType } from './types';
+import type { ResourceType, TileType } from './types';
 
 export const WORLD_SIZE = 15000;
 export const AELDOR_SEED = 0xa31d02;
@@ -149,6 +149,78 @@ export function ruinAt(x: number, y: number): Ruin | null {
     if (dx * dx + dy * dy <= r.radius * r.radius) return r;
   }
   return null;
+}
+
+// Monster difficulty scales with distance from the capital specifically (not
+// the nearest town) - otherwise a far-flung town like Northreach would carry
+// its own safe low-level bubble, when the intent (per the authored level-zone
+// map) is that danger rises the further you get from civilization's center
+// regardless of which towns happen to be nearby.
+export function distanceFromCapital(x: number, y: number): number {
+  return Math.hypot(x - CAPITAL.x, y - CAPITAL.y);
+}
+
+// ---- Ore veins ----
+// Ore is placed as small authored clusters ("veins") rather than scattered
+// randomly across every mountain tile - each vein is 3-5 nodes of each of
+// its listed ore types, positioned in a small ring around the vein center.
+// Positions are this build's approximation of a hand-drawn reference map
+// (roughly matching each named region/town), not exact coordinates.
+export interface OreVein {
+  name: string;
+  x: number;
+  y: number;
+  ores: { type: ResourceType; count: number }[];
+}
+
+export const ORE_VEINS: OreVein[] = [
+  { name: 'Dragonite Peaks', x: 6267, y: 620, ores: [{ type: 'rock_dragonite', count: 4 }] },
+  { name: 'Runite Ridge', x: 11118, y: 1008, ores: [{ type: 'rock_rune', count: 4 }] },
+  { name: 'Stormwatch Deposit', x: 2041, y: 2558, ores: [
+    { type: 'rock_adamant', count: 4 }, { type: 'rock_mithril', count: 4 }, { type: 'rock_coal', count: 5 },
+  ] },
+  { name: 'Ravenpoint Deposit', x: 946, y: 5038, ores: [
+    { type: 'rock_adamant', count: 3 }, { type: 'rock_gold', count: 4 }, { type: 'rock_silver', count: 4 },
+  ] },
+  { name: 'Eastwatch Deposit', x: 14200, y: 5300, ores: [
+    { type: 'rock_mithril', count: 4 }, { type: 'rock_adamant', count: 4 },
+  ] },
+  { name: 'Darkfen Deposit', x: 4545, y: 7905, ores: [
+    { type: 'rock_mithril', count: 4 }, { type: 'rock_adamant', count: 3 }, { type: 'rock_gold', count: 4 },
+  ] },
+  { name: 'Lakeside Deposit', x: 8881, y: 8262, ores: [
+    { type: 'rock_iron', count: 5 }, { type: 'rock_coal', count: 5 },
+  ] },
+  { name: 'Southpoint Deposit', x: 12795, y: 12245, ores: [
+    { type: 'rock_silver', count: 4 }, { type: 'rock_gold', count: 4 }, { type: 'rock_mithril', count: 3 },
+  ] },
+  { name: 'Capital Deposit', x: CAPITAL.x + 15, y: CAPITAL.y + 6, ores: [
+    { type: 'rock_tin', count: 4 }, { type: 'rock_copper', count: 4 },
+  ] },
+  { name: 'Highfield Deposit', x: 4123, y: 11700, ores: [
+    { type: 'rock_iron', count: 4 }, { type: 'rock_coal', count: 4 },
+  ] },
+  { name: 'Far South Deposit', x: 11900, y: 13300, ores: [{ type: 'rock_silver', count: 4 }] },
+];
+
+const ORE_NODE_MAP = new Map<string, ResourceType>();
+for (const vein of ORE_VEINS) {
+  let groupIndex = 0;
+  for (const group of vein.ores) {
+    for (let i = 0; i < group.count; i++) {
+      const angle = (i / group.count) * Math.PI * 2 + groupIndex * 1.3;
+      const radius = 3 + (i % 3);
+      const nx = Math.round(vein.x + Math.cos(angle) * radius);
+      const ny = Math.round(vein.y + Math.sin(angle) * radius);
+      const key = `${nx},${ny}`;
+      if (!ORE_NODE_MAP.has(key)) ORE_NODE_MAP.set(key, group.type);
+    }
+    groupIndex++;
+  }
+}
+
+export function oreVeinResourceAt(x: number, y: number): ResourceType | null {
+  return ORE_NODE_MAP.get(`${x},${y}`) ?? null;
 }
 
 export const REGION_BIOME: Record<RegionKind, TileType | null> = {

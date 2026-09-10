@@ -54,6 +54,10 @@ for (const m of METAL_TIERS) {
 }
 reg({ id: 'gold_ore', name: 'Gold ore', type: 'resource', stackable: true, value: 20, description: 'Smelted into gold bars for jewellery.' });
 reg({ id: 'silver_ore', name: 'Silver ore', type: 'resource', stackable: true, value: 15, description: 'Smelted into silver bars for jewellery.' });
+// Dragonite - a standalone top-end ore beyond rune, found only in the far
+// north. Not part of METAL_TIERS (no equipment line of its own yet, just a
+// bar) since only the smelting step was asked for.
+reg({ id: 'dragonite_ore', name: 'Dragonite ore', type: 'resource', stackable: true, value: 650, description: 'A rare, near-mythical ore found only in the far north.' });
 
 // Bars
 for (const m of METAL_TIERS) {
@@ -61,6 +65,7 @@ for (const m of METAL_TIERS) {
 }
 reg({ id: 'gold_bar', name: 'Gold bar', type: 'material', stackable: true, value: 60, description: 'Used in jewellery crafting.' });
 reg({ id: 'silver_bar', name: 'Silver bar', type: 'material', stackable: true, value: 45, description: 'Used in jewellery crafting.' });
+reg({ id: 'dragonite_bar', name: 'Dragonite bar', type: 'material', stackable: true, value: 2000, description: 'Smelted from dragonite ore and coal.' });
 
 // ---- Weapons & armor per metal tier ----
 const WEAPON_SCALE = 6; // bonus per tier index

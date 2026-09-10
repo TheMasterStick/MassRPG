@@ -195,10 +195,14 @@ export function monstersForBiome(biome: TileType): MonsterDef[] {
   return MONSTERS.filter((m) => m.biomes.includes(biome));
 }
 
-// Keeps dangerous monsters away from the starting village: difficulty
-// scales up gradually the further you wander from world origin.
+// Keeps dangerous monsters away from the capital: difficulty scales up
+// gradually the further out you go, tuned so the full level range only
+// unlocks near the far edges of the continent (~10-12k tiles from the
+// capital, out toward Stormwatch/Northreach) rather than a few hundred
+// tiles out - matching the authored level-zone reference map (roughly
+// 1-10 near the capital, up through 60-120 in the far north).
 export function monstersForBiomeNearOrigin(biome: TileType, distanceFromOrigin: number): MonsterDef[] {
-  const maxLevel = 4 + distanceFromOrigin * 0.35;
+  const maxLevel = 4 + distanceFromOrigin * 0.008;
   const inRange = MONSTERS.filter((m) => m.biomes.includes(biome) && m.level <= maxLevel);
   return inRange.length > 0 ? inRange : MONSTERS.filter((m) => m.biomes.includes(biome)).sort((a, b) => a.level - b.level).slice(0, 1);
 }

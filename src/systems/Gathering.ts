@@ -42,6 +42,7 @@ const MINING: Record<string, GatherOutcome> = {
   rock_adamant: { skill: 'mining', levelRequired: 70, xp: 95, itemId: 'adamant_ore', qty: 1, toolIds: pickaxes(), depleteChance: 0.12, respawnTicks: RESOURCE_RESPAWN_TICKS * 2 },
   rock_rune: { skill: 'mining', levelRequired: 85, xp: 125, itemId: 'rune_ore', qty: 1, toolIds: pickaxes(), depleteChance: 0.1, respawnTicks: RESOURCE_RESPAWN_TICKS * 3 },
   rock_gem: { skill: 'mining', levelRequired: 40, xp: 60, itemId: 'uncut_sapphire', qty: 1, toolIds: pickaxes(), depleteChance: 0.15, respawnTicks: RESOURCE_RESPAWN_TICKS * 2 },
+  rock_dragonite: { skill: 'mining', levelRequired: 92, xp: 150, itemId: 'dragonite_ore', qty: 1, toolIds: pickaxes(), depleteChance: 0.08, respawnTicks: RESOURCE_RESPAWN_TICKS * 4 },
 };
 function pickaxes() {
   return ['bronze_pickaxe', 'iron_pickaxe', 'steel_pickaxe', 'mithril_pickaxe', 'adamant_pickaxe', 'rune_pickaxe'];

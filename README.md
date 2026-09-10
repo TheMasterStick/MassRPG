@@ -93,13 +93,23 @@ than the nearby area in memory).
   Mining, Fishing, Farming (gathering); Cooking, Firemaking, Smithing,
   Crafting, Fletching, Herblore (production); Construction and Agility
   (support/running).
-- **Gathering**: six tiers of trees, ten tiers of rock/ore, tiered fishing
+- **Gathering**: six tiers of trees (rarer tiers like oak/yew/magic cluster
+  into their own noise-based groves rather than mixing uniformly through
+  every forest, so a forest reads as mostly-common-trees with distinct
+  pockets of the rarer ones), ten tiers of rock/ore (plus Dragonite, a
+  top-end tier beyond rune found only in the far north), tiered fishing
   spots (net → rod → pot → harpoon), farming and herb patches with real
-  growth timers, and flax fields.
-- **Production**: smelt ore into six metal tiers (bronze → rune) and smith
-  full equipment sets at an anvil; cook at a fire or range (with a burn
-  chance that falls off as your level rises); fletch bows and arrows; tan
-  and craft leather armor; cut gems and set jewellery; clean and brew
+  growth timers, and flax fields. Ore isn't scattered randomly across
+  mountains - it's placed as authored veins (3-5 nodes of each ore type,
+  clustered together) at specific spots across the world, roughly matching
+  each region's difficulty (common metals near the capital, the rarest
+  tiers in the far reaches). A mined-out rock or felled tree stays visible
+  but dimmed/greyed-out while it's on cooldown, rather than disappearing.
+- **Production**: smelt ore into six metal tiers (bronze → rune) plus
+  Dragonite bars (2 ore + 2 coal, no equipment line of its own yet) and
+  smith full equipment sets at an anvil; cook at a fire or range (with a
+  burn chance that falls off as your level rises); fletch bows and arrows;
+  tan and craft leather armor; cut gems and set jewellery; clean and brew
   herblore potions.
 - **Combat**: OSRS-style accuracy/max-hit formulas for melee, ranged and
   magic, loot tables, and 21 monster types spanning level 1 to 95+.
@@ -107,11 +117,13 @@ than the nearby area in memory).
   everything else aggroes within a short range, gives up if you get more
   than a few tiles from where it spawned, ambles back home, and won't
   re-aggro for several seconds after giving up a chase — so you can
-  always run rather than being followed indefinitely. Tougher monsters
-  only start appearing the further you get from the nearest town, and
-  every town's immediate radius is a safe zone: nothing spawns there, and
-  a monster chasing you gives up the instant you cross into one rather
-  than following you in.
+  always run rather than being followed indefinitely. Difficulty scales
+  with distance from the capital specifically (not whichever town happens
+  to be nearest), so a far-flung frontier town doesn't carry its own
+  low-level safe bubble - the wilds get genuinely dangerous out toward the
+  far north. Every town's immediate radius is a safe zone: nothing spawns
+  there (regardless of distance from the capital), and a monster chasing
+  you gives up the instant you cross into one rather than following you in.
 - **Construction**: place furnaces, anvils, cooking ranges, tanneries,
   looms, workbenches, storage chests, beds (sets your respawn point),
   fences and walls anywhere you've cleared space, using planks, stone and
@@ -193,6 +205,16 @@ build's own interpretation of the reference maps it was designed from, not
 a pixel-exact reproduction; and there's no NPC system yet (`public/sprites/
 hold/` has a set of NPC portraits uploaded ahead of that work) - the
 buildings exist first so NPCs will have somewhere to actually live.
+
+Ore vein positions (`ORE_VEINS` in `src/world/AeldorData.ts`) and the
+capital-distance difficulty curve are both this build's approximation of a
+hand-drawn reference map, not exact coordinates or hand-authored per-region
+level ranges - the general shape (common ore/easy monsters near the
+capital, the rarest tiers in the far north) should hold, but exact
+boundaries won't match the reference pixel-for-pixel, and a monster a tier
+or two outside its "expected" zone is expected here and there. Dragonite
+has an ore vein, a mining outcome and a bar-smelting recipe, but no
+weapon/armor line or monster loot-table drops of its own yet.
 
 On the UI: the Quest tab is a placeholder (there's no quest system yet);
 WASD movement steps one tile at a time in whatever direction you're

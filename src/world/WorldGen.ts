@@ -5,20 +5,22 @@ import { RESOURCE_SPAWNS } from '../data/biomes';
 import { monstersForBiomeNearOrigin } from '../data/monsters';
 import {
   WORLD_SIZE, REGIONS, REGION_BIOME, ROADS, RUINS,
-  nearestTown, nearestTownDistance, type Region, type Ruin,
+  nearestTown, distanceFromCapital, oreVeinResourceAt, type Region, type Ruin,
 } from './AeldorData';
 import { TOWN_BUILDINGS, ALL_TOWN_BUILDINGS, type TownBuilding } from './Buildings';
 
 // Wide enough to comfortably fit the largest town building (smithy_01, up to
 // 11 tiles from center) plus a little margin, so village-only effects (path/
-// grass terrain, no wild resource/monster spawns) cover the whole town.
-const VILLAGE_RADIUS = 13;
+// grass terrain, no wild resource/monster spawns) cover the whole town. Kept
+// equal to TOWN_WALL_RADIUS - a smaller safety radius than the wall itself
+// left a band just inside the fence where monsters could still spawn.
+const VILLAGE_RADIUS = 15;
 // The capital is a proper city, not a village - a much larger safe/urban
 // radius, cobblestone streets further out than the small starter-town path
 // circle, and its perimeter wall sits right at the edge of that radius.
 const CAPITAL_RADIUS = 26;
 const CAPITAL_STREET_RADIUS = 22;
-const TOWN_WALL_RADIUS = 15; // just outside VILLAGE_RADIUS, clears both town buildings
+const TOWN_WALL_RADIUS = VILLAGE_RADIUS;
 const CAPITAL_WALL_RADIUS = CAPITAL_RADIUS;
 const ROAD_HALF_WIDTH = 1.6;
 
@@ -42,6 +44,7 @@ export class WorldGen {
   private temperatureNoise: SimplexNoise;
   private continentWarp: SimplexNoise;
   private edgeWarp: SimplexNoise;
+  private groveNoise: SimplexNoise;
 
   constructor(seed: number) {
     this.seed = seed >>> 0;
@@ -49,6 +52,24 @@ export class WorldGen {
     this.temperatureNoise = new SimplexNoise(this.seed ^ 0x3333);
     this.continentWarp = new SimplexNoise(this.seed ^ 0x4444);
     this.edgeWarp = new SimplexNoise(this.seed ^ 0x5555);
+    this.groveNoise = new SimplexNoise(this.seed ^ 0x6666);
+  }
+
+  // Rarer tree tiers (oak/yew/magic) are only rolled for inside their own
+  // low-frequency noise patches, instead of being mixed uniformly across
+  // every forest/taiga tile - the common tier (tree_normal, ungated here)
+  // fills the rest, so a forest reads as mostly-normal-trees with distinct
+  // oak/yew/magic groves dotted through it rather than a random salt-and-
+  // pepper mix of every tier everywhere.
+  private static readonly GROVE_THRESHOLD: Partial<Record<ResourceType, number>> = {
+    tree_oak: 0.15, tree_yew: 0.4, tree_magic: 0.55,
+  };
+  private groveEligible(resource: ResourceType, x: number, y: number): boolean {
+    const threshold = WorldGen.GROVE_THRESHOLD[resource];
+    if (threshold === undefined) return true;
+    const offset = resource.length * 41;
+    const n = this.groveNoise.fbm(x / 140 + offset, y / 140 - offset, 2);
+    return n > threshold;
   }
 
   isVillage(x: number, y: number): boolean {
@@ -250,6 +271,9 @@ export class WorldGen {
   // Resource placement needs to see neighbouring tiles for water-adjacency
   // rules (fishing spots, willows), so it takes a tile lookup callback.
   resourceAt(x: number, y: number, getTile: (x: number, y: number) => TileType): ResourceType | null {
+    const vein = oreVeinResourceAt(x, y);
+    if (vein) return vein;
+
     if (this.isVillage(x, y) || this.onRoad(x, y)) return null;
     const tile = getTile(x, y);
 
@@ -286,6 +310,7 @@ export class WorldGen {
     const rules = RESOURCE_SPAWNS[tile];
     if (!rules || rules.length === 0) return null;
     for (let i = 0; i < rules.length; i++) {
+      if (!this.groveEligible(rules[i].resource, x, y)) continue;
       const roll = hash2D(this.seed, x, y, 1000 + i);
       if (roll < rules[i].chance) return rules[i].resource;
     }
@@ -298,7 +323,10 @@ export class WorldGen {
     if (!this.isLandWalkable(tile)) return null;
     const roll = hash2D(this.seed, x, y, 5000);
     if (roll > 0.02) return null;
-    const distance = nearestTownDistance(x, y);
+    // Difficulty scales from the capital outward, not from whichever town
+    // happens to be nearest - otherwise a distant frontier town would carry
+    // its own low-level safe bubble instead of sitting in dangerous territory.
+    const distance = distanceFromCapital(x, y);
     const candidates = monstersForBiomeNearOrigin(tile, distance);
     if (candidates.length === 0) return null;
     const idx = Math.floor(hash2D(this.seed, x, y, 5001) * candidates.length);

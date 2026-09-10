@@ -43,6 +43,7 @@ const RESOURCE_GLYPH: Record<ResourceType, { glyph: string; color: string }> = {
   rock_gold: { glyph: '◆', color: '#e0c33f' },
   rock_silver: { glyph: '◆', color: '#d6d6e0' },
   rock_gem: { glyph: '◆', color: '#d060c0' },
+  rock_dragonite: { glyph: '◆', color: '#e0435f' },
   fishing_shrimp: { glyph: '≈', color: '#bfe4ff' },
   fishing_lobster: { glyph: '≈', color: '#7fd0ff' },
   fishing_swordfish: { glyph: '≈', color: '#4fb0ff' },
@@ -152,9 +153,11 @@ export class Renderer {
         const structure = world.getStructure(tx, ty);
         if (structure) {
           objects.push({ sortY: ty, draw: () => this.drawStructure(sx, sy, structure) });
-        } else if (world.isResourceAvailable(tx, ty)) {
-          const res = world.getResourceNode(tx, ty)!;
-          objects.push({ sortY: ty, draw: () => this.drawResource(sx, sy, res, tx, ty, world) });
+        } else {
+          const res = world.getResourceNode(tx, ty);
+          // Drawn even while depleted (dimmed, see drawResource) instead of
+          // vanishing entirely - a mined-out rock is still there, just spent.
+          if (res) objects.push({ sortY: ty, draw: () => this.drawResource(sx, sy, res, tx, ty, world) });
         }
       }
     }
@@ -286,15 +289,25 @@ export class Renderer {
       return;
     }
 
-    const sprite = getSprite('resources', res);
-    if (sprite) { this.drawSpriteOnTile(sprite, sx, sy); return; }
+    // Depleted resources (an ore vein just mined out, a tree just felled)
+    // stay put but render dimmed and desaturated, rather than vanishing
+    // outright, until they respawn.
+    const available = world.isResourceAvailable(tx, ty);
+    if (!available) { ctx.save(); ctx.filter = 'grayscale(0.9) brightness(0.55)'; ctx.globalAlpha = 0.85; }
 
-    const info = RESOURCE_GLYPH[res];
-    ctx.fillStyle = info.color;
-    ctx.font = '20px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(info.glyph, sx + TILE_SIZE / 2, sy + TILE_SIZE / 2 + 1);
+    const sprite = getSprite('resources', res);
+    if (sprite) {
+      this.drawSpriteOnTile(sprite, sx, sy);
+    } else {
+      const info = RESOURCE_GLYPH[res];
+      ctx.fillStyle = info.color;
+      ctx.font = '20px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(info.glyph, sx + TILE_SIZE / 2, sy + TILE_SIZE / 2 + 1);
+    }
+
+    if (!available) ctx.restore();
   }
 
   private drawStructure(sx: number, sy: number, type: StructureType) {
