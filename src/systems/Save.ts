@@ -3,26 +3,28 @@ import { World } from '../world/World';
 import type { ChunkDiffs } from '../world/Chunk';
 import { log } from '../core/EventBus';
 import { TWIN_LANDS_SEED, WORLD_SIZE } from '../world/AeldorData';
+import type { WorldPlane } from '../world/types';
 
 const SAVE_KEY = 'massrpg_save_v1';
 const AUTOSAVE_MS = 20000;
-const AUTHORED_WORLD_REVISION = 3;
+const AUTHORED_WORLD_REVISION = 4;
 const WORLD_CENTER = Math.floor(WORLD_SIZE / 2);
 
 interface SaveData {
-  version: 1 | 2;
+  version: 1 | 2 | 3;
   worldRevision?: number;
   seed: number;
   tick: number;
   player: {
     name: string;
     x: number; y: number;
+    plane?: WorldPlane;
     skillsXp: Record<string, number>;
     currentHp: number;
     combatStyle: string;
     inventory: ({ itemId: string; qty: number } | null)[];
     equipment: Record<string, string>;
-    respawnPoint: { x: number; y: number };
+    respawnPoint: { x: number; y: number; plane?: WorldPlane };
   };
   bank: ({ itemId: string; qty: number } | null)[];
   chunkDiffs: Record<string, ChunkDiffs>;
@@ -30,13 +32,13 @@ interface SaveData {
 
 export function saveGame(world: World, player: Player) {
   const data: SaveData = {
-    version: 2,
+    version: 3,
     worldRevision: AUTHORED_WORLD_REVISION,
     seed: world.seed,
     tick: world.tick,
     player: {
       name: player.name,
-      x: player.x, y: player.y,
+      x: player.x, y: player.y, plane: player.plane,
       skillsXp: player.skillsXp,
       currentHp: player.currentHp,
       combatStyle: player.combatStyle,
@@ -85,13 +87,20 @@ export function loadGame(): { world: World; player: Player } | null {
     if (migratedWorld) {
       player.x = WORLD_CENTER;
       player.y = WORLD_CENTER;
-      player.respawnPoint = { x: WORLD_CENTER, y: WORLD_CENTER };
-      log('The procedural Twin Lands prototype was retired. Your character was moved to the centre of the new hand-authored world.', 'info');
+      player.plane = 0;
+      player.respawnPoint = { x: WORLD_CENTER, y: WORLD_CENTER, plane: 0 };
+      log('World elevation and underground planes were introduced. Your character was moved safely to the surface centre.', 'info');
     } else {
       player.x = data.player.x;
       player.y = data.player.y;
-      player.respawnPoint = data.player.respawnPoint;
+      player.plane = data.player.plane === -1 || data.player.plane === -2 ? data.player.plane : 0;
+      player.respawnPoint = {
+        x: data.player.respawnPoint.x,
+        y: data.player.respawnPoint.y,
+        plane: data.player.respawnPoint.plane === -1 || data.player.respawnPoint.plane === -2 ? data.player.respawnPoint.plane : 0,
+      };
     }
+    world.setActivePlane(player.plane);
 
     return { world, player };
   } catch {
