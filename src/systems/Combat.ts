@@ -224,6 +224,7 @@ function handlePlayerDeath(player: Player) {
   player.x = player.respawnPoint.x;
   player.y = player.respawnPoint.y;
   player.path = [];
+  player.action = null;
   player.combatTargetId = null;
   bus.emit('playerDied', undefined);
 }

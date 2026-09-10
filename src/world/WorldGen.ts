@@ -7,12 +7,19 @@ import {
   WORLD_SIZE, REGIONS, REGION_BIOME, ROADS, RUINS,
   nearestTown, nearestTownDistance, type Region, type Ruin,
 } from './AeldorData';
-import { TOWN_BUILDINGS, type TownBuilding } from './Buildings';
+import { TOWN_BUILDINGS, ALL_TOWN_BUILDINGS, type TownBuilding } from './Buildings';
 
 // Wide enough to comfortably fit the largest town building (smithy_01, up to
 // 11 tiles from center) plus a little margin, so village-only effects (path/
 // grass terrain, no wild resource/monster spawns) cover the whole town.
 const VILLAGE_RADIUS = 13;
+// The capital is a proper city, not a village - a much larger safe/urban
+// radius, cobblestone streets further out than the small starter-town path
+// circle, and its perimeter wall sits right at the edge of that radius.
+const CAPITAL_RADIUS = 26;
+const CAPITAL_STREET_RADIUS = 22;
+const TOWN_WALL_RADIUS = 15; // just outside VILLAGE_RADIUS, clears both town buildings
+const CAPITAL_WALL_RADIUS = CAPITAL_RADIUS;
 const ROAD_HALF_WIDTH = 1.6;
 
 export interface VillageStructure { x: number; y: number; type: StructureType }
@@ -45,19 +52,24 @@ export class WorldGen {
   }
 
   isVillage(x: number, y: number): boolean {
-    return nearestTownDistance(x, y) <= VILLAGE_RADIUS;
+    const town = nearestTown(x, y);
+    const dist = Math.hypot(x - town.x, y - town.y);
+    return dist <= (town.capital ? CAPITAL_RADIUS : VILLAGE_RADIUS);
   }
 
   villageStructureAt(x: number, y: number): StructureType | null {
     const building = this.buildingCellAt(x, y);
     if (building) {
-      if (building.ch === 'W') return 'wall';
+      if (building.ch === 'W') return building.instance.prefab.wall;
       if (building.ch === 'w') return 'wall_window';
       const furniture = building.instance.prefab.furniture.find(
         (f) => f.x === building.localX && f.y === building.localY,
       );
       return furniture ? furniture.type : null; // plain floor/door cell - nothing placed there
     }
+
+    const wallCell = this.townWallCellAt(x, y);
+    if (wallCell) return wallCell;
 
     const town = nearestTown(x, y);
     const lx = x - town.x;
@@ -67,9 +79,21 @@ export class WorldGen {
     return null;
   }
 
+  /** A square perimeter wall/fence ring at a fixed distance from the town center - stone for the capital's city wall, timber fence for every other town - with a gap left wherever a road actually passes through, so roads always double as gates instead of the wall blocking them. */
+  private townWallCellAt(x: number, y: number): StructureType | null {
+    const town = nearestTown(x, y);
+    const radius = town.capital ? CAPITAL_WALL_RADIUS : TOWN_WALL_RADIUS;
+    const lx = x - town.x;
+    const ly = y - town.y;
+    if (Math.max(Math.abs(lx), Math.abs(ly)) !== radius) return null;
+    if (this.onRoad(x, y)) return null;
+    return town.capital ? 'wall_stone' : 'fence';
+  }
+
   private buildingCellAt(x: number, y: number): BuildingCell | null {
     const town = nearestTown(x, y);
-    for (const b of TOWN_BUILDINGS) {
+    const list = town.capital ? ALL_TOWN_BUILDINGS : TOWN_BUILDINGS;
+    for (const b of list) {
       const originX = town.x + b.dx;
       const originY = town.y + b.dy;
       const lx = x - originX;
@@ -183,6 +207,7 @@ export class WorldGen {
     if (this.isVillage(x, y)) {
       const town = nearestTown(x, y);
       const dist = Math.hypot(x - town.x, y - town.y);
+      if (town.capital) return dist < CAPITAL_STREET_RADIUS ? 'floor_cobble' : 'grass';
       return dist < 5.5 ? 'path' : 'grass';
     }
 

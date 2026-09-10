@@ -14,6 +14,9 @@ workbench.png
 fence.png
 wall.png
 wall_window.png
+wall_brick.png
+wall_stone.png
+wall_cobble.png
 bed.png
 storage_chest.png
 tannery.png
@@ -21,8 +24,11 @@ loom.png
 general_store.png
 ```
 
-`wall.png` and `wall_window.png` are also used as the exterior wall/window
-segments of the game's built-in multi-tile buildings (a house and a
-smithy, see `src/world/Buildings.ts`) — one image tiled across every wall
-tile of the building's perimeter, not a single building-sized sprite.
+`wall.png`/`wall_window.png`/`wall_brick.png`/`wall_stone.png`/`wall_cobble.png`
+are also used as the exterior wall/window segments of the game's built-in
+multi-tile buildings (houses and a smithy in various materials, see
+`src/world/Buildings.ts`) — one image tiled across every wall tile of a
+building's perimeter, not a single building-sized sprite. `wall_stone.png`
+doubles as every town's perimeter wall/fence material for the capital
+specifically (`fence.png` is used for every other town's perimeter).
 

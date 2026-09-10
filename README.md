@@ -74,7 +74,13 @@ the roofline above it, so it's visible from outside exactly where to walk
 in - it's always on the south side) and a roof that wraps the whole
 building with a trimmed edge on all four sides, rendering above it from
 outside and disappearing once you're standing inside it, so you can see
-the interior. Three ruins (Old Cairn Ruins, Moonfall Ruins, Serpent's Spire)
+the interior. Every town is ringed by a perimeter wall with a gate wherever
+a road actually passes through it - a timber fence for ordinary towns, and
+for the capital (where you start) a proper stone city wall around a much
+larger area, with cobblestone streets throughout and a denser mix of
+buildings in brick and cobblestone alongside the standard house and
+smithy - a first step toward a real city rather than a village-sized hub.
+Three ruins (Old Cairn Ruins, Moonfall Ruins, Serpent's Spire)
 are marked zones of scattered rubble. Monster difficulty scales up with
 distance from the nearest town, so the roads and their surrounding land
 stay safe while the deep wilderness between settlements
@@ -171,7 +177,14 @@ prefabs regardless of regional flavor (a swamp town like Darkfen or a
 farming town like Highfield doesn't yet get its own distinct building set
 or extra structures) - `src/world/Buildings.ts` is where to add more
 prefabs (a bank/general-store building, an inn, per-region variants) once
-they're wanted; roads are straight-ish lines between towns and will cross
+they're wanted. The capital's city treatment (bigger wall, cobblestone
+streets, a few extra brick/cobblestone houses) is a first pass, not a
+full Varrock-scale layout - it's still only 6 buildings, all on one of
+three footprints; a real city would want unique building shapes, actual
+streets/blocks instead of one big cobblestone area, and more of them.
+Regular towns' perimeter is a plain square fence/wall ring at a fixed
+radius, not shaped to the town's actual layout. Roads are straight-ish
+lines between towns and will cross
 water as a "bridge" rather than routing around it; Serpent's Spire is a
 real island in the middle of the lake with no boat or swim mechanic yet to
 reach it (it renders correctly, it's just not reachable on foot); the

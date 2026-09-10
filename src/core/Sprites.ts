@@ -58,7 +58,8 @@ const RESOURCE_TYPES: ResourceType[] = [
 ];
 const STRUCTURE_TYPES: StructureType[] = [
   'bank_chest', 'furnace', 'anvil', 'cooking_range', 'campfire', 'workbench',
-  'fence', 'wall', 'wall_window', 'bed', 'storage_chest', 'tannery', 'loom', 'general_store',
+  'fence', 'wall', 'wall_window', 'wall_brick', 'wall_stone', 'wall_cobble',
+  'bed', 'storage_chest', 'tannery', 'loom', 'general_store',
 ];
 const PLAYER_FACINGS: Facing[] = ['down', 'up', 'left', 'right'];
 const ROOF_IDS = ['tile_middle', 'tile_side', 'tatch_middle', 'tatch_side'];

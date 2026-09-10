@@ -7,8 +7,9 @@
 
 import type { StructureType } from './types';
 
-export type FloorMaterial = 'floor_wood' | 'floor_cobble';
+export type FloorMaterial = 'floor_wood' | 'floor_brick' | 'floor_cobble';
 export type RoofMaterial = 'tile' | 'tatch';
+export type WallMaterial = 'wall' | 'wall_brick' | 'wall_stone' | 'wall_cobble';
 
 export interface BuildingFurniture {
   x: number; // local offset within the grid, 0..width-1
@@ -20,6 +21,7 @@ export interface BuildingPrefab {
   id: string;
   width: number;
   height: number;
+  wall: WallMaterial;
   floor: FloorMaterial;
   roof: RoofMaterial;
   // One row per y, north (top) to south (bottom/front). Each character:
@@ -33,6 +35,7 @@ export const HOUSE_SMALL_01: BuildingPrefab = {
   id: 'house_small_01',
   width: 7,
   height: 6,
+  wall: 'wall',
   floor: 'floor_wood',
   roof: 'tatch',
   grid: [
@@ -53,6 +56,7 @@ export const SMITHY_01: BuildingPrefab = {
   id: 'smithy_01',
   width: 8,
   height: 9,
+  wall: 'wall',
   floor: 'floor_cobble',
   roof: 'tile',
   grid: [
@@ -74,13 +78,45 @@ export const SMITHY_01: BuildingPrefab = {
   ],
 };
 
+// Same footprint/furniture as the wooden house, dressed in city materials -
+// used for the capital's denser, more built-up layout.
+export const HOUSE_BRICK_01: BuildingPrefab = {
+  ...HOUSE_SMALL_01,
+  id: 'house_brick_01',
+  wall: 'wall_brick',
+  floor: 'floor_brick',
+  roof: 'tile',
+};
+
+export const HOUSE_COBBLE_01: BuildingPrefab = {
+  ...HOUSE_SMALL_01,
+  id: 'house_cobble_01',
+  wall: 'wall_cobble',
+  floor: 'floor_cobble',
+  roof: 'tile',
+};
+
 // Placed relative to each town's center - dx/dy are the world offset of the
 // prefab grid's top-left corner (grid[0][0]). Kept well clear of the loose
 // VILLAGE_STRUCTURES positions (bank_chest, general_store, cooking_range,
 // loom currently sit within +/-3 tiles of center) and of each other.
 export interface TownBuilding { dx: number; dy: number; prefab: BuildingPrefab }
 
+// Every town gets a house and a smithy.
 export const TOWN_BUILDINGS: TownBuilding[] = [
   { dx: -10, dy: 2, prefab: HOUSE_SMALL_01 },
   { dx: 3, dy: 2, prefab: SMITHY_01 },
 ];
+
+// The capital additionally gets a denser ring of brick/cobble houses further
+// out, inside its larger walled area - a first step toward a proper city
+// layout rather than a village-sized hub.
+export const CAPITAL_EXTRA_BUILDINGS: TownBuilding[] = [
+  { dx: -10, dy: -10, prefab: HOUSE_BRICK_01 },
+  { dx: 10, dy: -10, prefab: HOUSE_BRICK_01 },
+  { dx: -18, dy: 4, prefab: HOUSE_COBBLE_01 },
+  { dx: 14, dy: 4, prefab: HOUSE_COBBLE_01 },
+];
+
+// Precomputed once so per-tile lookups don't rebuild this array on every call.
+export const ALL_TOWN_BUILDINGS = [...TOWN_BUILDINGS, ...CAPITAL_EXTRA_BUILDINGS];
