@@ -1,6 +1,7 @@
 import { el } from './dom';
 import type { Game } from '../core/Game';
-import { TOWNS, RUINS, ORE_VEINS, RIVERS, WORLD_SIZE, type Town } from '../world/AeldorData';
+import { WORLD_SIZE } from '../world/AeldorData';
+import { loadEditorWorld, type EditorMarker, type EditorMarkerType, type TerrainStroke } from '../world/EditorWorld';
 import { TILE_MAP_COLORS } from './mapColors';
 import { findNearestWalkable } from '../systems/Pathfinding';
 import { log } from '../core/EventBus';
@@ -8,12 +9,23 @@ import { log } from '../core/EventBus';
 const CANVAS_SIZE = 560;
 const ZOOM_SPANS = [WORLD_SIZE, WORLD_SIZE / 3, WORLD_SIZE / 9];
 
+const MARKER_COLORS: Record<EditorMarkerType, string> = {
+  settlement: '#f2f2f2',
+  village: '#8ee28e',
+  town: '#f1d56b',
+  city: '#ff7777',
+  castle: '#c391ff',
+  mining_area: '#ff8a32',
+};
+
 export function buildWorldMap(root: HTMLElement, game: Game) {
   const canvas = el('canvas', {
     className: 'worldmap-canvas',
     attrs: { width: String(CANVAS_SIZE), height: String(CANVAS_SIZE) },
   }) as HTMLCanvasElement;
-  const ctx = canvas.getContext('2d')!;
+  const context = canvas.getContext('2d');
+  if (!context) throw new Error('World map requires Canvas 2D.');
+  const ctx: CanvasRenderingContext2D = context;
 
   const zoomOutBtn = el('button', { className: 'worldmap-zoom-btn', text: '−', attrs: { title: 'Zoom out' } });
   const zoomInBtn = el('button', { className: 'worldmap-zoom-btn', text: '+', attrs: { title: 'Zoom in' } });
@@ -25,7 +37,7 @@ export function buildWorldMap(root: HTMLElement, game: Game) {
     el('div', { className: 'worldmap-canvas-wrap' }, [canvas]),
     el('div', { className: 'worldmap-controls' }, [
       zoomOutBtn, zoomLabel, zoomInBtn,
-      el('span', { className: 'worldmap-hint', text: 'Click anywhere to travel there instantly · mining sites are public' }),
+      el('span', { className: 'worldmap-hint', text: 'This map is built from your World Editor terrain and reference markers.' }),
     ]),
   ]);
   root.append(panel);
@@ -49,169 +61,86 @@ export function buildWorldMap(root: HTMLElement, game: Game) {
   }
 
   function renderBaseTerrain(c: { x: number; y: number }, span: number): HTMLCanvasElement {
-    const key = `${span}:${Math.round(c.x / 4)}:${Math.round(c.y / 4)}`;
-    if (baseCache && baseCache.key === key) return baseCache.canvas;
-
-    const sampleSize = CANVAS_SIZE / 2;
-    const sample = document.createElement('canvas');
-    sample.width = sampleSize;
-    sample.height = sampleSize;
-    const sctx = sample.getContext('2d')!;
-    const startX = c.x - span / 2;
-    const startY = c.y - span / 2;
-    const stepWorld = span / sampleSize;
-    const img = sctx.createImageData(sampleSize, sampleSize);
-
-    for (let py = 0; py < sampleSize; py++) {
-      const wy = Math.round(startY + py * stepWorld);
-      for (let px = 0; px < sampleSize; px++) {
-        const wx = Math.round(startX + px * stepWorld);
-        const tile = wx < 0 || wy < 0 || wx >= WORLD_SIZE || wy >= WORLD_SIZE
-          ? 'deep_water'
-          : game.world.gen.tileAt(wx, wy);
-        const hex = TILE_MAP_COLORS[tile] ?? '#000000';
-        const i = (py * sampleSize + px) * 4;
-        img.data[i] = parseInt(hex.slice(1, 3), 16);
-        img.data[i + 1] = parseInt(hex.slice(3, 5), 16);
-        img.data[i + 2] = parseInt(hex.slice(5, 7), 16);
-        img.data[i + 3] = 255;
-      }
-    }
-    sctx.putImageData(img, 0, 0);
+    const data = loadEditorWorld(WORLD_SIZE);
+    const key = `${data.updatedAt}:${span}:${Math.round(c.x)}:${Math.round(c.y)}`;
+    if (baseCache?.key === key) return baseCache.canvas;
 
     const off = document.createElement('canvas');
     off.width = CANVAS_SIZE;
     off.height = CANVAS_SIZE;
-    const octx = off.getContext('2d')!;
-    octx.imageSmoothingEnabled = true;
-    octx.drawImage(sample, 0, 0, CANVAS_SIZE, CANVAS_SIZE);
+    const maybe = off.getContext('2d');
+    if (!maybe) throw new Error('World map cache requires Canvas 2D.');
+    const octx: CanvasRenderingContext2D = maybe;
+    octx.fillStyle = TILE_MAP_COLORS.deep_water;
+    octx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+
+    for (const stroke of data.terrainStrokes) drawStroke(octx, stroke, c, span);
+    for (const [keyCell, cell] of Object.entries(data.cells)) {
+      if (!cell.tile) continue;
+      const comma = keyCell.indexOf(',');
+      const wx = Number(keyCell.slice(0, comma));
+      const wy = Number(keyCell.slice(comma + 1));
+      const p = worldToCanvas(wx, wy, c, span);
+      if (p.x < -2 || p.y < -2 || p.x > CANVAS_SIZE + 2 || p.y > CANVAS_SIZE + 2) continue;
+      octx.fillStyle = TILE_MAP_COLORS[cell.tile];
+      octx.fillRect(Math.floor(p.x), Math.floor(p.y), zoomIndex === 0 ? 1 : 2, zoomIndex === 0 ? 1 : 2);
+    }
+
     baseCache = { key, canvas: off };
     return off;
   }
 
-  function drawMiningMarker(sx: number, sy: number) {
-    ctx.fillStyle = '#111111';
-    ctx.strokeStyle = '#d8d8d8';
-    ctx.lineWidth = 1;
+  function drawStroke(octx: CanvasRenderingContext2D, stroke: TerrainStroke, c: { x: number; y: number }, span: number) {
+    const half = Math.floor(stroke.size / 2);
+    const topLeft = worldToCanvas(stroke.x - half, stroke.y - half, c, span);
+    const scale = CANVAS_SIZE / span;
+    const sizePx = stroke.size * scale;
+    if (topLeft.x > CANVAS_SIZE || topLeft.y > CANVAS_SIZE || topLeft.x + sizePx < 0 || topLeft.y + sizePx < 0) return;
+    octx.fillStyle = stroke.tile ? TILE_MAP_COLORS[stroke.tile] : TILE_MAP_COLORS.deep_water;
+    octx.fillRect(topLeft.x, topLeft.y, Math.max(1, sizePx), Math.max(1, sizePx));
+  }
+
+  function drawMarker(marker: EditorMarker, c: { x: number; y: number }, span: number) {
+    const p = worldToCanvas(marker.x, marker.y, c, span);
+    if (p.x < -12 || p.y < -12 || p.x > CANVAS_SIZE + 12 || p.y > CANVAS_SIZE + 12) return;
+    const radius = marker.type === 'city' || marker.type === 'castle' ? 4.5 : 3.5;
+    ctx.fillStyle = MARKER_COLORS[marker.type];
+    ctx.strokeStyle = '#111';
+    ctx.lineWidth = 1.2;
     ctx.beginPath();
-    ctx.arc(sx, sy, 5, 0, Math.PI * 2);
+    ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
 
-    ctx.strokeStyle = '#f3f3f3';
-    ctx.lineWidth = 1.5;
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.moveTo(sx - 2.7, sy + 3.0);
-    ctx.lineTo(sx + 2.5, sy - 2.7);
-    ctx.moveTo(sx - 1.8, sy - 2.3);
-    ctx.quadraticCurveTo(sx + 0.8, sy - 4.2, sx + 3.6, sy - 1.7);
-    ctx.stroke();
-    ctx.lineCap = 'butt';
-  }
-
-  function settlementRadius(town: Town): number {
-    switch (town.kind) {
-      case 'capital': return 5;
-      case 'city': return 4;
-      case 'town': return 3.2;
-      case 'village': return 2.6;
-      case 'hamlet': return 2.1;
-      default: return 1.7;
+    const shouldLabel = zoomIndex > 0 || marker.type === 'city' || marker.type === 'castle';
+    if (shouldLabel) {
+      ctx.fillStyle = '#fff';
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = 3;
+      ctx.font = marker.type === 'city' ? 'bold 10px sans-serif' : '10px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.strokeText(marker.name, p.x, p.y - radius - 4);
+      ctx.fillText(marker.name, p.x, p.y - radius - 4);
     }
-  }
-
-  function shouldLabelTown(town: Town): boolean {
-    if (town.kind === 'capital' || town.kind === 'city') return true;
-    if (zoomIndex >= 1 && town.kind === 'town') return true;
-    return zoomIndex >= 2 && (town.kind === 'village' || town.kind === 'hamlet');
   }
 
   function draw() {
     const c = center();
     const span = ZOOM_SPANS[zoomIndex];
+    ctx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
     ctx.drawImage(renderBaseTerrain(c, span), 0, 0);
 
-    function marker(wx: number, wy: number, paint: (sx: number, sy: number) => void) {
-      const { x: sx, y: sy } = worldToCanvas(wx, wy, c, span);
-      if (sx < -10 || sx > CANVAS_SIZE + 10 || sy < -10 || sy > CANVAS_SIZE + 10) return;
-      paint(sx, sy);
-    }
+    const data = loadEditorWorld(WORLD_SIZE);
+    for (const marker of data.markers) drawMarker(marker, c, span);
 
-    // Rivers are only a handful of tiles wide in the local world; draw their
-    // authored courses over the continental map so they remain useful landmarks.
-    ctx.save();
-    ctx.strokeStyle = '#2d7fbe';
-    ctx.lineWidth = zoomIndex === 0 ? 1.1 : 1.6;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    for (const river of RIVERS) {
-      ctx.beginPath();
-      river.points.forEach((p, i) => {
-        const s = worldToCanvas(p.x, p.y, c, span);
-        if (i === 0) ctx.moveTo(s.x, s.y);
-        else ctx.lineTo(s.x, s.y);
-      });
-      ctx.stroke();
-    }
-    ctx.restore();
-
-    for (const vein of ORE_VEINS) {
-      marker(vein.x, vein.y, (sx, sy) => {
-        drawMiningMarker(sx, sy);
-        if (zoomIndex >= 2) {
-          ctx.fillStyle = '#ffffff';
-          ctx.strokeStyle = '#000000';
-          ctx.lineWidth = 3;
-          ctx.font = '10px sans-serif';
-          ctx.textAlign = 'center';
-          ctx.strokeText(vein.name, sx, sy - 9);
-          ctx.fillText(vein.name, sx, sy - 9);
-        }
-      });
-    }
-
-    for (const r of RUINS) {
-      marker(r.x, r.y, (sx, sy) => {
-        ctx.fillStyle = '#c04040';
-        ctx.beginPath();
-        ctx.arc(sx, sy, 3, 0, Math.PI * 2);
-        ctx.fill();
-      });
-    }
-
-    for (const t of TOWNS) {
-      marker(t.x, t.y, (sx, sy) => {
-        const radius = settlementRadius(t);
-        ctx.fillStyle = t.capital ? '#ffd700' : '#ffffff';
-        ctx.strokeStyle = '#000000';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.arc(sx, sy, radius, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-
-        if (shouldLabelTown(t)) {
-          ctx.fillStyle = '#fff';
-          ctx.strokeStyle = '#000';
-          ctx.lineWidth = 3;
-          ctx.font = t.capital ? 'bold 11px sans-serif' : '10px sans-serif';
-          ctx.textAlign = 'center';
-          ctx.strokeText(t.name, sx, sy - radius - 4);
-          ctx.fillText(t.name, sx, sy - radius - 4);
-        }
-      });
-    }
-
-    marker(game.player.x, game.player.y, (sx, sy) => {
-      ctx.fillStyle = '#ffee55';
-      ctx.strokeStyle = '#000000';
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.arc(sx, sy, 5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-    });
+    const player = worldToCanvas(game.player.x, game.player.y, c, span);
+    ctx.fillStyle = '#ffee55';
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(player.x, player.y, 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
 
     zoomLabel.textContent = zoomIndex === 0 ? 'Whole Twin Lands' : `Zoom ${zoomIndex}/${ZOOM_SPANS.length - 1}`;
     zoomOutBtn.toggleAttribute('disabled', zoomIndex === 0);
@@ -226,31 +155,25 @@ export function buildWorldMap(root: HTMLElement, game: Game) {
     const tile = { x: Math.round(target.x), y: Math.round(target.y) };
     const dest = findNearestWalkable(game.world, tile);
     if (!dest) {
-      log("You can't find solid ground to travel to there.", 'warning');
+      log("You can't find authored land to travel to there.", 'warning');
       return;
     }
-    const player = game.player;
-    player.action = null;
-    player.combatTargetId = null;
-    player.path = [];
-    player.x = dest.x;
-    player.y = dest.y;
+    game.player.action = null;
+    game.player.combatTargetId = null;
+    game.player.path = [];
+    game.player.x = dest.x;
+    game.player.y = dest.y;
     log('You travel across the map to your destination.', 'info');
     close();
   });
 
-  zoomInBtn.addEventListener('click', () => {
-    zoomIndex = Math.min(ZOOM_SPANS.length - 1, zoomIndex + 1);
-    draw();
-  });
-  zoomOutBtn.addEventListener('click', () => {
-    zoomIndex = Math.max(0, zoomIndex - 1);
-    draw();
-  });
+  zoomInBtn.addEventListener('click', () => { zoomIndex = Math.min(ZOOM_SPANS.length - 1, zoomIndex + 1); baseCache = null; draw(); });
+  zoomOutBtn.addEventListener('click', () => { zoomIndex = Math.max(0, zoomIndex - 1); baseCache = null; draw(); });
   closeBtn.addEventListener('click', () => close());
 
   function open() {
     zoomIndex = 0;
+    baseCache = null;
     panel.classList.remove('hidden');
     draw();
   }
