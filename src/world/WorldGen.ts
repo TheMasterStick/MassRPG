@@ -100,8 +100,11 @@ export class WorldGen {
 
   isVillage(x: number, y: number): boolean {
     const town = nearestTown(x, y);
-    const dist = Math.hypot(x - town.x, y - town.y);
-    return dist <= (town.capital ? CAPITAL_RADIUS : VILLAGE_RADIUS);
+    const radius = town.capital ? CAPITAL_RADIUS : VILLAGE_RADIUS;
+    // Town perimeter walls are square (Chebyshev radius), so the safe zone
+    // must use the same geometry. A circular Math.hypot() check leaves four
+    // corner wedges *inside* the wall eligible for wilderness spawns.
+    return Math.max(Math.abs(x - town.x), Math.abs(y - town.y)) <= radius;
   }
 
   villageStructureAt(x: number, y: number): StructureType | null {
