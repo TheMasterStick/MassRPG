@@ -1,7 +1,7 @@
 import { CHUNK_SIZE } from '../core/constants';
-import type { ResourceType, StructureType, TileType } from './types';
+import type { ResourceType, StructureType, TileType, WorldPlane } from './types';
 import { WorldGen } from './WorldGen';
-import { getEditorCell, getEditorTerrainStrokeAt, hasOwnEditorField } from './EditorWorld';
+import { baseTileForPlane, getEditorCell, getEditorTerrainStrokeAt, hasOwnEditorField } from './EditorWorld';
 import { WORLD_SIZE } from './AeldorData';
 
 export interface InventorySlotData { itemId: string; qty: number }
@@ -24,38 +24,37 @@ export function localKey(lx: number, ly: number): string {
 export class Chunk {
   readonly cx: number;
   readonly cy: number;
+  readonly plane: WorldPlane;
   readonly tiles: TileType[];
   readonly resources: Map<string, ResourceType> = new Map();
   readonly naturalStructures: Map<string, StructureType> = new Map();
   readonly spawnPoints: { lx: number; ly: number; monsterId: string }[] = [];
   diffs: ChunkDiffs;
 
-  constructor(cx: number, cy: number, gen: WorldGen, savedDiffs?: ChunkDiffs) {
+  constructor(cx: number, cy: number, plane: WorldPlane, gen: WorldGen, savedDiffs?: ChunkDiffs) {
     this.cx = cx;
     this.cy = cy;
+    this.plane = plane;
     this.diffs = savedDiffs ?? emptyDiffs();
     this.tiles = new Array(CHUNK_SIZE * CHUNK_SIZE);
 
     const getTile = (wx: number, wy: number): TileType => {
-      const edit = getEditorCell(wx, wy, WORLD_SIZE);
+      const edit = getEditorCell(wx, wy, WORLD_SIZE, plane);
       if (edit?.tile) return edit.tile;
-      const stroke = getEditorTerrainStrokeAt(wx, wy, WORLD_SIZE);
-      return stroke?.tile ?? gen.tileAt(wx, wy);
+      const stroke = getEditorTerrainStrokeAt(wx, wy, WORLD_SIZE, plane);
+      return stroke?.tile ?? baseTileForPlane(plane);
     };
 
     for (let ly = 0; ly < CHUNK_SIZE; ly++) {
       for (let lx = 0; lx < CHUNK_SIZE; lx++) {
         const wx = cx * CHUNK_SIZE + lx;
         const wy = cy * CHUNK_SIZE + ly;
-        const edit = getEditorCell(wx, wy, WORLD_SIZE);
-        const terrainStroke = edit?.tile ? undefined : getEditorTerrainStrokeAt(wx, wy, WORLD_SIZE);
-        const tile = edit?.tile ?? terrainStroke?.tile ?? gen.tileAt(wx, wy);
+        const edit = getEditorCell(wx, wy, WORLD_SIZE, plane);
+        const terrainStroke = edit?.tile ? undefined : getEditorTerrainStrokeAt(wx, wy, WORLD_SIZE, plane);
+        const tile = edit?.tile ?? terrainStroke?.tile ?? baseTileForPlane(plane);
         this.tiles[ly * CHUNK_SIZE + lx] = tile;
         const key = localKey(lx, ly);
 
-        // The hand-authored editor layer is authoritative. WorldGen now returns
-        // only blank ocean/no objects, but the fallback calls stay here to keep
-        // the runtime API stable for future explicitly authored base layers.
         let structure: StructureType | null = null;
         if (hasOwnEditorField(edit, 'structure')) structure = edit?.structure ?? null;
         else structure = gen.villageStructureAt(wx, wy);
