@@ -1,24 +1,73 @@
-# Claude handoff — Twin Lands world expansion
+# Claude handoff — Twin Lands hand-authored world
 
 This is the current user-directed world/settlement direction. Preserve these rules unless the user explicitly changes them.
 
-## Current macro world
+## World authority changed completely
 
-The old 15,000 x 15,000 Aeldor prototype has been expanded to a **180,000 x 180,000** tile world. The new macro geography is based on the user's merged **Twin Lands** reference: Westerland and Estland are one huge connected landmass rather than two continents separated by a sea strait.
+The old procedural Aeldor/Twin Lands prototype is no longer the gameplay/world authority.
 
-`src/world/AeldorData.ts` keeps its old filename for compatibility, but now contains Twin Lands data. `AELDOR_SEED` is retained as an alias while new code should prefer `TWIN_LANDS_SEED`.
+The world remains **180,000 x 180,000 tiles**, but it now starts as a completely blank **deep-water ocean**. `WorldGen.ts` deliberately returns deep water for terrain and no procedural structures, resources or monster spawns. The user intends to draw the playable world by hand in the World Editor.
 
-The intended continental character remains:
+Legacy geographic/settlement data may remain in `AeldorData.ts` temporarily for compatibility with old imports, but it must not be treated as canonical geography and must not be silently re-enabled. Do not resurrect the old generated landmass, automatic towns, roads, ore veins, forests or progression regions unless the user explicitly asks for some procedural helper again.
 
-- **Westerland / west:** wetter, greener, lake/river rich, extensive forests, strong mountain barriers and broken coasts.
-- **Estland / east:** broader, drier, more open, major desert/steppe country, long mountain systems and river lifelines.
-- The main capital is in central Westerland beside the large river/lake system.
+The user has made the architectural decision that **authored editor data is the world**.
 
-The current coastline/biome polygons are a first implementation pass based on the merged visual reference. Refine them from the user's map rather than reverting to giant ellipses/circles.
+## World Editor — primary worldbuilding tool
 
-## Settlement design — important
+The start screen exposes the **World Editor** (`?editor=1`). It is now intended to support building essentially the entire map by hand.
 
-The user explicitly does **not** want the old "three houses = capital" model. Settlement scale matters and is encoded in `Town.kind` / `Town.radius`:
+Current editor behavior:
+
+- Base terrain is deep water everywhere.
+- All land, forests, mountains, beaches, rivers, floors and paths are painted manually.
+- Structures such as furnaces, beds, anvils, walls, banks, storage, looms and general-store props are hand-placed.
+- Trees, ores, fishing spots and farming resources are hand-placed.
+- Monster spawners are hand-placed.
+- There is no procedural-object toggle anymore because procedural world population has been retired completely.
+- Terrain brush preview is translucent green.
+- Tree resources can be placed individually or scattered randomly through the current brush with sparse/normal/dense grove density.
+- Zoom reaches **0.005 px per tile**, enough to fit the entire 180k map in the main editor viewport on a typical desktop.
+- Terrain brushes range from 1x1 up to **65,535 x 65,535**.
+- Brushes of 33x33 or larger remain compact macro `terrainStrokes`; never expand them into millions of individual JSON cells.
+- At macro zoom the editor paints the ocean once and composites only sparse authored strokes/cells. Do not return to per-tile sampling across tens of thousands of visible tiles; that was a major source of lag.
+- The right-side mini world map is clickable for rapid camera movement and reflects authored terrain immediately.
+- **M** opens/closes the large editor world map; clicking it moves the editor camera.
+- Undo/redo, browser autosave and JSON import/export remain supported.
+
+`EditorWorld.ts` is now data format **version 3**. Old v1/v2 editor data is migrated forward. The exported file is `twinlands-world.json`.
+
+## Reference markers — important for later AI-assisted implementation
+
+The editor now supports explicit map/reference markers. These are not gameplay structures; they are world-design metadata saved into the exported JSON so ChatGPT/Claude can later read exact intended locations and build proper references/implementations around them.
+
+Supported marker types:
+
+- `settlement`
+- `village`
+- `town`
+- `city`
+- `castle`
+- `mining_area`
+
+Each marker stores:
+
+- stable-ish generated `id`
+- `type`
+- user-provided `name` (or automatic placeholder name)
+- exact world `x`, `y`
+- optional free-text `notes`
+
+Markers appear on the editor mini-map and full M-map. They can be selected from the toolbar jump list. The marker palette also lists placed markers and clicking one jumps to it. A delete-nearest-marker tool is available.
+
+When the user later exports/uploads `twinlands-world.json`, use `markers` as explicit authored intent for where settlements, castles and mining areas are meant to exist. Do not infer replacement locations from old `TOWNS`/`ORE_VEINS` data.
+
+## Settlement design — still important
+
+The user explicitly does **not** want the old "three houses = capital" model. When actual settlements are hand-built or later converted into authored templates, use the design language:
+
+**RuneScape function density + World of Warcraft district readability.**
+
+Approximate gameplay-compressed settlement scales discussed previously:
 
 - farmstead: ~28 tiles across, ~3 buildings
 - hamlet: ~50 tiles across, ~8 buildings
@@ -27,70 +76,44 @@ The user explicitly does **not** want the old "three houses = capital" model. Se
 - city: ~300 tiles across, ~78 buildings
 - capital: ~480 tiles across, ~130 buildings
 
-These are gameplay-compressed settlements, not literal medieval population simulations. The design language is **RuneScape function density + World of Warcraft district readability**.
+These are guidelines, not mandatory squares. Coastal towns can be long and narrow, mining towns can climb terrain, river cities can span banks, etc. Large settlements need multiple streets/blocks/districts rather than one central crossroad. Important services should be actual recognizable destinations surrounded by ordinary houses, workshops, warehouses, yards and civic space.
 
-Important services should live inside recognizable buildings. Cities need ordinary homes, workshops, warehouses, side streets and non-critical buildings around those services. Large settlements need multiple streets/blocks/districts rather than one crossroad. Capitals/cities can have duplicate secondary services. Do not shrink settlements back to tiny hubs just because that is easier for generation or pathfinding.
-
-`src/world/Buildings.ts` defines reusable house, smithy, inn, bank, store, workshop, tannery, weaver, warehouse and chapel prefabs plus deterministic fallback layouts. These are prototypes; hand-authored city plans should layer over or replace the fallback locally.
-
-## Hand-authored world editor — now a major workflow
-
-The user now intends to be able to build **the entire world by hand if desired**, not merely individual settlements. The procedural world should be treated as a convenient base/fallback, not as the final authority over authored areas.
-
-The start screen exposes the **World Editor** (`?editor=1`). Current editor features include:
-
-- all current terrain/floor tiles
-- structures such as furnaces, beds, anvils, walls, banks, storage, looms and general-store props
-- trees, ores, fishing spots and farming resources
-- monster spawners
-- exact coordinate jumping plus known settlement/mine jump targets
-- undo/redo, browser autosave and JSON import/export
-- a permanent clickable **mini world map** for rapid navigation
-- **M** opens/closes a much larger full-world editor map; clicking it moves the editing camera
-- map overlays update as manual terrain/objects are placed
-- zoom now extends far below one pixel per tile for regional/macro editing
-- terrain brushes now range from 1x1 up to 8193x8193
-- brushes of 33x33 or larger are stored as compact `terrainStrokes` rather than expanding into millions of JSON cells
-- the brush footprint is previewed as a translucent **green placement area** before painting
-- tree placement supports a single-tree mode or randomized grove/scatter mode with sparse/normal/dense density
-- terrain painting has a **Procedural objects** checkbox. If unchecked, the painted area suppresses automatically generated structures/resources/monster spawns, allowing intentionally empty grassland, forest floors, city sites, etc.
-
-`src/world/EditorWorld.ts` is now editor-data version 2. Detailed object work remains per-cell while broad terrain can be stored as square macro strokes. `Chunk.ts` applies cell terrain first, then macro terrain, then procedural terrain. Manual structures/resources/spawners always win. `suppressProcedural` prevents generated objects beneath manually painted terrain without preventing manually placed objects.
-
-This scalable stroke system is important: do not revert the editor to millions of individual cell records for large terrain brushes. The whole purpose is to make a 180k world hand-authorable without immediately exhausting browser storage.
-
-Large finished edits should still be exported to `twinlands-world-edits.json` and eventually committed/canonicalized in Git rather than existing only in one browser's local storage.
+Existing building prefabs in `Buildings.ts` remain useful as references/stamps, but they must not automatically generate settlements over the user's hand-authored terrain.
 
 ## Progression direction
 
-The character maximum level remains **120**, while world danger/progression zones may extend from **1 through 300**. Late-game equipment, food, potions/buffs and preparation are expected to let a max-level character challenge content above 120.
+The character maximum level remains **120**, while eventual world danger zones may extend from **1 through 300**. The old provisional procedural progression ellipses are no longer authoritative. The user wants to finish geography, settlement markers and POIs first, then decide progression regions based on the finished map.
 
-The current 1-300 zones are a provisional macro layout. Final danger regions should follow geography, settlements, travel corridors and POIs rather than perfect concentric circles. Rare authored exceptions are desirable: dragons, moss giant groves, lesser demons, dangerous ruins and bosses can exceed the surrounding region's normal band.
+Later danger regions should follow geography and travel structure rather than perfect rings. Rare authored exceptions remain desirable: dragons, moss giant groves, lesser demons, dangerous ruins and bosses may exceed the surrounding area's normal band.
 
-## Ore / gathering rules — preserve these
+## Ore / gathering rules
 
-1. **Biome does not determine metal ore.** Mountains/deserts/snow must not create carpets of valuable rocks.
-2. `ORE_VEINS` remains the macro/public list, while the editor can place the exact individual rock nodes by hand.
-3. A normal listed ore should generally have roughly **3-5 persistent nodes** unless the user deliberately builds a different mine.
-4. Depleted rocks stay visible but dim/grey while respawning.
-5. Mining sites are public information. The local minimap shows rocks as black dots and world maps show mining locations.
-6. Town safety wins over automatic resource placement; manual editor placement is authoritative.
-7. Trees/gatherables should occur in intentional pockets/groves rather than salt-and-pepper carpets.
-8. Gemstone expansion is still deferred.
-9. Dragonite remains above Runite. Current smelting intent is **2 Dragonite Ore + 2 Coal -> 1 Dragonite Bar**.
+Metal ore is now fully authored. Do not generate ore from mountain/desert/snow biomes.
 
-## Terrain / coastline rules
+Current ore ladder remains Copper, Tin, Iron, Coal, Silver, Gold, Mithril, Adamantite, Runite and Dragonite. Mining areas should normally be deliberately built as clustered sites, commonly around 3–5 nodes of each intended ore type unless the user designs otherwise. Depleted rocks should stay visible but dim/grey while respawning.
 
-- Keep beaches narrow and intermittent. The old enormous beach belt was a bug.
-- Visible terrain should use irregular/organic boundaries, not huge circles.
-- Rivers are real local water features and are overdrawn on continental maps for readability.
-- Roads still need a future terrain-aware pass with proper passes, bridges and ports.
-- Hand-painted editor terrain is allowed to supersede the procedural macro geography entirely where the user chooses.
+Mining locations are public information. Use `mining_area` editor markers for macro map references and exact hand-placed resource cells for individual rocks.
 
-## Save migration
+Dragonite remains above Runite. Current smelting intent remains **2 Dragonite Ore + 2 Coal -> 1 Dragonite Bar**.
 
-`WORLD_REVISION = 2` marks the 180k Twin Lands conversion. Old 15k-world saves retain character inventory/stats/bank, but obsolete chunk diffs are discarded and the character is moved to the new capital.
+## Runtime / saves
 
-## Near-term direction
+`Chunk.ts` now reads hand-authored terrain strokes/cells first. `WorldGen.ts` supplies only the blank ocean/no-object fallback.
 
-The user is increasingly leaning toward authoring the world directly in the editor. Support that workflow rather than fighting it with more procedural complexity. Useful next steps are richer editor tools (roads/lines, fill, rectangles, named POIs, settlement markers, copy/paste/stamps), then hand-building the capital and representative towns/villages, then finalizing progression and resource locations from the completed geography.
+The save layer uses authored-world revision 3. Older world saves keep character stats/inventory/bank but are migrated away from obsolete procedural chunk state and moved to the centre of the blank authored world.
+
+The in-game world map and minimap now read hand-authored editor terrain/markers rather than displaying the retired procedural settlements and mines.
+
+## Near-term editor improvements
+
+Prioritize tools that make full-map manual building faster rather than adding procedural complexity. Good candidates include:
+
+- line/path tool for roads and rivers
+- rectangle/circle/fill tools
+- selection, copy/paste and reusable stamps
+- terrain edge/shore helpers
+- marker editing/renaming rather than delete-and-replace
+- settlement/building stamp libraries
+- canonicalizing exported `twinlands-world.json` into Git once the user has substantial authored work
+
+The guiding principle is simple: **the user's editor output is canonical; code should help them author it efficiently, not override it.**
