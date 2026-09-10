@@ -53,13 +53,31 @@ export class MiniMap {
     const px = Math.round(player.x);
     const py = Math.round(player.y);
     const radiusTiles = Math.ceil(SIZE / SCALE / 2) + 1;
+    const oreDots: { x: number; y: number }[] = [];
 
     for (let ty = -radiusTiles; ty <= radiusTiles; ty++) {
       for (let tx = -radiusTiles; tx <= radiusTiles; tx++) {
-        const tile = world.getTile(px + tx, py + ty);
+        const wx = px + tx;
+        const wy = py + ty;
+        const tile = world.getTile(wx, wy);
+        const sx = SIZE / 2 + tx * SCALE;
+        const sy = SIZE / 2 + ty * SCALE;
         ctx.fillStyle = TILE_MAP_COLORS[tile] ?? '#000';
-        ctx.fillRect(SIZE / 2 + tx * SCALE - SCALE / 2, SIZE / 2 + ty * SCALE - SCALE / 2, SCALE, SCALE);
+        ctx.fillRect(sx - SCALE / 2, sy - SCALE / 2, SCALE, SCALE);
+
+        // Authored ore nodes are black dots on the local minimap. Depleted
+        // rocks remain marked because the node itself still exists/respawns.
+        const resource = world.getResourceNode(wx, wy);
+        if (resource?.startsWith('rock_')) oreDots.push({ x: sx, y: sy });
       }
+    }
+
+    // Resources sit above terrain but below towns, creatures and the player.
+    ctx.fillStyle = '#000000';
+    for (const dot of oreDots) {
+      ctx.beginPath();
+      ctx.arc(dot.x, dot.y, 1.7, 0, Math.PI * 2);
+      ctx.fill();
     }
 
     const worldRadius = SIZE / 2 / SCALE;
@@ -77,6 +95,7 @@ export class MiniMap {
       ctx.fill();
       ctx.stroke();
     }
+
     for (const r of RUINS) {
       const dx = r.x - px;
       const dy = r.y - py;
@@ -89,8 +108,6 @@ export class MiniMap {
       ctx.fill();
     }
 
-    // Monsters as small red squares. (NPCs, once added, should render here the
-    // same way as yellow squares - there's no NPC entity yet to draw.)
     ctx.fillStyle = '#ff3030';
     const monsterHalf = 1.5;
     for (const m of world.monsters) {
@@ -103,7 +120,6 @@ export class MiniMap {
       ctx.fillRect(sx - monsterHalf, sy - monsterHalf, monsterHalf * 2, monsterHalf * 2);
     }
 
-    // Player marker, always centered.
     ctx.fillStyle = '#ffee55';
     ctx.strokeStyle = '#000000';
     ctx.beginPath();
