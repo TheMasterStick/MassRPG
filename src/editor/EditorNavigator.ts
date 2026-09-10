@@ -25,6 +25,11 @@ export interface EditorNavigatorHandle {
   closeLarge: () => void;
 }
 
+interface StaticMapCache {
+  revision: number;
+  canvas: HTMLCanvasElement;
+}
+
 const BASE_SAMPLE = 256;
 const MINI_SIZE = 220;
 const LARGE_SIZE = 760;
@@ -77,8 +82,8 @@ export function createEditorNavigator(options: NavigatorOptions): EditorNavigato
 
   let baseMap: HTMLCanvasElement | null = null;
   let editRevision = 0;
-  let lastMiniRevision = -1;
-  let lastLargeRevision = -1;
+  let miniStatic: StaticMapCache | null = null;
+  let largeStatic: StaticMapCache | null = null;
 
   function ensureBaseMap(): HTMLCanvasElement {
     if (baseMap) return baseMap;
@@ -104,36 +109,38 @@ export function createEditorNavigator(options: NavigatorOptions): EditorNavigato
     return c;
   }
 
-  function drawMap(canvas: HTMLCanvasElement, largeMode: boolean): void {
+  function staticMap(size: number, largeMode: boolean): HTMLCanvasElement {
+    const existing = largeMode ? largeStatic : miniStatic;
+    if (existing && existing.revision === editRevision) return existing.canvas;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
     const ctx = canvas.getContext('2d')!;
-    const width = canvas.width;
-    const height = canvas.height;
     const base = ensureBaseMap();
-    ctx.clearRect(0, 0, width, height);
     ctx.imageSmoothingEnabled = true;
-    ctx.drawImage(base, 0, 0, width, height);
+    ctx.drawImage(base, 0, 0, size, size);
 
     const data = options.getData();
-    for (const stroke of data.terrainStrokes) drawTerrainStroke(ctx, base, stroke, width, height);
+    for (const stroke of data.terrainStrokes) drawTerrainStroke(ctx, base, stroke, size, size);
 
     // Cell-level terrain edits sit above broad terrain strokes.
     for (const [key, cell] of Object.entries(data.cells)) {
+      if (!cell.tile) continue;
       const [x, y] = parseKey(key);
-      if (cell.tile) {
-        ctx.fillStyle = TILE_MAP_COLORS[cell.tile];
-        const sx = (x / WORLD_SIZE) * width;
-        const sy = (y / WORLD_SIZE) * height;
-        const dot = largeMode ? 2 : 1;
-        ctx.fillRect(Math.floor(sx), Math.floor(sy), dot, dot);
-      }
+      ctx.fillStyle = TILE_MAP_COLORS[cell.tile];
+      const sx = (x / WORLD_SIZE) * size;
+      const sy = (y / WORLD_SIZE) * size;
+      const dot = largeMode ? 2 : 1;
+      ctx.fillRect(Math.floor(sx), Math.floor(sy), dot, dot);
     }
 
     // Hand-placed world objects remain visible even when their terrain edit is
     // too small to register at continental scale.
     for (const [key, cell] of Object.entries(data.cells)) {
       const [x, y] = parseKey(key);
-      const sx = (x / WORLD_SIZE) * width;
-      const sy = (y / WORLD_SIZE) * height;
+      const sx = (x / WORLD_SIZE) * size;
+      const sy = (y / WORLD_SIZE) * size;
       if (cell.resource) {
         ctx.fillStyle = cell.resource.startsWith('rock_') ? '#101010' : '#1f8c3f';
         mapDot(ctx, sx, sy, largeMode ? 2.4 : 1.5);
@@ -148,14 +155,14 @@ export function createEditorNavigator(options: NavigatorOptions): EditorNavigato
 
     // Existing generated reference points are navigation aids, not secrets.
     for (const town of TOWNS) {
-      const sx = (town.x / WORLD_SIZE) * width;
-      const sy = (town.y / WORLD_SIZE) * height;
+      const sx = (town.x / WORLD_SIZE) * size;
+      const sy = (town.y / WORLD_SIZE) * size;
       ctx.fillStyle = town.capital ? '#ffe35a' : '#f5f5f5';
       ctx.strokeStyle = '#111';
       ctx.lineWidth = largeMode ? 1.5 : 1;
       mapDot(ctx, sx, sy, town.capital ? (largeMode ? 4 : 2.7) : (largeMode ? 3 : 2));
       ctx.stroke();
-      if (largeMode && width >= 600) {
+      if (largeMode && size >= 600) {
         ctx.font = '10px system-ui, sans-serif';
         ctx.textAlign = 'center';
         ctx.fillStyle = '#fff';
@@ -166,13 +173,23 @@ export function createEditorNavigator(options: NavigatorOptions): EditorNavigato
       }
     }
     for (const mine of ORE_VEINS) {
-      const sx = (mine.x / WORLD_SIZE) * width;
-      const sy = (mine.y / WORLD_SIZE) * height;
+      const sx = (mine.x / WORLD_SIZE) * size;
+      const sy = (mine.y / WORLD_SIZE) * size;
       ctx.fillStyle = '#ff8a32';
       mapDot(ctx, sx, sy, largeMode ? 3.2 : 2.1);
     }
 
-    drawViewport(ctx, width, height);
+    const next = { revision: editRevision, canvas };
+    if (largeMode) largeStatic = next;
+    else miniStatic = next;
+    return canvas;
+  }
+
+  function drawMap(canvas: HTMLCanvasElement, largeMode: boolean): void {
+    const ctx = canvas.getContext('2d')!;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(staticMap(canvas.width, largeMode), 0, 0);
+    drawViewport(ctx, canvas.width, canvas.height);
   }
 
   function drawTerrainStroke(
@@ -232,20 +249,14 @@ export function createEditorNavigator(options: NavigatorOptions): EditorNavigato
   }
 
   function redraw(): void {
-    // Terrain/object edits are always overdrawn live. Revision counters simply
-    // make future caching possible without changing the public API.
     drawMap(mini, false);
-    lastMiniRevision = editRevision;
-    if (!modal.classList.contains('hidden')) {
-      drawMap(large, true);
-      lastLargeRevision = editRevision;
-    }
+    if (!modal.classList.contains('hidden')) drawMap(large, true);
   }
 
   function markEditsDirty(): void {
     editRevision++;
-    void lastMiniRevision;
-    void lastLargeRevision;
+    miniStatic = null;
+    largeStatic = null;
   }
 
   function toggleLarge(): void {
