@@ -80,16 +80,17 @@ export class WorldGen {
     return null;
   }
 
-  /** For the renderer's roof overlay: which building (if any) covers this tile, and whether it's the front (south) row that gets the eave-trimmed roof piece instead of the plain repeating one. */
-  roofCellAt(x: number, y: number): { roof: 'tile' | 'tatch'; isSouthRow: boolean; originX: number; originY: number } | null {
+  /** For the renderer's roof overlay: which building (if any) covers this tile, and which edge of the roof rectangle it's on (the eave-trimmed piece goes around the whole perimeter, oriented outward; 'none' means the interior, which gets the plain repeating piece). */
+  roofCellAt(x: number, y: number): { roof: 'tile' | 'tatch'; edge: 'top' | 'bottom' | 'left' | 'right' | 'none'; originX: number; originY: number } | null {
     const b = this.buildingCellAt(x, y);
     if (!b) return null;
-    return {
-      roof: b.instance.prefab.roof,
-      isSouthRow: b.localY === b.instance.prefab.height - 1,
-      originX: b.originX,
-      originY: b.originY,
-    };
+    const { prefab } = b.instance;
+    let edge: 'top' | 'bottom' | 'left' | 'right' | 'none' = 'none';
+    if (b.localY === 0) edge = 'top';
+    else if (b.localY === prefab.height - 1) edge = 'bottom';
+    else if (b.localX === 0) edge = 'left';
+    else if (b.localX === prefab.width - 1) edge = 'right';
+    return { roof: prefab.roof, edge, originX: b.originX, originY: b.originY };
   }
 
   /** Which building instance (identified by its world origin) this tile belongs to, if any - used to hide that specific building's roof once the player steps inside it. */
@@ -171,7 +172,13 @@ export class WorldGen {
     if (x < 0 || y < 0 || x >= WORLD_SIZE || y >= WORLD_SIZE) return 'deep_water';
 
     const building = this.buildingCellAt(x, y);
-    if (building && (building.ch === '.' || building.ch === 'D')) return building.instance.prefab.floor;
+    if (building) {
+      if (building.ch === '.') return building.instance.prefab.floor;
+      // The door renders as the same path texture that leads up to town, so
+      // the one gap in the wall ring reads as an obvious way in rather than
+      // blending into the (differently-textured) interior floor either side.
+      if (building.ch === 'D') return 'path';
+    }
 
     if (this.isVillage(x, y)) {
       const town = nearestTown(x, y);

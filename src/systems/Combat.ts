@@ -132,12 +132,16 @@ function grantLoot(player: Player, monster: Monster) {
 }
 
 export function combatTick(world: World, player: Player) {
+  // Towns are a safe zone: monsters never aggro onto a player standing in one,
+  // and immediately give up any chase the moment the player reaches one.
+  const playerInVillage = player.isAlive() && world.gen.isVillage(Math.round(player.x), Math.round(player.y));
+
   // Aggro + leash + wander for monsters
   for (const monster of world.monsters) {
     if (!monster.isAlive()) continue;
 
     if (
-      monster.targetId !== 'player' && monster.def().aggressive && player.isAlive() &&
+      monster.targetId !== 'player' && monster.def().aggressive && player.isAlive() && !playerInVillage &&
       world.tick >= monster.aggroCooldownUntilTick
     ) {
       const dist = Math.max(Math.abs(monster.x - player.x), Math.abs(monster.y - player.y));
@@ -146,7 +150,7 @@ export function combatTick(world: World, player: Player) {
 
     if (monster.targetId === 'player') {
       const leash = Math.max(Math.abs(monster.x - monster.spawnX), Math.abs(monster.y - monster.spawnY));
-      if (!player.isAlive() || leash > MONSTER_LEASH_RANGE) {
+      if (!player.isAlive() || leash > MONSTER_LEASH_RANGE || playerInVillage) {
         monster.targetId = null;
         monster.aggroCooldownUntilTick = world.tick + MONSTER_AGGRO_COOLDOWN_TICKS;
         continue;
@@ -154,8 +158,15 @@ export function combatTick(world: World, player: Player) {
       faceHorizontally(monster, player.x - monster.x);
       if (!isAdjacent({ x: monster.x, y: monster.y }, { x: player.x, y: player.y }) && monster.lastMoveTick !== world.tick) {
         const next = stepToward(monster.x, monster.y, Math.round(player.x), Math.round(player.y), world);
-        monster.x = next.x; monster.y = next.y;
-        monster.lastMoveTick = world.tick;
+        // Never actually step into a town, even mid-chase - abandon the pursuit
+        // right at the border instead of just leashing out one step too late.
+        if (world.gen.isVillage(next.x, next.y)) {
+          monster.targetId = null;
+          monster.aggroCooldownUntilTick = world.tick + MONSTER_AGGRO_COOLDOWN_TICKS;
+        } else {
+          monster.x = next.x; monster.y = next.y;
+          monster.lastMoveTick = world.tick;
+        }
       } else if (isAdjacent({ x: monster.x, y: monster.y }, { x: Math.round(player.x), y: Math.round(player.y) })) {
         if (world.tick - monster.lastAttackTick >= monster.def().attackSpeedTicks) {
           resolveMonsterHit(player, monster);

@@ -69,9 +69,11 @@ spanning tree over all the towns) that doubles as a bridge wherever it
 needs to cross water. Every town also has two real walk-in buildings — a
 small thatched-roof house (with a bed and a storage chest) and a
 stone-floored smithy (furnace, anvil, workbench) — with proper walls,
-windows, a door gap and a roof that renders above the building from
-outside and disappears once you're standing inside it, so you can see the
-interior. Three ruins (Old Cairn Ruins, Moonfall Ruins, Serpent's Spire)
+windows, a door gap (rendered as a path tile so it's obvious where to walk
+in, since it's always on the south side) and a roof that wraps the whole
+building with a trimmed edge on all four sides, rendering above it from
+outside and disappearing once you're standing inside it, so you can see
+the interior. Three ruins (Old Cairn Ruins, Moonfall Ruins, Serpent's Spire)
 are marked zones of scattered rubble. Monster difficulty scales up with
 distance from the nearest town, so the roads and their surrounding land
 stay safe while the deep wilderness between settlements
@@ -99,7 +101,10 @@ than the nearby area in memory).
   than a few tiles from where it spawned, ambles back home, and won't
   re-aggro for several seconds after giving up a chase — so you can
   always run rather than being followed indefinitely. Tougher monsters
-  only start appearing the further you get from the nearest town.
+  only start appearing the further you get from the nearest town, and
+  every town's immediate radius is a safe zone: nothing spawns there, and
+  a monster chasing you gives up the instant you cross into one rather
+  than following you in.
 - **Construction**: place furnaces, anvils, cooking ranges, tanneries,
   looms, workbenches, storage chests, beds (sets your respawn point),
   fences and walls anywhere you've cleared space, using planks, stone and

@@ -195,27 +195,42 @@ export class Renderer {
     ctx.restore();
   }
 
-  /** Roofs draw as a final overlay above everything (walls, furniture, monsters, the player) so buildings read correctly from outside, but are skipped entirely for whichever single building the player is currently standing inside, so its interior is visible. */
+  // The eave-trimmed "side" roof piece is drawn facing outward on whichever edge
+  // it's on (rotated so the trim always points away from the building's center),
+  // wrapping the whole perimeter instead of just the front row.
+  private static readonly ROOF_EDGE_ROTATION: Record<'top' | 'bottom' | 'left' | 'right', number> = {
+    bottom: 0, top: Math.PI, left: Math.PI / 2, right: -Math.PI / 2,
+  };
+
+  /** Roofs draw as a final overlay above everything (walls, furniture, monsters, the player) so buildings read correctly from outside, but are skipped entirely for whichever single building the player is currently standing inside, so its interior is visible. Building footprints are tiny, so each tile is drawn individually (rather than pattern-tiled like ground textures) so the edge pieces can be rotated per side. */
   private drawRoofs(
     world: World, player: Player, camX: number, camY: number,
     minTX: number, maxTX: number, minTY: number, maxTY: number,
   ) {
+    const ctx = this.ctx;
     const playerBuilding = world.gen.buildingOriginAt(Math.round(player.x), Math.round(player.y));
-    const groups = new Map<HTMLImageElement, { sx: number; sy: number }[]>();
 
     for (let ty = minTY; ty <= maxTY; ty++) {
       for (let tx = minTX; tx <= maxTX; tx++) {
         const roof = world.gen.roofCellAt(tx, ty);
         if (!roof) continue;
         if (playerBuilding && playerBuilding.originX === roof.originX && playerBuilding.originY === roof.originY) continue;
-        const sprite = getSprite('roof', `${roof.roof}_${roof.isSouthRow ? 'side' : 'middle'}`);
+        const sx = tx * TILE_SIZE - camX;
+        const sy = ty * TILE_SIZE - camY;
+        if (roof.edge === 'none') {
+          const sprite = getSprite('roof', `${roof.roof}_middle`);
+          if (sprite) ctx.drawImage(sprite, sx, sy, TILE_SIZE, TILE_SIZE);
+          continue;
+        }
+        const sprite = getSprite('roof', `${roof.roof}_side`);
         if (!sprite) continue;
-        let group = groups.get(sprite);
-        if (!group) { group = []; groups.set(sprite, group); }
-        group.push({ sx: tx * TILE_SIZE - camX, sy: ty * TILE_SIZE - camY });
+        ctx.save();
+        ctx.translate(sx + TILE_SIZE / 2, sy + TILE_SIZE / 2);
+        ctx.rotate(Renderer.ROOF_EDGE_ROTATION[roof.edge]);
+        ctx.drawImage(sprite, -TILE_SIZE / 2, -TILE_SIZE / 2, TILE_SIZE, TILE_SIZE);
+        ctx.restore();
       }
     }
-    for (const [sprite, cells] of groups) this.paintTilePattern(sprite, cells, camX, camY);
   }
 
   private getTilePattern(img: HTMLImageElement): CanvasPattern {
