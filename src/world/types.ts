@@ -1,8 +1,12 @@
+export type WorldPlane = 0 | -1 | -2;
+export type ElevationLevel = -2 | -1 | 0 | 1 | 2 | 3 | 4 | 5;
+
 export type TileType =
   | 'deep_water' | 'water' | 'beach'
   | 'grass' | 'plains' | 'forest' | 'taiga' | 'mountain' | 'snow' | 'desert' | 'swamp'
   | 'path' | 'rubble'
-  | 'floor_wood' | 'floor_brick' | 'floor_cobble';
+  | 'floor_wood' | 'floor_brick' | 'floor_cobble'
+  | 'void' | 'cave_floor' | 'cave_wall';
 
 export interface TileVisual {
   base: string;
@@ -28,6 +32,9 @@ export const TILE_VISUALS: Record<TileType, TileVisual> = {
   floor_wood: { base: '#a07840', variants: ['#a07840'], walkable: true },
   floor_brick: { base: '#9c5f4a', variants: ['#9c5f4a'], walkable: true },
   floor_cobble: { base: '#8a8a8f', variants: ['#8a8a8f'], walkable: true },
+  void: { base: '#090a0c', variants: ['#090a0c'], walkable: false },
+  cave_floor: { base: '#4a433b', variants: ['#4a433b', '#453f38', '#50483f'], walkable: true },
+  cave_wall: { base: '#262421', variants: ['#262421', '#2b2926'], walkable: false },
 };
 
 export type ResourceType =
