@@ -48,6 +48,7 @@ const TILE_TYPES: TileType[] = [
   'deep_water', 'water', 'beach', 'grass', 'plains', 'forest', 'taiga',
   'mountain', 'snow', 'desert', 'swamp', 'path', 'rubble',
   'floor_wood', 'floor_brick', 'floor_cobble',
+  'void', 'cave_floor', 'cave_wall',
 ];
 const RESOURCE_TYPES: ResourceType[] = [
   'tree_normal', 'tree_oak', 'tree_willow', 'tree_maple', 'tree_yew', 'tree_magic',
