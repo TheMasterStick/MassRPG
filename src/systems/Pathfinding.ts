@@ -7,8 +7,6 @@ const DIRS: Point[] = [
   { x: 1, y: 1 }, { x: 1, y: -1 }, { x: -1, y: 1 }, { x: -1, y: -1 },
 ];
 
-// Bounded BFS over the walkable grid. Good enough for a local, tile-based
-// world where paths rarely need to travel more than a few dozen tiles.
 export function bfsPath(world: World, start: Point, goal: Point, maxRadius = 40): Point[] | null {
   if (start.x === goal.x && start.y === goal.y) return [];
   const key = (p: Point) => `${p.x},${p.y}`;
@@ -25,12 +23,10 @@ export function bfsPath(world: World, start: Point, goal: Point, maxRadius = 40)
       if (Math.abs(nx - start.x) > maxRadius || Math.abs(ny - start.y) > maxRadius) continue;
       const nk = `${nx},${ny}`;
       if (visited.has(nk)) continue;
-      const isGoal = nx === goal.x && ny === goal.y;
-      if (!isGoal && !world.isWalkable(nx, ny)) continue;
-      if (isGoal && !world.isWalkable(nx, ny)) continue;
+      if (!world.canStep(cur.x, cur.y, nx, ny)) continue;
       visited.add(nk);
       cameFrom.set(nk, cur);
-      if (isGoal) {
+      if (nx === goal.x && ny === goal.y) {
         const path: Point[] = [];
         let p: Point | undefined = { x: nx, y: ny };
         while (p && !(p.x === start.x && p.y === start.y)) {
@@ -45,8 +41,6 @@ export function bfsPath(world: World, start: Point, goal: Point, maxRadius = 40)
   return null;
 }
 
-// Finds the walkable tile adjacent to `target` closest to `from`, for
-// walking up to a resource/monster/structure to interact with it.
 export function nearestAdjacentWalkable(world: World, from: Point, target: Point): Point | null {
   let best: Point | null = null;
   let bestDist = Infinity;
@@ -59,9 +53,6 @@ export function nearestAdjacentWalkable(world: World, from: Point, target: Point
   return best;
 }
 
-// Expanding ring search for the nearest walkable tile to `target`, regardless of
-// distance from the player - used for world-map fast travel, where the destination
-// can be thousands of tiles away and a full bfsPath search isn't practical.
 export function findNearestWalkable(world: World, target: Point, maxRadius = 30): Point | null {
   if (world.isWalkable(target.x, target.y)) return target;
   for (let r = 1; r <= maxRadius; r++) {
