@@ -1,6 +1,7 @@
 import { World } from '../world/World';
 import { Player } from '../entities/Player';
 import { Renderer } from './Renderer';
+import { drawElevationAndLinks } from './ElevationOverlay';
 import { TICK_MS, SIM_RADIUS_CHUNKS, PLAYER_WALK_SPEED, PLAYER_RUN_SPEED } from './constants';
 import { bfsPath, nearestAdjacentWalkable, isSameOrAdjacent, type Point } from '../systems/Pathfinding';
 import { combatTick, playerAttack } from '../systems/Combat';
@@ -57,6 +58,7 @@ export class Game {
       this.lastFrame = t;
       if (!this.paused) this.update(dt);
       this.renderer.render(this.world, this.player, this.world.monsters, this.hoverTile);
+      drawElevationAndLinks(this.canvas, this.world, this.player);
       this.onFrame?.(t);
       this.rafHandle = requestAnimationFrame(loop);
     };
