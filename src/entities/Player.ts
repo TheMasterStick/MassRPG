@@ -2,6 +2,7 @@ import { SKILLS, type SkillId, levelForXp, xpForLevel } from '../data/skills';
 import { INVENTORY_SLOTS } from '../core/constants';
 import type { EquipSlot } from '../data/items';
 import { WORLD_SIZE } from '../world/AeldorData';
+import type { WorldPlane } from '../world/types';
 
 export interface InventorySlot { itemId: string; qty: number }
 export type CombatStyle = 'melee' | 'ranged' | 'magic';
@@ -12,6 +13,7 @@ export class Player {
   name = 'Adventurer';
   x = WORLD_CENTER;
   y = WORLD_CENTER;
+  plane: WorldPlane = 0;
   facing: 'up' | 'down' | 'left' | 'right' = 'down';
   path: { x: number; y: number }[] = [];
   running = false;
@@ -26,7 +28,7 @@ export class Player {
   inventory: (InventorySlot | null)[] = new Array(INVENTORY_SLOTS).fill(null);
   equipment: Partial<Record<EquipSlot, string>> = {};
 
-  respawnPoint = { x: WORLD_CENTER, y: WORLD_CENTER };
+  respawnPoint = { x: WORLD_CENTER, y: WORLD_CENTER, plane: 0 as WorldPlane };
 
   action: {
     type: 'gather' | 'produce' | 'build';
