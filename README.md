@@ -69,8 +69,9 @@ spanning tree over all the towns) that doubles as a bridge wherever it
 needs to cross water. Every town also has two real walk-in buildings — a
 small thatched-roof house (with a bed and a storage chest) and a
 stone-floored smithy (furnace, anvil, workbench) — with proper walls,
-windows, a door gap (rendered as a path tile so it's obvious where to walk
-in, since it's always on the south side) and a roof that wraps the whole
+windows, a door gap (rendered as a path tile, with a matching gap left in
+the roofline above it, so it's visible from outside exactly where to walk
+in - it's always on the south side) and a roof that wraps the whole
 building with a trimmed edge on all four sides, rendering above it from
 outside and disappearing once you're standing inside it, so you can see
 the interior. Three ruins (Old Cairn Ruins, Moonfall Ruins, Serpent's Spire)

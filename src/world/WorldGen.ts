@@ -80,10 +80,10 @@ export class WorldGen {
     return null;
   }
 
-  /** For the renderer's roof overlay: which building (if any) covers this tile, and which edge of the roof rectangle it's on (the eave-trimmed piece goes around the whole perimeter, oriented outward; 'none' means the interior, which gets the plain repeating piece). */
+  /** For the renderer's roof overlay: which building (if any) covers this tile, and which edge of the roof rectangle it's on (the eave-trimmed piece goes around the whole perimeter, oriented outward; 'none' means the interior, which gets the plain repeating piece). The door cell itself is left with no roof at all, so its path tile stays visible year-round - the roof otherwise hides the whole building (door included) from outside, leaving no way to spot the entrance. */
   roofCellAt(x: number, y: number): { roof: 'tile' | 'tatch'; edge: 'top' | 'bottom' | 'left' | 'right' | 'none'; originX: number; originY: number } | null {
     const b = this.buildingCellAt(x, y);
-    if (!b) return null;
+    if (!b || b.ch === 'D') return null;
     const { prefab } = b.instance;
     let edge: 'top' | 'bottom' | 'left' | 'right' | 'none' = 'none';
     if (b.localY === 0) edge = 'top';
