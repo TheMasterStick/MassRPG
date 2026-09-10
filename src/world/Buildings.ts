@@ -1,19 +1,21 @@
-// Small multi-tile building prefabs (walls, interior floor, furniture) placed
-// at fixed offsets in every town. Modeled on hand-drawn reference blueprints
-// (house_small_01, smithy_01) - a fixed rectangular footprint with a wall
-// ring, a door gap, and furniture at fixed interior positions. This replaces
-// a couple of the old loose point structures (bed, furnace, anvil, workbench)
-// that used to just sit on open ground with no building around them.
+// Settlement building prefabs and deterministic town/city layout generation.
+//
+// Design target: RuneScape-style function density combined with WoW-style
+// district/road readability. A settlement is no longer two prefabs beside a
+// chest; its kind controls its physical footprint, service buildings, street
+// network and approximate building count.
 
-import type { StructureType } from './types';
+import { hash2D } from '../core/Random';
+import type { StructureType, TileType } from './types';
+import type { SettlementKind, Town } from './AeldorData';
 
 export type FloorMaterial = 'floor_wood' | 'floor_brick' | 'floor_cobble';
 export type RoofMaterial = 'tile' | 'tatch';
 export type WallMaterial = 'wall' | 'wall_brick' | 'wall_stone' | 'wall_cobble';
 
 export interface BuildingFurniture {
-  x: number; // local offset within the grid, 0..width-1
-  y: number; // local offset within the grid, 0..height-1
+  x: number;
+  y: number;
   type: StructureType;
 }
 
@@ -24,20 +26,14 @@ export interface BuildingPrefab {
   wall: WallMaterial;
   floor: FloorMaterial;
   roof: RoofMaterial;
-  // One row per y, north (top) to south (bottom/front). Each character:
-  // 'W' wall, 'w' wall with a window, '.' interior floor, 'D' door (floor,
-  // no wall - the gap in the perimeter).
+  // 'W' wall, 'w' window wall, '.' floor, 'D' door/open threshold.
   grid: string[];
   furniture: BuildingFurniture[];
 }
 
 export const HOUSE_SMALL_01: BuildingPrefab = {
-  id: 'house_small_01',
-  width: 7,
-  height: 6,
-  wall: 'wall',
-  floor: 'floor_wood',
-  roof: 'tatch',
+  id: 'house_small_01', width: 7, height: 6,
+  wall: 'wall', floor: 'floor_wood', roof: 'tatch',
   grid: [
     'WWWWWWW',
     'W.....W',
@@ -52,13 +48,44 @@ export const HOUSE_SMALL_01: BuildingPrefab = {
   ],
 };
 
+export const HOUSE_SMALL_02: BuildingPrefab = {
+  id: 'house_small_02', width: 8, height: 6,
+  wall: 'wall', floor: 'floor_wood', roof: 'tatch',
+  grid: [
+    'WWWWWWWW',
+    'W......W',
+    'W......W',
+    'W......W',
+    'W......W',
+    'WWwDDwWW',
+  ],
+  furniture: [
+    { x: 1, y: 1, type: 'bed' },
+    { x: 6, y: 3, type: 'storage_chest' },
+  ],
+};
+
+export const HOUSE_SMALL_03: BuildingPrefab = {
+  id: 'house_small_03', width: 6, height: 7,
+  wall: 'wall', floor: 'floor_wood', roof: 'tatch',
+  grid: [
+    'WWWWWW',
+    'W....W',
+    'W....W',
+    'W....W',
+    'W....W',
+    'W....W',
+    'WwDDwW',
+  ],
+  furniture: [
+    { x: 4, y: 1, type: 'bed' },
+    { x: 1, y: 4, type: 'storage_chest' },
+  ],
+};
+
 export const SMITHY_01: BuildingPrefab = {
-  id: 'smithy_01',
-  width: 8,
-  height: 9,
-  wall: 'wall',
-  floor: 'floor_cobble',
-  roof: 'tile',
+  id: 'smithy_01', width: 8, height: 9,
+  wall: 'wall_cobble', floor: 'floor_cobble', roof: 'tile',
   grid: [
     'WWWWWWWW',
     'W......W',
@@ -78,45 +105,346 @@ export const SMITHY_01: BuildingPrefab = {
   ],
 };
 
-// Same footprint/furniture as the wooden house, dressed in city materials -
-// used for the capital's denser, more built-up layout.
-export const HOUSE_BRICK_01: BuildingPrefab = {
-  ...HOUSE_SMALL_01,
-  id: 'house_brick_01',
-  wall: 'wall_brick',
-  floor: 'floor_brick',
-  roof: 'tile',
+export const INN_01: BuildingPrefab = {
+  id: 'inn_01', width: 12, height: 10,
+  wall: 'wall', floor: 'floor_wood', roof: 'tatch',
+  grid: [
+    'WWWWWWWWWWWW',
+    'W..........W',
+    'W..........W',
+    'W..........W',
+    'W..........W',
+    'W..........W',
+    'W..........W',
+    'W..........W',
+    'W..........W',
+    'WwWWWDDWWWwW',
+  ],
+  furniture: [
+    { x: 2, y: 2, type: 'bed' },
+    { x: 9, y: 2, type: 'bed' },
+    { x: 2, y: 7, type: 'cooking_range' },
+    { x: 9, y: 7, type: 'storage_chest' },
+  ],
 };
 
-export const HOUSE_COBBLE_01: BuildingPrefab = {
-  ...HOUSE_SMALL_01,
-  id: 'house_cobble_01',
-  wall: 'wall_cobble',
-  floor: 'floor_cobble',
-  roof: 'tile',
+export const BANK_01: BuildingPrefab = {
+  id: 'bank_01', width: 10, height: 8,
+  wall: 'wall_cobble', floor: 'floor_cobble', roof: 'tile',
+  grid: [
+    'WWWWWWWWWW',
+    'W........W',
+    'W........W',
+    'W........W',
+    'W........W',
+    'W........W',
+    'W........W',
+    'WwWWDDWwWW',
+  ],
+  furniture: [
+    { x: 2, y: 2, type: 'bank_chest' },
+    { x: 7, y: 2, type: 'bank_chest' },
+    { x: 5, y: 5, type: 'storage_chest' },
+  ],
 };
 
-// Placed relative to each town's center - dx/dy are the world offset of the
-// prefab grid's top-left corner (grid[0][0]). Kept well clear of the loose
-// VILLAGE_STRUCTURES positions (bank_chest, general_store, cooking_range,
-// loom currently sit within +/-3 tiles of center) and of each other.
-export interface TownBuilding { dx: number; dy: number; prefab: BuildingPrefab }
+export const GENERAL_STORE_01: BuildingPrefab = {
+  id: 'general_store_01', width: 10, height: 8,
+  wall: 'wall', floor: 'floor_wood', roof: 'tatch',
+  grid: [
+    'WWWWWWWWWW',
+    'W........W',
+    'W........W',
+    'W........W',
+    'W........W',
+    'W........W',
+    'W........W',
+    'WwWWDDWwWW',
+  ],
+  furniture: [
+    { x: 5, y: 3, type: 'general_store' },
+    { x: 2, y: 5, type: 'storage_chest' },
+    { x: 7, y: 5, type: 'storage_chest' },
+  ],
+};
 
-// Every town gets a house and a smithy.
-export const TOWN_BUILDINGS: TownBuilding[] = [
-  { dx: -10, dy: 2, prefab: HOUSE_SMALL_01 },
-  { dx: 3, dy: 2, prefab: SMITHY_01 },
-];
+export const WORKSHOP_01: BuildingPrefab = {
+  id: 'workshop_01', width: 9, height: 8,
+  wall: 'wall', floor: 'floor_wood', roof: 'tatch',
+  grid: [
+    'WWWWWWWWW',
+    'W.......W',
+    'W.......W',
+    'W.......W',
+    'W.......W',
+    'W.......W',
+    'W.......W',
+    'WwWDDWwWW',
+  ],
+  furniture: [
+    { x: 2, y: 3, type: 'workbench' },
+    { x: 6, y: 3, type: 'storage_chest' },
+  ],
+};
 
-// The capital additionally gets a denser ring of brick/cobble houses further
-// out, inside its larger walled area - a first step toward a proper city
-// layout rather than a village-sized hub.
-export const CAPITAL_EXTRA_BUILDINGS: TownBuilding[] = [
-  { dx: -10, dy: -10, prefab: HOUSE_BRICK_01 },
-  { dx: 10, dy: -10, prefab: HOUSE_BRICK_01 },
-  { dx: -18, dy: 4, prefab: HOUSE_COBBLE_01 },
-  { dx: 14, dy: 4, prefab: HOUSE_COBBLE_01 },
-];
+export const TANNERY_01: BuildingPrefab = {
+  ...WORKSHOP_01,
+  id: 'tannery_01',
+  furniture: [
+    { x: 2, y: 3, type: 'tannery' },
+    { x: 6, y: 3, type: 'storage_chest' },
+  ],
+};
 
-// Precomputed once so per-tile lookups don't rebuild this array on every call.
-export const ALL_TOWN_BUILDINGS = [...TOWN_BUILDINGS, ...CAPITAL_EXTRA_BUILDINGS];
+export const WEAVER_01: BuildingPrefab = {
+  ...WORKSHOP_01,
+  id: 'weaver_01',
+  furniture: [
+    { x: 2, y: 3, type: 'loom' },
+    { x: 6, y: 3, type: 'storage_chest' },
+  ],
+};
+
+export const WAREHOUSE_01: BuildingPrefab = {
+  id: 'warehouse_01', width: 12, height: 9,
+  wall: 'wall_cobble', floor: 'floor_cobble', roof: 'tile',
+  grid: [
+    'WWWWWWWWWWWW',
+    'W..........W',
+    'W..........W',
+    'W..........W',
+    'W..........W',
+    'W..........W',
+    'W..........W',
+    'W..........W',
+    'WWWWDDWWWWWW',
+  ],
+  furniture: [
+    { x: 2, y: 2, type: 'storage_chest' },
+    { x: 5, y: 2, type: 'storage_chest' },
+    { x: 8, y: 2, type: 'storage_chest' },
+  ],
+};
+
+export const CHAPEL_01: BuildingPrefab = {
+  id: 'chapel_01', width: 9, height: 12,
+  wall: 'wall_stone', floor: 'floor_cobble', roof: 'tile',
+  grid: [
+    'WWWWWWWWW',
+    'W.......W',
+    'W.......W',
+    'W.......W',
+    'W.......W',
+    'W.......W',
+    'W.......W',
+    'W.......W',
+    'W.......W',
+    'W.......W',
+    'W.......W',
+    'WWWwDwWWW',
+  ],
+  furniture: [],
+};
+
+const HOUSE_BRICK_01: BuildingPrefab = { ...HOUSE_SMALL_01, id: 'house_brick_01', wall: 'wall_brick', floor: 'floor_brick', roof: 'tile' };
+const HOUSE_BRICK_02: BuildingPrefab = { ...HOUSE_SMALL_02, id: 'house_brick_02', wall: 'wall_brick', floor: 'floor_brick', roof: 'tile' };
+const HOUSE_COBBLE_01: BuildingPrefab = { ...HOUSE_SMALL_03, id: 'house_cobble_01', wall: 'wall_cobble', floor: 'floor_cobble', roof: 'tile' };
+
+export interface TownBuilding {
+  dx: number;
+  dy: number;
+  prefab: BuildingPrefab;
+  district?: 'civic' | 'trade' | 'craft' | 'residential';
+}
+
+const BUILDING_TARGET: Record<SettlementKind, number> = {
+  farmstead: 3,
+  hamlet: 8,
+  village: 18,
+  town: 42,
+  city: 78,
+  capital: 130,
+};
+
+const LAYOUT_CACHE = new Map<string, TownBuilding[]>();
+
+function overlaps(a: TownBuilding, b: TownBuilding, padding = 2): boolean {
+  return !(
+    a.dx + a.prefab.width + padding <= b.dx ||
+    b.dx + b.prefab.width + padding <= a.dx ||
+    a.dy + a.prefab.height + padding <= b.dy ||
+    b.dy + b.prefab.height + padding <= a.dy
+  );
+}
+
+function addIfFree(list: TownBuilding[], building: TownBuilding): boolean {
+  if (list.some((other) => overlaps(other, building))) return false;
+  list.push(building);
+  return true;
+}
+
+function cityHouseFor(town: Town, roll: number): BuildingPrefab {
+  if (town.style === 'stone') return roll < 0.5 ? HOUSE_COBBLE_01 : HOUSE_BRICK_01;
+  if (town.style === 'desert') return roll < 0.65 ? HOUSE_BRICK_01 : HOUSE_COBBLE_01;
+  if ((town.kind === 'capital' || town.kind === 'city') && roll < 0.55) {
+    return roll < 0.25 ? HOUSE_BRICK_02 : HOUSE_COBBLE_01;
+  }
+  if (roll < 0.34) return HOUSE_SMALL_01;
+  if (roll < 0.67) return HOUSE_SMALL_02;
+  return HOUSE_SMALL_03;
+}
+
+function serviceBuildings(town: Town): TownBuilding[] {
+  const list: TownBuilding[] = [];
+  const add = (dx: number, dy: number, prefab: BuildingPrefab, district: TownBuilding['district']) => {
+    addIfFree(list, { dx, dy, prefab, district });
+  };
+
+  if (town.kind === 'farmstead') {
+    add(-5, -4, HOUSE_SMALL_02, 'residential');
+    add(5, 3, WORKSHOP_01, 'craft');
+    return list;
+  }
+
+  if (town.kind === 'hamlet') {
+    add(-11, -9, HOUSE_SMALL_02, 'residential');
+    add(4, -8, GENERAL_STORE_01, 'trade');
+    add(-5, 5, HOUSE_SMALL_01, 'residential');
+    return list;
+  }
+
+  // Every village has a clear functional centre rather than loose utility
+  // objects sitting outdoors.
+  add(-15, -17, GENERAL_STORE_01, 'trade');
+  add(4, -18, INN_01, 'trade');
+
+  if (town.kind === 'village') {
+    add(-11, 6, SMITHY_01, 'craft');
+    add(5, 7, HOUSE_SMALL_02, 'residential');
+    return list;
+  }
+
+  // Town and above: bank/store/inn/smithy form the central functional core.
+  add(-18, 5, BANK_01, 'civic');
+  add(4, 6, SMITHY_01, 'craft');
+  add(-4, -42, CHAPEL_01, 'civic');
+  add(26, -17, WORKSHOP_01, 'craft');
+  add(-34, -17, WEAVER_01, 'craft');
+
+  if (town.kind === 'town') {
+    add(25, 9, WAREHOUSE_01, 'trade');
+    return list;
+  }
+
+  // Cities get secondary service nodes so the whole settlement does not feel
+  // like one tiny RuneScape village copied into a giant wall.
+  add(48, -35, INN_01, 'trade');
+  add(-58, -32, GENERAL_STORE_01, 'trade');
+  add(48, 22, WAREHOUSE_01, 'trade');
+  add(-58, 24, TANNERY_01, 'craft');
+  add(18, 48, SMITHY_01, 'craft');
+
+  if (town.kind === 'capital') {
+    add(-78, 4, BANK_01, 'civic');
+    add(72, 3, GENERAL_STORE_01, 'trade');
+    add(-76, 62, INN_01, 'trade');
+    add(67, 65, WAREHOUSE_01, 'trade');
+    add(-8, 78, SMITHY_01, 'craft');
+    add(86, -64, WEAVER_01, 'craft');
+    add(-95, -64, TANNERY_01, 'craft');
+  }
+
+  return list;
+}
+
+function streetLine(v: number, spacing: number, halfWidth: number): boolean {
+  const m = ((v % spacing) + spacing) % spacing;
+  return m <= halfWidth || m >= spacing - halfWidth;
+}
+
+export function settlementStreetTile(town: Town, localX: number, localY: number): TileType | null {
+  const ax = Math.abs(localX);
+  const ay = Math.abs(localY);
+
+  // Market/civic square at the centre of towns and cities.
+  if ((town.kind === 'town' || town.kind === 'city' || town.kind === 'capital') && ax <= 9 && ay <= 9) {
+    return 'floor_cobble';
+  }
+
+  // Every settlement has a clear main route through it.
+  if (ax <= 2 || ay <= 2) {
+    return town.kind === 'city' || town.kind === 'capital' || town.kind === 'town' ? 'floor_cobble' : 'path';
+  }
+
+  // Larger settlements are broken into readable blocks/districts. This is the
+  // WoW part of the layout language: multiple streets and neighbourhoods,
+  // rather than one central cross surrounded by an undifferentiated blob.
+  if (town.kind === 'capital') {
+    if (streetLine(localX, 48, 1) || streetLine(localY, 48, 1)) return 'floor_cobble';
+  } else if (town.kind === 'city') {
+    if (streetLine(localX, 42, 1) || streetLine(localY, 42, 1)) return 'floor_cobble';
+  } else if (town.kind === 'town') {
+    if (streetLine(localX, 34, 1) || streetLine(localY, 34, 1)) return 'path';
+  } else if (town.kind === 'village') {
+    if (streetLine(localX, 28, 0)) return 'path';
+  }
+
+  return null;
+}
+
+function generatedResidentialBuildings(town: Town, already: TownBuilding[]): TownBuilding[] {
+  const target = BUILDING_TARGET[town.kind];
+  const list = [...already];
+  if (list.length >= target) return list;
+
+  // Buildings occupy a lived-in core inside the wider safe/settlement radius;
+  // the outer band provides yards, gardens and room for later props/NPCs.
+  const extent = Math.max(10, Math.floor(town.radius * 0.76));
+  const slotX = 14;
+  const slotY = 13;
+  let salt = 0;
+
+  for (let y = -extent; y <= extent - 12 && list.length < target; y += slotY) {
+    for (let x = -extent; x <= extent - 12 && list.length < target; x += slotX) {
+      const cx = x + 6;
+      const cy = y + 5;
+      if (settlementStreetTile(town, cx, cy)) continue;
+
+      // Leave a little breathing room around the civic centre and create
+      // occasional courtyards/empty lots instead of packing every slot.
+      if (Math.abs(cx) < 18 && Math.abs(cy) < 18) continue;
+      const densityRoll = hash2D(0x51e771e, town.x + x, town.y + y, salt++);
+      const density = town.kind === 'capital' ? 0.84
+        : town.kind === 'city' ? 0.78
+          : town.kind === 'town' ? 0.72
+            : town.kind === 'village' ? 0.66
+              : 0.58;
+      if (densityRoll > density) continue;
+
+      const typeRoll = hash2D(0x19c7a11, town.x + x, town.y + y, salt++);
+      let prefab: BuildingPrefab;
+      if ((town.kind === 'capital' || town.kind === 'city') && typeRoll > 0.91) prefab = WORKSHOP_01;
+      else if ((town.kind === 'capital' || town.kind === 'city' || town.kind === 'town') && typeRoll > 0.86) prefab = WAREHOUSE_01;
+      else prefab = cityHouseFor(town, typeRoll);
+
+      // Centre the selected prefab within its slot.
+      const dx = x + Math.floor((slotX - prefab.width) / 2);
+      const dy = y + Math.floor((slotY - prefab.height) / 2);
+      addIfFree(list, { dx, dy, prefab, district: prefab === WAREHOUSE_01 || prefab === WORKSHOP_01 ? 'craft' : 'residential' });
+    }
+  }
+
+  return list;
+}
+
+export function getSettlementBuildings(town: Town): TownBuilding[] {
+  const cached = LAYOUT_CACHE.get(town.id);
+  if (cached) return cached;
+  const layout = generatedResidentialBuildings(town, serviceBuildings(town));
+  LAYOUT_CACHE.set(town.id, layout);
+  return layout;
+}
+
+export function settlementBuildingTarget(kind: SettlementKind): number {
+  return BUILDING_TARGET[kind];
+}
