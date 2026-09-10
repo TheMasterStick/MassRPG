@@ -106,9 +106,8 @@ export function createEditorNavigator(options: NavigatorOptions): EditorNavigato
     ctx.fillRect(0, 0, size, size);
 
     const data = options.getData();
-    for (const stroke of data.terrainStrokes) drawTerrainStroke(ctx, stroke, size, size);
+    for (const stroke of data.terrainStrokes) drawTerrainStroke(ctx, stroke, size);
 
-    // Detailed cell terrain edits sit above broad terrain strokes.
     for (const [key, cell] of Object.entries(data.cells)) {
       if (!cell.tile) continue;
       const [x, y] = parseKey(key);
@@ -119,8 +118,6 @@ export function createEditorNavigator(options: NavigatorOptions): EditorNavigato
       ctx.fillRect(Math.floor(sx), Math.floor(sy), dot, dot);
     }
 
-    // Hand-placed world objects remain visible even when their terrain edit is
-    // too small to register at continental scale.
     for (const [key, cell] of Object.entries(data.cells)) {
       const [x, y] = parseKey(key);
       const sx = (x / WORLD_SIZE) * size;
@@ -154,18 +151,49 @@ export function createEditorNavigator(options: NavigatorOptions): EditorNavigato
     drawViewport(ctx, canvas.width, canvas.height);
   }
 
-  function drawTerrainStroke(ctx: CanvasRenderingContext2D, stroke: TerrainStroke, width: number, height: number): void {
+  function drawTerrainStroke(ctx: CanvasRenderingContext2D, stroke: TerrainStroke, size: number): void {
+    const color = stroke.tile ? TILE_MAP_COLORS[stroke.tile] : BASE_COLOR;
+    const scale = size / WORLD_SIZE;
+    ctx.fillStyle = color;
+    ctx.strokeStyle = color;
+
+    if (stroke.kind === 'line') {
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.lineWidth = Math.max(1, stroke.size * scale);
+      ctx.beginPath();
+      ctx.moveTo(stroke.x * scale, stroke.y * scale);
+      ctx.lineTo((stroke.x2 ?? stroke.x) * scale, (stroke.y2 ?? stroke.y) * scale);
+      ctx.stroke();
+      return;
+    }
+
+    if (stroke.kind === 'rect_fill' || stroke.kind === 'rect_outline') {
+      const x2 = stroke.x2 ?? stroke.x;
+      const y2 = stroke.y2 ?? stroke.y;
+      const left = Math.min(stroke.x, x2) * scale;
+      const top = Math.min(stroke.y, y2) * scale;
+      const width = Math.max(1, Math.abs(x2 - stroke.x) * scale);
+      const height = Math.max(1, Math.abs(y2 - stroke.y) * scale);
+      if (stroke.kind === 'rect_fill') ctx.fillRect(left, top, width, height);
+      else {
+        ctx.lineWidth = Math.max(1, stroke.size * scale);
+        ctx.strokeRect(left, top, width, height);
+      }
+      return;
+    }
+
     const half = Math.floor(stroke.size / 2);
     const left = Math.max(0, stroke.x - half);
     const top = Math.max(0, stroke.y - half);
     const right = Math.min(WORLD_SIZE, stroke.x + half + 1);
     const bottom = Math.min(WORLD_SIZE, stroke.y + half + 1);
-    const dx = (left / WORLD_SIZE) * width;
-    const dy = (top / WORLD_SIZE) * height;
-    const dw = Math.max(1, ((right - left) / WORLD_SIZE) * width);
-    const dh = Math.max(1, ((bottom - top) / WORLD_SIZE) * height);
-    ctx.fillStyle = stroke.tile ? TILE_MAP_COLORS[stroke.tile] : BASE_COLOR;
-    ctx.fillRect(dx, dy, dw, dh);
+    ctx.fillRect(
+      left * scale,
+      top * scale,
+      Math.max(1, (right - left) * scale),
+      Math.max(1, (bottom - top) * scale),
+    );
   }
 
   function drawMarker(ctx: CanvasRenderingContext2D, marker: EditorMarker, size: number, largeMode: boolean): void {
