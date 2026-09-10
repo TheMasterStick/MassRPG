@@ -301,8 +301,9 @@ function serviceBuildings(town: Town): TownBuilding[] {
   };
 
   if (town.kind === 'farmstead') {
-    add(-5, -4, HOUSE_SMALL_02, 'residential');
+    add(-6, -8, HOUSE_SMALL_02, 'residential');
     add(5, 3, WORKSHOP_01, 'craft');
+    add(-8, 5, HOUSE_SMALL_01, 'residential');
     return list;
   }
 
@@ -310,6 +311,11 @@ function serviceBuildings(town: Town): TownBuilding[] {
     add(-11, -9, HOUSE_SMALL_02, 'residential');
     add(4, -8, GENERAL_STORE_01, 'trade');
     add(-5, 5, HOUSE_SMALL_01, 'residential');
+    add(-20, -20, HOUSE_SMALL_01, 'residential');
+    add(10, -20, HOUSE_SMALL_03, 'residential');
+    add(-20, 9, HOUSE_SMALL_02, 'residential');
+    add(11, 9, HOUSE_SMALL_01, 'residential');
+    add(-5, 16, HOUSE_SMALL_03, 'residential');
     return list;
   }
 
@@ -366,19 +372,14 @@ export function settlementStreetTile(town: Town, localX: number, localY: number)
   const ax = Math.abs(localX);
   const ay = Math.abs(localY);
 
-  // Market/civic square at the centre of towns and cities.
   if ((town.kind === 'town' || town.kind === 'city' || town.kind === 'capital') && ax <= 9 && ay <= 9) {
     return 'floor_cobble';
   }
 
-  // Every settlement has a clear main route through it.
   if (ax <= 2 || ay <= 2) {
     return town.kind === 'city' || town.kind === 'capital' || town.kind === 'town' ? 'floor_cobble' : 'path';
   }
 
-  // Larger settlements are broken into readable blocks/districts. This is the
-  // WoW part of the layout language: multiple streets and neighbourhoods,
-  // rather than one central cross surrounded by an undifferentiated blob.
   if (town.kind === 'capital') {
     if (streetLine(localX, 48, 1) || streetLine(localY, 48, 1)) return 'floor_cobble';
   } else if (town.kind === 'city') {
@@ -397,27 +398,27 @@ function generatedResidentialBuildings(town: Town, already: TownBuilding[]): Tow
   const list = [...already];
   if (list.length >= target) return list;
 
-  // Buildings occupy a lived-in core inside the wider safe/settlement radius;
-  // the outer band provides yards, gardens and room for later props/NPCs.
-  const extent = Math.max(10, Math.floor(town.radius * 0.76));
-  const slotX = 14;
-  const slotY = 13;
+  // Small settlements need tighter lots; cities need larger blocks/courtyards.
+  const small = town.kind === 'village';
+  const extent = small ? Math.floor(town.radius * 0.9) : Math.max(10, Math.floor(town.radius * 0.76));
+  const slotX = small ? 11 : 14;
+  const slotY = small ? 10 : 13;
+  const centralClearance = small ? 12 : 18;
   let salt = 0;
 
-  for (let y = -extent; y <= extent - 12 && list.length < target; y += slotY) {
-    for (let x = -extent; x <= extent - 12 && list.length < target; x += slotX) {
-      const cx = x + 6;
-      const cy = y + 5;
+  for (let y = -extent; y <= extent - slotY; y += slotY) {
+    for (let x = -extent; x <= extent - slotX; x += slotX) {
+      if (list.length >= target) break;
+      const cx = x + Math.floor(slotX / 2);
+      const cy = y + Math.floor(slotY / 2);
       if (settlementStreetTile(town, cx, cy)) continue;
+      if (Math.abs(cx) < centralClearance && Math.abs(cy) < centralClearance) continue;
 
-      // Leave a little breathing room around the civic centre and create
-      // occasional courtyards/empty lots instead of packing every slot.
-      if (Math.abs(cx) < 18 && Math.abs(cy) < 18) continue;
       const densityRoll = hash2D(0x51e771e, town.x + x, town.y + y, salt++);
       const density = town.kind === 'capital' ? 0.84
         : town.kind === 'city' ? 0.78
           : town.kind === 'town' ? 0.72
-            : town.kind === 'village' ? 0.66
+            : town.kind === 'village' ? 0.85
               : 0.58;
       if (densityRoll > density) continue;
 
@@ -427,11 +428,16 @@ function generatedResidentialBuildings(town: Town, already: TownBuilding[]): Tow
       else if ((town.kind === 'capital' || town.kind === 'city' || town.kind === 'town') && typeRoll > 0.86) prefab = WAREHOUSE_01;
       else prefab = cityHouseFor(town, typeRoll);
 
-      // Centre the selected prefab within its slot.
       const dx = x + Math.floor((slotX - prefab.width) / 2);
       const dy = y + Math.floor((slotY - prefab.height) / 2);
-      addIfFree(list, { dx, dy, prefab, district: prefab === WAREHOUSE_01 || prefab === WORKSHOP_01 ? 'craft' : 'residential' });
+      addIfFree(list, {
+        dx,
+        dy,
+        prefab,
+        district: prefab === WAREHOUSE_01 || prefab === WORKSHOP_01 ? 'craft' : 'residential',
+      });
     }
+    if (list.length >= target) break;
   }
 
   return list;
