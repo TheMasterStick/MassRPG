@@ -108,7 +108,9 @@ export function processProduceTick(player: Player) {
   if (burned) {
     const burntId = recipe.outputItem.replace('cooked_', 'burnt_');
     addItem(player, burntId, recipe.outputQty);
-    log(`You accidentally burn it.`, 'warning');
+    const failureXp = Math.max(1, recipe.xp * 0.1);
+    addXp(player, recipe.skill, failureXp);
+    log(`You accidentally burn it, but learn a little from the mistake.`, 'warning');
   } else {
     addItem(player, recipe.outputItem, recipe.outputQty);
     addXp(player, recipe.skill, recipe.xp);
