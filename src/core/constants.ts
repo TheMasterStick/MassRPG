@@ -1,4 +1,4 @@
-export const TILE_SIZE = 32;
+export const TILE_SIZE = 40;
 export const CHUNK_SIZE = 16;
 export const TICK_MS = 600;
 export const VIEW_RADIUS_CHUNKS = 3;
