@@ -2,7 +2,7 @@
 // programmatically to keep a deep RuneScape-style progression without
 // hand-writing every near-identical entry.
 
-export type EquipSlot = 'weapon' | 'shield' | 'head' | 'body' | 'legs' | 'feet' | 'hands' | 'cape' | 'amulet' | 'ring';
+export type EquipSlot = 'weapon' | 'shield' | 'head' | 'body' | 'legs' | 'feet' | 'hands' | 'cape' | 'amulet' | 'ammo' | 'ring' | 'ring2';
 export type ItemType = 'tool' | 'weapon' | 'armor' | 'resource' | 'food' | 'potion' | 'material' | 'currency' | 'seed' | 'misc';
 
 export interface CombatBonuses {
@@ -22,6 +22,7 @@ export interface ItemDef {
   value: number;
   description: string;
   equipSlot?: EquipSlot;
+  twoHanded?: boolean;
   bonuses?: CombatBonuses;
   heal?: number; // for food
   toolTier?: number; // gathering speed/success tier for tools
@@ -94,7 +95,7 @@ for (let i = 0; i < METAL_TIERS.length; i++) {
   reg({ id: `${m.id}_shield`, name: `${m.name} kiteshield`, type: 'armor', stackable: false, value: m.value * 6, description: `A ${m.name.toLowerCase()} kiteshield.`, equipSlot: 'shield', bonuses: { defence: Math.round(def * 0.6) } });
   reg({ id: `${m.id}_boots`, name: `${m.name} boots`, type: 'armor', stackable: false, value: m.value * 2, description: `${m.name} boots.`, equipSlot: 'feet', bonuses: { defence: Math.round(def * 0.2) } });
   reg({ id: `${m.id}_gloves`, name: `${m.name} gauntlets`, type: 'armor', stackable: false, value: m.value * 2, description: `${m.name} gauntlets.`, equipSlot: 'hands', bonuses: { defence: Math.round(def * 0.2) } });
-  reg({ id: `${m.id}_arrow`, name: `${m.name} arrow`, type: 'weapon', stackable: true, value: Math.max(1, Math.round(m.value * 0.3)), description: `Arrows tipped with ${m.name.toLowerCase()}.`, bonuses: { rangedStrength: 2 + i * 3 } });
+  reg({ id: `${m.id}_arrow`, name: `${m.name} arrow`, type: 'weapon', stackable: true, value: Math.max(1, Math.round(m.value * 0.3)), description: `Arrows tipped with ${m.name.toLowerCase()}.`, equipSlot: 'ammo', bonuses: { rangedStrength: 2 + i * 3 } });
 }
 
 // ---- Tools ----
@@ -237,7 +238,7 @@ for (let i = 0; i < TREE_TIERS.length; i++) {
   reg({ id: `${t.id}_shortbow_u`, name: `${label} (u)`, type: 'material', stackable: false, value: t.value * 4, description: 'An unstrung shortbow.' });
   reg({
     id: `${t.id}_shortbow`, name: label, type: 'weapon', stackable: false, value: t.value * 8, description: 'A finished shortbow.',
-    equipSlot: 'weapon', bonuses: { rangedAttack: 4 + i * 7, rangedStrength: 2 + i * 4 },
+    equipSlot: 'weapon', twoHanded: true, bonuses: { rangedAttack: 4 + i * 7, rangedStrength: 2 + i * 4 },
   });
 }
 
