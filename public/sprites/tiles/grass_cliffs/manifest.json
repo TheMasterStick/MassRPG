@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "nativeTileSize": 32,
+  "description": "Approved grassy elevation edge sprites. Canonical PNGs are stored once; mirrored orientations are derived at render time.",
+  "collision": {
+    "model": "edge_band",
+    "note": "The flat grass portion remains walkable. Only the rocky cliff or crevice edge should block crossing; movement/pathfinding should not treat the whole tile as solid."
+  },
+  "sprites": {
+    "grass_crevice_north": { "file": "grass_crevice_north.png", "kind": "crevice", "edge": ["north"] },
+    "grass_crevice_north_east": { "file": "grass_crevice_north_east.png", "kind": "crevice", "edge": ["north", "east"] },
+    "grass_crevice_north_west": { "file": "grass_crevice_north_west.png", "kind": "crevice", "edge": ["north", "west"] },
+    "grass_cliff_south": { "file": "grass_cliff_south.png", "kind": "cliff", "edge": ["south"] },
+    "grass_cliff_south_east": { "file": "grass_cliff_south_east.png", "kind": "cliff", "edge": ["south", "east"] },
+    "grass_cliff_south_west": { "file": "grass_cliff_south_west.png", "kind": "cliff", "edge": ["south", "west"] },
+    "grass_crevice_east": { "file": "grass_crevice_east.png", "kind": "crevice", "edge": ["east"] },
+    "grass_cliff_west": { "file": "grass_cliff_west.png", "kind": "cliff", "edge": ["west"] }
+  },
+  "derived": {
+    "grass_crevice_west": { "source": "grass_crevice_east", "transform": "flipX", "edge": ["west"] },
+    "grass_cliff_east": { "source": "grass_cliff_west", "transform": "flipX", "edge": ["east"] }
+  }
+}
