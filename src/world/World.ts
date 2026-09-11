@@ -19,6 +19,16 @@ function worldToChunk(x: number, y: number): { cx: number; cy: number; lx: numbe
   return { cx, cy, lx, ly };
 }
 
+/** Explicit authored travel surfaces can act as a mountain pass. */
+export function isElevationPassTerrain(tile: TileType): boolean {
+  return tile === 'path' || tile === 'cobblestone' || tile === 'floor_stone' || tile === 'floor_wood';
+}
+
+/** Surface elevation +2 and above is mountain-barrier terrain unless a pass was authored through it. */
+export function isHighElevationBarrier(elevation: number, tile: TileType, plane: WorldPlane): boolean {
+  return plane === 0 && elevation >= 2 && !isElevationPassTerrain(tile);
+}
+
 const GROW_TICKS: Record<string, number> = {};
 for (const c of CROP_TIERS) GROW_TICKS[c.id] = c.growTicks;
 for (const h of HERB_TIERS) GROW_TICKS[h.id] = h.growTicks;
@@ -160,10 +170,25 @@ export class World {
     return true;
   }
 
-  /** A normal step may climb/drop one elevation level. A 2+ level edge is a cliff. */
+  /**
+   * Elevation +1 is ordinary traversable hillside. Surface +2 and above is an
+   * impassable mountain barrier unless the player is following an explicitly
+   * authored path/cobblestone/floor pass. Pass terrain is also allowed to bridge
+   * an otherwise too-steep edge, so future mountain roads work without hidden
+   * one-tile elevation ramps.
+   */
   canStep(fromX: number, fromY: number, toX: number, toY: number): boolean {
     if (!this.isWalkable(toX, toY)) return false;
-    return Math.abs(this.getElevation(toX, toY) - this.getElevation(fromX, fromY)) <= 1;
+
+    const fromTile = this.getTile(fromX, fromY);
+    const toTile = this.getTile(toX, toY);
+    const fromElevation = this.getElevation(fromX, fromY);
+    const toElevation = this.getElevation(toX, toY);
+
+    if (this.activePlane === 0 && (isElevationPassTerrain(fromTile) || isElevationPassTerrain(toTile))) return true;
+    if (Math.abs(toElevation - fromElevation) > 1) return false;
+    if (isHighElevationBarrier(toElevation, toTile, this.activePlane)) return false;
+    return true;
   }
 
   getPlaneLink(x: number, y: number) {
