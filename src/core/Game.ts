@@ -5,13 +5,14 @@ import { drawElevationAndLinks } from './ElevationOverlay';
 import { TICK_MS, SIM_RADIUS_CHUNKS, PLAYER_WALK_SPEED, PLAYER_RUN_SPEED } from './constants';
 import { bfsPath, nearestAdjacentWalkable, isSameOrAdjacent, type Point } from '../systems/Pathfinding';
 import { combatTick, playerAttack } from '../systems/Combat';
-import { canGather, startGathering, processGatherTick, harvest } from '../systems/Gathering';
+import { canGather, startGathering, processGatherTick, harvest, resourceLabel } from '../systems/Gathering';
 import { processProduceTick } from '../systems/Production';
 import { bus, log } from '../core/EventBus';
-import { TILE_VISUALS, type StructureType } from '../world/types';
+import { TILE_VISUALS, type ResourceType, type StructureType } from '../world/types';
 import { startAutosave, saveGame } from '../systems/Save';
 import { placeStructure } from '../systems/Construction';
 import { facingFromDelta } from '../systems/Facing';
+import type { Monster } from '../entities/Monster';
 
 export type PendingInteraction =
   | { type: 'gather'; x: number; y: number }
@@ -19,6 +20,13 @@ export type PendingInteraction =
   | { type: 'plant_menu'; x: number; y: number }
   | { type: 'structure'; x: number; y: number; structureType: StructureType }
   | { type: 'plane_link'; x: number; y: number };
+
+export interface GameContextMenuItem {
+  label: string;
+  onClick: () => void;
+  levelText?: string;
+  levelColor?: string;
+}
 
 export class Game {
   world: World;
@@ -127,7 +135,6 @@ export class Game {
   }
 
   private handleKeyboardMovement() {
-    if (this.player.action) return;
     let dx = 0, dy = 0;
     if (this.keys.has('w') || this.keys.has('arrowup')) dy -= 1;
     if (this.keys.has('s') || this.keys.has('arrowdown')) dy += 1;
@@ -135,8 +142,9 @@ export class Game {
     if (this.keys.has('d') || this.keys.has('arrowright')) dx += 1;
     if (dx === 0 && dy === 0) return;
 
-    // Direct keyboard movement always wins over a queued mouse path. This keeps
-    // WASD responsive even after a long click-to-move command.
+    // Direct keyboard movement is an explicit interruption: cancel gathering,
+    // production, combat pursuit, pending interactions and mouse paths first.
+    this.player.action = null;
     this.player.path = [];
     this.pendingInteraction = null;
     this.player.combatTargetId = null;
@@ -164,9 +172,21 @@ export class Game {
     this.executeInteraction(pi);
   }
 
+  private faceGatheringTarget(x: number, y: number) {
+    const dx = x - this.player.x;
+    if (dx < 0) this.player.facing = 'left';
+    else if (dx > 0) this.player.facing = 'right';
+    else if (this.player.facing !== 'left' && this.player.facing !== 'right') {
+      // With no dedicated north/south tool art yet, a directly vertical target
+      // uses the existing right-facing gather animation rather than dropping to idle.
+      this.player.facing = 'right';
+    }
+  }
+
   private executeInteraction(pi: PendingInteraction) {
     const { world, player } = this;
-    player.facing = facingFromDelta(pi.x - player.x, pi.y - player.y, player.facing);
+    if (pi.type === 'gather') this.faceGatheringTarget(pi.x, pi.y);
+    else player.facing = facingFromDelta(pi.x - player.x, pi.y - player.y, player.facing);
 
     if (pi.type === 'gather') {
       const resource = world.getResourceNode(pi.x, pi.y);
@@ -207,6 +227,7 @@ export class Game {
   onOpenPlantMenu: ((x: number, y: number) => void) | null = null;
   onOpenStructure: ((x: number, y: number, type: StructureType) => void) | null = null;
   onToggleWorldMap: (() => void) | null = null;
+  onOpenContextMenu: ((x: number, y: number, items: GameContextMenuItem[]) => void) | null = null;
 
   moveAdjacentThen(pi: PendingInteraction) {
     this.player.action = null;
@@ -234,9 +255,24 @@ export class Game {
     if (path) this.player.path = path;
   }
 
-  private handleClick(screenX: number, screenY: number) {
-    const tile = this.renderer.screenToWorldTile(screenX, screenY, this.player);
+  private walkHere(target: Point, occupied: boolean) {
+    this.player.action = null;
+    this.player.combatTargetId = null;
+    this.pendingInteraction = null;
+    this.player.path = [];
+    const start = { x: Math.round(this.player.x), y: Math.round(this.player.y) };
+    const destination = occupied ? nearestAdjacentWalkable(this.world, start, target) : target;
+    if (!destination) { log("You can't reach that spot.", 'warning'); return; }
+    const path = bfsPath(this.world, start, destination);
+    if (path) this.player.path = path;
+    else log("You can't find a path there.", 'warning');
+  }
 
+  private monsterAt(tile: Point): Monster | undefined {
+    return this.world.monsters.find((m) => m.isAlive() && Math.round(m.x) === tile.x && Math.round(m.y) === tile.y);
+  }
+
+  private handleTileClick(tile: Point) {
     if (this.buildMode) {
       placeStructure(this.world, this.player, this.buildMode, tile.x, tile.y);
       this.buildMode = null;
@@ -249,7 +285,7 @@ export class Game {
       return;
     }
 
-    const monster = this.world.monsters.find((m) => m.isAlive() && Math.round(m.x) === tile.x && Math.round(m.y) === tile.y);
+    const monster = this.monsterAt(tile);
     if (monster) {
       this.player.action = null;
       this.player.path = [];
@@ -259,7 +295,10 @@ export class Game {
     }
 
     const structure = this.world.getStructure(tile.x, tile.y);
-    if (structure) { this.moveAdjacentThen({ type: 'structure', x: tile.x, y: tile.y, structureType: structure }); return; }
+    if (structure && structure !== 'blocker') {
+      this.moveAdjacentThen({ type: 'structure', x: tile.x, y: tile.y, structureType: structure });
+      return;
+    }
 
     if (this.world.isResourceAvailable(tile.x, tile.y)) {
       const res = this.world.getResourceNode(tile.x, tile.y)!;
@@ -276,10 +315,113 @@ export class Game {
     this.moveTo(tile);
   }
 
+  private resourceActionLabel(resource: ResourceType): string {
+    if (resource.startsWith('tree_')) {
+      const kind = resource.slice('tree_'.length);
+      return kind === 'normal' ? 'Cut Tree' : `Cut ${kind.charAt(0).toUpperCase()}${kind.slice(1)}`;
+    }
+    if (resource.startsWith('rock_')) {
+      const kind = resource.slice('rock_'.length).replace(/_/g, ' ');
+      return `Mine ${kind.replace(/\b\w/g, (c) => c.toUpperCase())}`;
+    }
+    if (resource.startsWith('fishing_')) return 'Fish';
+    if (resource === 'flax_plant') return 'Pick Flax';
+    if (resource === 'farm_patch' || resource === 'herb_patch') {
+      const crop = this.world.getCropState(Math.round(this.hoverTile?.x ?? this.player.x), Math.round(this.hoverTile?.y ?? this.player.y));
+      return crop?.ready ? 'Harvest' : `Use ${resourceLabel(resource)}`;
+    }
+    return `Gather ${resourceLabel(resource)}`;
+  }
+
+  private structureName(structure: StructureType): string {
+    return structure.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+
+  private structureActionLabel(structure: StructureType): string {
+    const name = this.structureName(structure);
+    if (structure === 'bank_chest' || structure === 'storage_chest') return `Open ${name}`;
+    if (structure === 'general_store') return `Trade ${name}`;
+    if (structure === 'bed') return 'Rest';
+    return `Use ${name}`;
+  }
+
+  private attackLevelColor(monsterLevel: number): string | undefined {
+    const difference = Math.abs(monsterLevel - this.player.combatLevel());
+    if (difference <= 5) return '#55d86b';
+    if (difference > 30) return '#e85a5a';
+    if (difference > 10) return '#f2d35c';
+    return undefined;
+  }
+
+  private contextMenuForTile(tile: Point): GameContextMenuItem[] {
+    const monster = this.monsterAt(tile);
+    const structure = this.world.getStructure(tile.x, tile.y);
+    const resource = this.world.getResourceNode(tile.x, tile.y);
+    const link = this.world.getPlaneLink(tile.x, tile.y);
+    const items: GameContextMenuItem[] = [];
+
+    if (monster) {
+      const def = monster.def();
+      items.push({
+        label: `Attack ${def.name} - Level `,
+        levelText: String(def.level),
+        levelColor: this.attackLevelColor(def.level),
+        onClick: () => {
+          this.player.action = null;
+          this.player.path = [];
+          this.pendingInteraction = null;
+          playerAttack(this.player, monster);
+        },
+      });
+    } else if (link) {
+      items.push({ label: `Use ${link.link.kind.replace(/_/g, ' ')}`, onClick: () => this.moveAdjacentThen({ type: 'plane_link', x: tile.x, y: tile.y }) });
+    } else if (structure && structure !== 'blocker') {
+      items.push({
+        label: this.structureActionLabel(structure),
+        onClick: () => this.moveAdjacentThen({ type: 'structure', x: tile.x, y: tile.y, structureType: structure }),
+      });
+    } else if (resource) {
+      items.push({ label: this.resourceActionLabel(resource), onClick: () => this.handleTileClick(tile) });
+    }
+
+    const occupied = !!monster || !!structure || (!!resource && this.world.isResourceAvailable(tile.x, tile.y));
+    items.push({ label: 'Walk here', onClick: () => this.walkHere(tile, occupied) });
+
+    if (monster) {
+      const def = monster.def();
+      items.push({
+        label: 'Examine',
+        onClick: () => log(`${def.name}, combat level ${def.level}. ${def.aggressive ? 'It looks hostile.' : 'It does not attack unless provoked.'}`, 'info'),
+      });
+    } else if (structure && structure !== 'blocker') {
+      items.push({ label: 'Examine', onClick: () => log(`You examine the ${this.structureName(structure).toLowerCase()}.`, 'info') });
+    } else if (resource) {
+      items.push({ label: 'Examine', onClick: () => log(`You examine the ${resourceLabel(resource).toLowerCase()}.`, 'info') });
+    } else {
+      const tileType = this.world.getTile(tile.x, tile.y);
+      const name = tileType.replace(/_/g, ' ');
+      items.push({ label: 'Examine', onClick: () => log(`It's ${name}.`, 'info') });
+    }
+
+    items.push({ label: 'Cancel', onClick: () => {} });
+    return items;
+  }
+
+  private handleClick(screenX: number, screenY: number) {
+    const tile = this.renderer.screenToWorldTile(screenX, screenY, this.player);
+    this.handleTileClick(tile);
+  }
+
   private bindInput() {
     this.canvas.addEventListener('click', (e) => {
       const rect = this.canvas.getBoundingClientRect();
       this.handleClick(e.clientX - rect.left, e.clientY - rect.top);
+    });
+    this.canvas.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      const rect = this.canvas.getBoundingClientRect();
+      const tile = this.renderer.screenToWorldTile(e.clientX - rect.left, e.clientY - rect.top, this.player);
+      this.onOpenContextMenu?.(e.clientX, e.clientY, this.contextMenuForTile(tile));
     });
     this.canvas.addEventListener('mousemove', (e) => {
       const rect = this.canvas.getBoundingClientRect();
