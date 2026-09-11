@@ -1,12 +1,13 @@
 import type { ResourceType, StructureType, TileType } from './types';
+import { getEditorMarkers } from './EditorWorld';
+import { WORLD_SIZE } from './AeldorData';
 
 /**
  * The procedural world has deliberately been retired.
  *
- * MassRPG now starts as a blank 180k x 180k ocean and the World Editor is the
- * authoritative source for terrain, structures, resources and monster spawns.
- * This class remains as the base-world API so the rest of the runtime does not
- * need to care whether content was generated or hand-authored.
+ * MassRPG starts from the hand-authored World Editor data. This class remains
+ * as the base-world API so older runtime systems do not need to know how the
+ * world is stored. It never invents terrain/resources/monsters by itself.
  */
 export class WorldGen {
   readonly seed: number;
@@ -15,7 +16,23 @@ export class WorldGen {
     this.seed = seed >>> 0;
   }
 
-  isVillage(_x: number, _y: number): boolean {
+  /**
+   * Legacy callers use isVillage() as a monster-safe-zone check. Map that API
+   * onto the user's authored settlement markers instead of resurrecting the
+   * old procedural town geometry. Mining-area markers intentionally are not
+   * safe zones.
+   */
+  isVillage(x: number, y: number): boolean {
+    for (const marker of getEditorMarkers(WORLD_SIZE, 0)) {
+      if (marker.type === 'mining_area') continue;
+      const radius = marker.name.trim().toLowerCase() === 'capital city' ? 72
+        : marker.type === 'city' ? 56
+        : marker.type === 'castle' ? 50
+        : marker.type === 'town' ? 43
+        : marker.type === 'village' ? 32
+        : 25;
+      if (Math.max(Math.abs(x - marker.x), Math.abs(y - marker.y)) <= radius) return true;
+    }
     return false;
   }
 
