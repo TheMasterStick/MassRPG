@@ -120,6 +120,10 @@ export function buildInventoryPanel(root: HTMLElement, game: Game) {
   function useSelectedOn(targetItemId: string) {
     const selected = game.selectedInventoryItemId;
     if (!selected) return false;
+    if (selected === targetItemId) {
+      game.clearInventoryItemSelection();
+      return true;
+    }
     const handled = game.onUseInventoryItems?.(selected, targetItemId) ?? false;
     if (!handled) log(`Nothing interesting happens.`, 'info');
     game.clearInventoryItemSelection();
