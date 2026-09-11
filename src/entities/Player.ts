@@ -27,6 +27,7 @@ export class Player {
 
   inventory: (InventorySlot | null)[] = new Array(INVENTORY_SLOTS).fill(null);
   equipment: Partial<Record<EquipSlot, string>> = {};
+  equippedAmmoQty = 0;
 
   respawnPoint = { x: WORLD_CENTER, y: WORLD_CENTER, plane: 0 as WorldPlane };
 
