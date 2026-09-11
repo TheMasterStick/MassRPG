@@ -5,7 +5,8 @@ import type { ElevationLevel, ResourceType, StructureType, TileType, WorldPlane,
 import { TILE_VISUALS } from './types';
 import { Monster } from '../entities/Monster';
 import { CROP_TIERS, HERB_TIERS } from '../data/items';
-import { getEditorElevationAt, getPlaneLinkAt } from './EditorWorld';
+import { getPlaneLinkAt } from './EditorWorld';
+import { getIndexedElevationOverrideAt } from './EditorSpatialIndex';
 import { WORLD_SIZE } from './AeldorData';
 
 function chunkKey(plane: WorldPlane, cx: number, cy: number): string {
@@ -21,7 +22,7 @@ function worldToChunk(x: number, y: number): { cx: number; cy: number; lx: numbe
 
 /** Explicit authored travel surfaces can act as a mountain pass. */
 export function isElevationPassTerrain(tile: TileType): boolean {
-  return tile === 'path' || tile === 'cobblestone' || tile === 'floor_stone' || tile === 'floor_wood';
+  return tile === 'path' || tile === 'floor_cobble' || tile === 'floor_stone' || tile === 'floor_wood';
 }
 
 /** Surface elevation +2 and above is mountain-barrier terrain unless a pass was authored through it. */
@@ -92,7 +93,10 @@ export class World {
   }
 
   getElevation(x: number, y: number, plane: WorldPlane = this.activePlane): ElevationLevel {
-    return getEditorElevationAt(x, y, WORLD_SIZE, plane);
+    const authored = getIndexedElevationOverrideAt(x, y, WORLD_SIZE, plane);
+    if (authored !== undefined) return authored;
+    if (plane !== 0) return 0;
+    return this.gen.ambientElevationAt(x, y, this.getTile(x, y, plane));
   }
 
   getStructure(x: number, y: number, plane: WorldPlane = this.activePlane): StructureType | undefined {
