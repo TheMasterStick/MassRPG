@@ -22,7 +22,7 @@ function worldToChunk(x: number, y: number): { cx: number; cy: number; lx: numbe
 
 /** Explicit authored travel surfaces can act as a mountain pass. */
 export function isElevationPassTerrain(tile: TileType): boolean {
-  return tile === 'path' || tile === 'floor_cobble' || tile === 'floor_stone' || tile === 'floor_wood';
+  return tile === 'path' || tile === 'floor_cobble' || tile === 'floor_brick' || tile === 'floor_wood';
 }
 
 /** Surface elevation +2 and above is mountain-barrier terrain unless a pass was authored through it. */
