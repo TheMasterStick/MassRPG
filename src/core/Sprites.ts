@@ -9,6 +9,7 @@ import { MONSTERS } from '../data/monsters';
 
 export type SpriteCategory = 'tiles' | 'resources' | 'structures' | 'monsters' | 'player' | 'roof';
 export type Facing = 'up' | 'down' | 'left' | 'right';
+export type ElevationTheme = 'grass' | 'snow' | 'desert';
 
 type LoadState = 'loading' | 'loaded' | 'missing';
 
@@ -18,6 +19,7 @@ interface Entry {
 }
 
 const cache = new Map<string, Entry>();
+const elevationCache = new Map<string, Entry>();
 
 function key(category: SpriteCategory, id: string): string {
   return `${category}/${id}`;
@@ -34,9 +36,30 @@ function load(category: SpriteCategory, id: string) {
   img.src = `/sprites/${category}/${id}.png`;
 }
 
+function elevationKey(theme: ElevationTheme, id: string): string {
+  return `${theme}/${id}`;
+}
+
+function loadElevation(theme: ElevationTheme, id: string) {
+  const k = elevationKey(theme, id);
+  if (elevationCache.has(k)) return;
+  const img = new Image();
+  const entry: Entry = { img, state: 'loading' };
+  elevationCache.set(k, entry);
+  img.onload = () => { entry.state = 'loaded'; };
+  img.onerror = () => { entry.state = 'missing'; };
+  img.src = `/sprites/tiles/${theme}_cliffs/${id}.png`;
+}
+
 /** Returns a loaded image ready to draw, or null if missing/not loaded yet (fall back to procedural rendering). */
 export function getSprite(category: SpriteCategory, id: string): HTMLImageElement | null {
   const entry = cache.get(key(category, id));
+  return entry && entry.state === 'loaded' ? entry.img : null;
+}
+
+/** Approved 32x32 cliff/crevice art lives in nested biome-specific tile folders. */
+export function getElevationSprite(theme: ElevationTheme, id: string): HTMLImageElement | null {
+  const entry = elevationCache.get(elevationKey(theme, id));
   return entry && entry.state === 'loaded' ? entry.img : null;
 }
 
@@ -64,6 +87,12 @@ const STRUCTURE_TYPES: StructureType[] = [
 ];
 const PLAYER_FACINGS: Facing[] = ['down', 'up', 'left', 'right'];
 const ROOF_IDS = ['tile_middle', 'tile_side', 'tatch_middle', 'tatch_side'];
+const ELEVATION_THEMES: ElevationTheme[] = ['grass', 'snow', 'desert'];
+const ELEVATION_IDS = [
+  'crevice_north', 'crevice_north_east', 'crevice_north_west',
+  'cliff_south', 'cliff_south_east', 'cliff_south_west',
+  'crevice_east', 'cliff_west',
+];
 
 // Gather-action tool animation: a "prepare" (windup) frame and a "swing"
 // frame, shown while chopping/mining instead of the idle/walk sprite.
@@ -93,5 +122,8 @@ export function preloadAllSprites() {
   for (const t of GATHER_TOOLS) {
     load('player', `${t}_prepare`);
     load('player', `${t}_swing`);
+  }
+  for (const theme of ELEVATION_THEMES) {
+    for (const suffix of ELEVATION_IDS) loadElevation(theme, `${theme}_${suffix}`);
   }
 }
