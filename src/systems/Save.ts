@@ -3,11 +3,12 @@ import { World } from '../world/World';
 import type { ChunkDiffs } from '../world/Chunk';
 import { log } from '../core/EventBus';
 import { TWIN_LANDS_SEED, WORLD_SIZE } from '../world/AeldorData';
+import { getEditorMarkers } from '../world/EditorWorld';
 import type { WorldPlane } from '../world/types';
 
 const SAVE_KEY = 'massrpg_save_v1';
 const AUTOSAVE_MS = 20000;
-const AUTHORED_WORLD_REVISION = 4;
+const AUTHORED_WORLD_REVISION = 5;
 const WORLD_CENTER = Math.floor(WORLD_SIZE / 2);
 
 interface SaveData {
@@ -28,6 +29,15 @@ interface SaveData {
   };
   bank: ({ itemId: string; qty: number } | null)[];
   chunkDiffs: Record<string, ChunkDiffs>;
+}
+
+function authoredStart(): { x: number; y: number } {
+  const markers = getEditorMarkers(WORLD_SIZE, 0);
+  const capital = markers.find((m) => m.name.trim().toLowerCase() === 'capital city')
+    ?? markers.find((m) => m.type === 'city')
+    ?? markers.find((m) => m.type === 'town')
+    ?? markers[0];
+  return capital ? { x: capital.x, y: capital.y } : { x: WORLD_CENTER, y: WORLD_CENTER };
 }
 
 export function saveGame(world: World, player: Player) {
@@ -85,11 +95,12 @@ export function loadGame(): { world: World; player: Player } | null {
     player.equipment = data.player.equipment as Player['equipment'];
 
     if (migratedWorld) {
-      player.x = WORLD_CENTER;
-      player.y = WORLD_CENTER;
+      const start = authoredStart();
+      player.x = start.x;
+      player.y = start.y;
       player.plane = 0;
-      player.respawnPoint = { x: WORLD_CENTER, y: WORLD_CENTER, plane: 0 };
-      log('World elevation and underground planes were introduced. Your character was moved safely to the surface centre.', 'info');
+      player.respawnPoint = { x: start.x, y: start.y, plane: 0 };
+      log('The authored Twin Lands world changed. Your character was moved safely to the capital.', 'info');
     } else {
       player.x = data.player.x;
       player.y = data.player.y;
