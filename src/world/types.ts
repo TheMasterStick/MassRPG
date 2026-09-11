@@ -47,7 +47,8 @@ export type ResourceType =
 export type StructureType =
   | 'bank_chest' | 'furnace' | 'anvil' | 'cooking_range' | 'campfire' | 'workbench'
   | 'fence' | 'wall' | 'wall_window' | 'wall_brick' | 'wall_stone' | 'wall_cobble'
-  | 'bed' | 'storage_chest' | 'tannery' | 'loom' | 'general_store';
+  | 'bed' | 'storage_chest' | 'tannery' | 'loom' | 'general_store'
+  | 'blocker';
 
 export interface WorldPos {
   x: number;
