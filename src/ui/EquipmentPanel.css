@@ -1,0 +1,174 @@
+.equipment-hint {
+  color: #999;
+  font-size: 10px;
+  text-align: center;
+  margin: -2px 0 8px;
+}
+
+.equipment-doll {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(3, 68px);
+  grid-template-rows: repeat(5, 58px);
+  grid-template-areas:
+    ". head ."
+    "cape neck ammo"
+    "weapon body shield"
+    "hands legs ring1"
+    "ring2 feet .";
+  justify-content: center;
+  gap: 5px;
+  padding: 7px 0 10px;
+  min-height: 330px;
+}
+
+.equipment-silhouette {
+  position: absolute;
+  left: 50%;
+  top: 55px;
+  width: 78px;
+  height: 218px;
+  transform: translateX(-50%);
+  opacity: 0.19;
+  pointer-events: none;
+}
+
+.equipment-silhouette-head {
+  position: absolute;
+  width: 38px;
+  height: 38px;
+  left: 20px;
+  top: 0;
+  border: 2px solid #d8caa7;
+  border-radius: 50%;
+  background: rgba(216, 202, 167, 0.12);
+}
+
+.equipment-silhouette-body {
+  position: absolute;
+  width: 50px;
+  height: 82px;
+  left: 14px;
+  top: 43px;
+  border: 2px solid #d8caa7;
+  border-radius: 18px 18px 10px 10px;
+  background: rgba(216, 202, 167, 0.09);
+}
+
+.equipment-silhouette-arms {
+  position: absolute;
+  width: 78px;
+  height: 62px;
+  left: 0;
+  top: 51px;
+  border-left: 8px solid rgba(216, 202, 167, 0.75);
+  border-right: 8px solid rgba(216, 202, 167, 0.75);
+  border-radius: 12px;
+}
+
+.equipment-silhouette-legs {
+  position: absolute;
+  width: 42px;
+  height: 89px;
+  left: 18px;
+  top: 123px;
+  border-left: 12px solid rgba(216, 202, 167, 0.75);
+  border-right: 12px solid rgba(216, 202, 167, 0.75);
+}
+
+.equipment-slot {
+  position: relative;
+  z-index: 2;
+  min-width: 0;
+  width: 68px;
+  height: 58px;
+  padding: 3px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  border-radius: 7px;
+  border: 1px solid #171512;
+  background: linear-gradient(#302c26, #211e1a);
+  color: #ddd;
+  cursor: default;
+  overflow: hidden;
+}
+
+.equipment-slot.equipped {
+  cursor: pointer;
+  border-color: #78652d;
+  background: linear-gradient(#3d382c, #29251e);
+  box-shadow: inset 0 0 8px rgba(212, 175, 55, 0.08);
+}
+
+.equipment-slot.equipped:hover {
+  border-color: var(--gold);
+  background: #443f32;
+}
+
+.equipment-slot.empty {
+  opacity: 0.7;
+}
+
+.equipment-slot-glyph {
+  font-size: 18px;
+  line-height: 18px;
+  color: #c9b57d;
+  text-shadow: 0 1px 2px #000;
+}
+
+.equipment-slot-label {
+  color: #888;
+  font-size: 9px;
+  line-height: 10px;
+}
+
+.equipment-slot-item {
+  display: block;
+  max-width: 62px;
+  color: #eee;
+  font-size: 8px;
+  line-height: 9px;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.equipment-slot-qty {
+  position: absolute;
+  right: 4px;
+  bottom: 2px;
+  font-size: 9px;
+  color: #f1dc86;
+  text-shadow: 0 1px 2px #000;
+}
+
+.equipment-stats-title {
+  margin-top: 4px !important;
+}
+
+.equipment-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}
+
+.equipment-stat {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 6px;
+  border: 1px solid #24211d;
+  border-radius: 5px;
+  background: rgba(20, 18, 15, 0.55);
+  color: #aaa;
+  font-size: 9px;
+}
+
+.equipment-stat strong {
+  color: #e4cf83;
+  font-size: 10px;
+}
