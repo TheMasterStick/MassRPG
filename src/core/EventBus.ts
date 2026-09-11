@@ -28,6 +28,7 @@ export interface GameEvents {
   hit: { targetKind: 'player' | 'monster'; targetId: string; amount: number; x: number; y: number };
   inventoryChanged: undefined;
   equipmentChanged: undefined;
+  itemSelectionChanged: undefined;
   skillsChanged: undefined;
   playerDied: undefined;
   save: undefined;
