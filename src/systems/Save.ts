@@ -25,6 +25,7 @@ interface SaveData {
     combatStyle: string;
     inventory: ({ itemId: string; qty: number } | null)[];
     equipment: Record<string, string>;
+    equippedAmmoQty?: number;
     respawnPoint: { x: number; y: number; plane?: WorldPlane };
   };
   bank: ({ itemId: string; qty: number } | null)[];
@@ -54,6 +55,7 @@ export function saveGame(world: World, player: Player) {
       combatStyle: player.combatStyle,
       inventory: player.inventory,
       equipment: player.equipment as Record<string, string>,
+      equippedAmmoQty: player.equippedAmmoQty,
       respawnPoint: player.respawnPoint,
     },
     bank: world.bank,
@@ -93,6 +95,8 @@ export function loadGame(): { world: World; player: Player } | null {
     player.combatStyle = data.player.combatStyle as Player['combatStyle'];
     player.inventory = data.player.inventory;
     player.equipment = data.player.equipment as Player['equipment'];
+    player.equippedAmmoQty = data.player.equippedAmmoQty ?? 0;
+    if (!player.equipment.ammo) player.equippedAmmoQty = 0;
 
     if (migratedWorld) {
       const start = authoredStart();
