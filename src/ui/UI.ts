@@ -5,6 +5,7 @@ import { buildStationPanel } from './StationPanel';
 import { buildBankPanel } from './BankPanel';
 import { buildShopPanel } from './ShopPanel';
 import { buildWorldMap } from './WorldMap';
+import { buildSkillBook } from './SkillBook';
 import { openPlantMenu } from './PlantMenu';
 import { initContextPopup, showContextPopup } from './ContextPopup';
 import type { StructureType } from '../world/types';
@@ -22,10 +23,16 @@ export function initUI(root: HTMLElement, game: Game) {
   const bank = buildBankPanel(root, game);
   const shop = buildShopPanel(root, game);
   const worldMap = buildWorldMap(root, game);
-  const floatingPanels = [station.panel, bank.panel, shop.panel, worldMap.panel];
+  const skillBook = buildSkillBook(root, game);
+  const floatingPanels = [station.panel, bank.panel, shop.panel, worldMap.panel, skillBook.panel];
   function hideFloatingExcept(keep?: HTMLElement) {
     for (const p of floatingPanels) if (p !== keep) p.classList.add('hidden');
   }
+
+  game.onOpenSkillBook = (skillId) => {
+    hideFloatingExcept(skillBook.panel);
+    skillBook.open(skillId);
+  };
 
   game.onUseInventoryItems = (firstItemId, secondItemId) => {
     const opened = station.openInventory([firstItemId, secondItemId]);
