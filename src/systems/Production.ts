@@ -7,6 +7,7 @@ import { addXp } from './Skills';
 import { log } from '../core/EventBus';
 import { isSameOrAdjacent } from './Pathfinding';
 import { firemakingXp } from '../data/recipes';
+import { PLAYER_CAMPFIRE_LIFETIME_TICKS } from '../core/constants';
 
 export interface RecipeAvailability {
   recipe: Recipe;
@@ -122,7 +123,7 @@ export function processProduceTick(player: Player) {
   }
 }
 
-// ---- Firemaking (produces a world structure, not an inventory item) ----
+// ---- Firemaking (produces a temporary world structure, not an inventory item) ----
 export function lightFire(world: World, player: Player, logItemId: string) {
   if (!player.hasItem('tinderbox')) { log(`You need a tinderbox to light a fire.`, 'warning'); return; }
   if (!player.hasItem(logItemId)) return;
@@ -132,7 +133,7 @@ export function lightFire(world: World, player: Player, logItemId: string) {
   if (!tier) return;
   if (player.level('firemaking') < tier.level) { log(`You need Firemaking level ${tier.level}.`, 'warning'); return; }
   removeItem(player, logItemId, 1);
-  world.placeStructure(Math.round(player.x), Math.round(player.y), 'campfire');
+  world.placeTemporaryStructure(Math.round(player.x), Math.round(player.y), 'campfire', PLAYER_CAMPFIRE_LIFETIME_TICKS);
   addXp(player, 'firemaking', firemakingXp(treeId));
-  log(`You light a fire.`, 'info');
+  log(`You light a fire. It will burn out after a while.`, 'info');
 }
