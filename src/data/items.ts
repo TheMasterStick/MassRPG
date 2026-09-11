@@ -42,6 +42,7 @@ export const METAL_TIERS = [
   { id: 'mithril', name: 'Mithril', tier: 4, oreLevel: 55, smithLevel: 50, value: 90 },
   { id: 'adamant', name: 'Adamant', tier: 5, oreLevel: 70, smithLevel: 70, value: 200 },
   { id: 'rune', name: 'Rune', tier: 6, oreLevel: 85, smithLevel: 85, value: 500 },
+  { id: 'dragonite', name: 'Dragonite', tier: 7, oreLevel: 92, smithLevel: 92, value: 650 },
 ] as const;
 
 // Ores (primary). Bronze uses copper+tin, and steel uses iron+coal, so
@@ -55,9 +56,6 @@ for (const m of METAL_TIERS) {
 }
 reg({ id: 'gold_ore', name: 'Gold ore', type: 'resource', stackable: true, value: 20, description: 'Smelted into gold bars for jewellery.' });
 reg({ id: 'silver_ore', name: 'Silver ore', type: 'resource', stackable: true, value: 15, description: 'Smelted into silver bars for jewellery.' });
-// Dragonite - a standalone top-end ore beyond rune, found only in the far
-// north. Not part of METAL_TIERS (no equipment line of its own yet, just a
-// bar) since only the smelting step was asked for.
 reg({ id: 'dragonite_ore', name: 'Dragonite ore', type: 'resource', stackable: true, value: 650, description: 'A rare, near-mythical ore found only in the far north.' });
 
 // Bars
@@ -65,7 +63,7 @@ for (const m of METAL_TIERS) {
   reg({ id: `${m.id}_bar`, name: `${m.name} bar`, type: 'material', stackable: true, value: m.value * 3, description: `A bar of ${m.name.toLowerCase()}, smithed into equipment.` });
 }
 reg({ id: 'gold_bar', name: 'Gold bar', type: 'material', stackable: true, value: 60, description: 'Used in jewellery crafting.' });
-reg({ id: 'silver_bar', name: 'Silver bar', type: 'material', stackable: true, value: 45, description: 'Used in jewellery crafting.' });
+reg({ id: 'silver_bar', name: 'Silver bar', type: 'material', stackable: true, value: 45, description: 'Used in silver crafting.' });
 reg({ id: 'dragonite_bar', name: 'Dragonite bar', type: 'material', stackable: true, value: 2000, description: 'Smelted from dragonite ore and coal.' });
 
 // ---- Weapons & armor per metal tier ----
