@@ -1,0 +1,78 @@
+.skillbook-panel {
+  top: 50%;
+  left: calc((100% - var(--sidebar-width)) / 2);
+  right: auto;
+  transform: translate(-50%, -50%);
+  width: 620px;
+  max-width: calc(100vw - var(--sidebar-width) - 32px);
+  max-height: 82vh;
+  padding: 0;
+  overflow: hidden;
+  background: linear-gradient(90deg, #2b241a 0 49.5%, #211b14 50.5% 100%);
+  border: 2px solid #6d5b3f;
+}
+
+.skillbook-panel h2 {
+  margin: 0;
+  padding: 10px 14px;
+  background: rgba(0,0,0,0.22);
+  border-bottom: 1px solid #5b4c36;
+}
+
+.skillbook-header-meta {
+  padding: 8px 14px;
+  font-size: 11px;
+  color: #c9bea9;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+
+.skillbook-body {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  min-height: 360px;
+  max-height: calc(82vh - 78px);
+}
+
+.skillbook-index {
+  padding: 10px;
+  border-right: 1px solid #5b4c36;
+  background: rgba(0,0,0,0.12);
+  overflow-y: auto;
+}
+
+.skillbook-category-btn {
+  width: 100%;
+  margin: 0 0 5px;
+  padding: 7px 8px;
+  text-align: left;
+  font-size: 11px;
+  color: #d5c9b1;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.skillbook-category-btn:hover { background: rgba(255,255,255,0.06); }
+.skillbook-category-btn.active { background: rgba(212,175,55,0.12); border-color: #8d7440; color: #f1d789; }
+
+.skillbook-page {
+  padding: 12px 14px 18px;
+  overflow-y: auto;
+}
+
+.skillbook-page-title { margin: 0 0 10px; color: #ead8af; font-size: 14px; }
+.skillbook-empty { color: #9d927f; font-size: 11px; line-height: 1.5; }
+
+.skillbook-unlock {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  gap: 8px;
+  padding: 7px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+.skillbook-unlock.locked { opacity: 0.48; }
+.skillbook-unlock-level { color: #e3c56e; font-weight: 700; font-size: 11px; }
+.skillbook-unlock-name { color: #e1dbcf; font-size: 11px; font-weight: 600; }
+.skillbook-unlock-detail { color: #a79d8c; font-size: 10px; margin-top: 2px; line-height: 1.35; }
