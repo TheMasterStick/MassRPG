@@ -10,16 +10,8 @@ import { getSprite, getPlayerSprite, preloadAllSprites } from './Sprites';
 
 interface FloatingText { x: number; y: number; text: string; color: string; born: number; }
 
-// How many tiles wide one repeat of a ground texture spans. Sprite art
-// arrives at all kinds of resolutions (hand-drawn 32px pixel art, or a
-// large detailed digital painting meant to tile); rather than squishing
-// the whole image into a single tile, it's tiled as a repeating pattern
-// anchored to world space.
 const TILE_TEXTURE_REPEAT_TILES = 6;
 const TREE_RENDER_SCALE = 2;
-
-// Monsters render a bit bigger than their tile, and with a red outline, so
-// they read clearly against busy ground textures instead of blending in.
 const MONSTER_RENDER_SCALE = 1.25;
 const MONSTER_OUTLINE_PX = 3;
 
@@ -49,7 +41,7 @@ const RESOURCE_GLYPH: Record<ResourceType, { glyph: string; color: string }> = {
   flax_plant: { glyph: '⚘', color: '#6a9a4a' },
 };
 
-const STRUCTURE_GLYPH: Record<StructureType, { glyph: string; color: string }> = {
+const STRUCTURE_GLYPH: Partial<Record<StructureType, { glyph: string; color: string }>> = {
   bank_chest: { glyph: '♜', color: '#d4af37' },
   furnace: { glyph: '▲', color: '#7a4a2a' },
   anvil: { glyph: '■', color: '#555' },
@@ -290,11 +282,13 @@ export class Renderer {
   }
 
   private drawStructure(sx: number, sy: number, type: StructureType) {
+    if (type === 'blocker') return;
     const ctx = this.ctx;
     const sprite = getSprite('structures', type);
     if (sprite) { this.drawSpriteOnTile(sprite, sx, sy); return; }
 
     const info = STRUCTURE_GLYPH[type];
+    if (!info) return;
     ctx.fillStyle = 'rgba(0,0,0,0.15)';
     ctx.fillRect(sx + 2, sy + 2, TILE_SIZE - 4, TILE_SIZE - 4);
     ctx.fillStyle = info.color;
@@ -385,14 +379,7 @@ export class Renderer {
     return null;
   }
 
-  /** Picks the right player frame: mid-gather tool animation, walk cycle while moving, or idle facing sprite. */
   private resolvePlayerSprite(player: Player): HTMLImageElement | null {
-    const tool = this.gatheringTool(player);
-    if (tool && (player.facing === 'left' || player.facing === 'right')) {
-      const swinging = player.action?.ticksRemaining !== undefined && player.action.ticksRemaining <= 1;
-      const frame = getSprite('player', `${tool}_${swinging ? 'swing' : 'prepare'}`);
-      if (frame) return frame;
-    }
     if (player.path.length > 0) {
       const walkFrame = Math.floor(performance.now() / 220) % 2 === 0 ? '1' : '2';
       const walking = getSprite('player', `${player.facing}_walk${walkFrame}`);
@@ -403,10 +390,13 @@ export class Renderer {
 
   private drawPlayer(sx: number, sy: number, player: Player) {
     const ctx = this.ctx;
-    const sprite = this.resolvePlayerSprite(player);
+    const tool = this.gatheringTool(player);
+    const horizontalTool = tool && (player.facing === 'left' || player.facing === 'right');
+    const swinging = player.action?.ticksRemaining !== undefined && player.action.ticksRemaining <= 1;
+    const toolFrame = horizontalTool ? getSprite('player', `${tool}_${swinging ? 'swing' : 'prepare'}`) : null;
+    const sprite = toolFrame ?? this.resolvePlayerSprite(player);
     if (sprite) {
-      const flipGather = this.gatheringTool(player) !== null && player.facing === 'left';
-      this.drawSpriteOnTile(sprite, sx, sy, 1, flipGather);
+      this.drawSpriteOnTile(sprite, sx, sy, 1, !!toolFrame && player.facing === 'left');
     } else {
       const cx = sx + TILE_SIZE / 2;
       const cy = sy + TILE_SIZE / 2;
