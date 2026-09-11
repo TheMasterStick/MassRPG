@@ -31,7 +31,7 @@ function findBestArrow(player: Player): string | null {
 export function playerAttack(player: Player, monster: Monster) {
   if (player.combatTargetId === monster.instanceId) return; // already fighting it - clicking again is a no-op
   player.combatTargetId = monster.instanceId;
-  monster.targetId = 'player';
+  player.path = [];
   log(`You attack the ${monster.def().name}.`, 'combat');
 }
 
@@ -40,7 +40,7 @@ function stepToward(x: number, y: number, tx: number, ty: number, world: World):
   const dy = Math.sign(ty - y);
   const candidates: [number, number][] = [[x + dx, y + dy], [x + dx, y], [x, y + dy]];
   for (const [nx, ny] of candidates) {
-    if ((nx !== x || ny !== y) && world.isWalkable(nx, ny)) return { x: nx, y: ny };
+    if ((nx !== x || ny !== y) && world.canStep(x, y, nx, ny)) return { x: nx, y: ny };
   }
   return { x, y };
 }
@@ -77,6 +77,11 @@ function resolvePlayerHit(player: Player, monster: Monster) {
     atkBonus = equippedBonus(player, 'attack');
     maxHit = CM.maxHitMelee(player.level('strength'), equippedBonus(player, 'strength'));
   }
+
+  // A passive creature only becomes hostile once the player actually performs
+  // the first attack roll. A miss still counts as an attack; merely clicking it
+  // while out of range does not.
+  monster.targetId = 'player';
 
   const aRoll = CM.attackRoll(atkLevel, atkBonus);
   const dRoll = CM.defenceRoll(def.defence, def.defenceBonus);
@@ -184,7 +189,8 @@ export function combatTick(world: World, player: Player) {
     }
   }
 
-  // Player's active combat
+  // Player's active combat follows the monster's live position instead of the
+  // tile it occupied when the player first clicked it.
   if (player.combatTargetId) {
     const monster = world.monsters.find((m) => m.instanceId === player.combatTargetId);
     if (!monster || !monster.isAlive() || !player.isAlive()) {
@@ -194,12 +200,11 @@ export function combatTick(world: World, player: Player) {
       const adjacent = isAdjacent({ x: player.x, y: player.y }, { x: monster.x, y: monster.y });
       const inRange = ranged ? Math.max(Math.abs(player.x - monster.x), Math.abs(player.y - monster.y)) <= 6 : adjacent;
       if (inRange && player.path.length === 0) {
-        // Standing still and fighting: keep facing the target rather than whatever direction we last walked.
         player.facing = facingFromDelta(monster.x - player.x, monster.y - player.y, player.facing);
       }
       if (!inRange && player.path.length === 0) {
         const next = stepToward(Math.round(player.x), Math.round(player.y), monster.x, monster.y, world);
-        player.path = [next];
+        if (next.x !== Math.round(player.x) || next.y !== Math.round(player.y)) player.path = [next];
       } else if (inRange && world.tick - player.lastAttackTick >= styleAttackSpeed(player.combatStyle)) {
         resolvePlayerHit(player, monster);
         player.lastAttackTick = world.tick;
