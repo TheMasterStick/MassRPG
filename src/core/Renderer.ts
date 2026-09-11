@@ -12,6 +12,7 @@ interface FloatingText { x: number; y: number; text: string; color: string; born
 
 const TILE_TEXTURE_REPEAT_TILES = 6;
 const TREE_RENDER_SCALE = 2;
+const PLAYER_RENDER_SCALE = 1.3;
 const MONSTER_RENDER_SCALE = 1.25;
 const MONSTER_OUTLINE_PX = 3;
 
@@ -395,8 +396,11 @@ export class Renderer {
     const swinging = player.action?.ticksRemaining !== undefined && player.action.ticksRemaining <= 1;
     const toolFrame = horizontalTool ? getSprite('player', `${tool}_${swinging ? 'swing' : 'prepare'}`) : null;
     const sprite = toolFrame ?? this.resolvePlayerSprite(player);
+    let barY = sy - 8;
     if (sprite) {
-      this.drawSpriteOnTile(sprite, sx, sy, 1, !!toolFrame && player.facing === 'left');
+      this.drawSpriteOnTile(sprite, sx, sy, PLAYER_RENDER_SCALE, !!toolFrame && player.facing === 'left');
+      const renderedHeight = TILE_SIZE * PLAYER_RENDER_SCALE * (sprite.naturalHeight / sprite.naturalWidth);
+      barY = sy + TILE_SIZE - renderedHeight - 8;
     } else {
       const cx = sx + TILE_SIZE / 2;
       const cy = sy + TILE_SIZE / 2;
@@ -418,9 +422,9 @@ export class Renderer {
     const barW = TILE_SIZE - 4;
     const pct = Math.max(0, player.currentHp / player.maxHp());
     ctx.fillStyle = '#2b2b2b';
-    ctx.fillRect(sx + 2, sy - 8, barW, 5);
+    ctx.fillRect(sx + 2, barY, barW, 5);
     ctx.fillStyle = pct > 0.5 ? '#4caf50' : pct > 0.25 ? '#ff9800' : '#e53935';
-    ctx.fillRect(sx + 2, sy - 8, barW * pct, 5);
+    ctx.fillRect(sx + 2, barY, barW * pct, 5);
   }
 
   private drawFloatingTexts(camX: number, camY: number) {
