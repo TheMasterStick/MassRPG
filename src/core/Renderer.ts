@@ -115,6 +115,7 @@ export class Renderer {
     const maxTY = Math.floor((camY + h) / TILE_SIZE) + 1;
 
     const objects: Drawable[] = [];
+    const shadows: (() => void)[] = [];
     const tilePatchGroups = new Map<HTMLImageElement, { sx: number; sy: number }[]>();
 
     for (let ty = minTY; ty <= maxTY; ty++) {
@@ -139,7 +140,10 @@ export class Renderer {
           objects.push({ sortY: ty, draw: () => this.drawStructure(sx, sy, structure) });
         } else {
           const res = world.getResourceNode(tx, ty);
-          if (res) objects.push({ sortY: ty, draw: () => this.drawResource(sx, sy, res, tx, ty, world) });
+          if (res) {
+            shadows.push(() => this.drawResourceShadow(sx, sy, res));
+            objects.push({ sortY: ty, draw: () => this.drawResource(sx, sy, res, tx, ty, world) });
+          }
         }
       }
     }
@@ -148,9 +152,24 @@ export class Renderer {
 
     for (const m of monsters) {
       if (!m.isAlive()) continue;
-      objects.push({ sortY: m.y, draw: () => this.drawMonster(m.x * TILE_SIZE - camX, m.y * TILE_SIZE - camY, m) });
+      const def = m.def();
+      const sx = m.x * TILE_SIZE - camX;
+      const sy = m.y * TILE_SIZE - camY;
+      const shadowWidth = Math.max(0.48, Math.min(1.55, 0.58 * def.size * MONSTER_RENDER_SCALE));
+      const shadowHeight = Math.max(0.15, Math.min(0.34, shadowWidth * 0.25));
+      shadows.push(() => this.drawGroundShadow(sx, sy, shadowWidth, shadowHeight, 0.24));
+      objects.push({ sortY: m.y, draw: () => this.drawMonster(sx, sy, m) });
     }
-    objects.push({ sortY: player.y, draw: () => this.drawPlayer(player.x * TILE_SIZE - camX, player.y * TILE_SIZE - camY, player) });
+
+    const playerSx = player.x * TILE_SIZE - camX;
+    const playerSy = player.y * TILE_SIZE - camY;
+    shadows.push(() => this.drawGroundShadow(playerSx, playerSy, 0.64, 0.18, 0.24));
+    objects.push({ sortY: player.y, draw: () => this.drawPlayer(playerSx, playerSy, player) });
+
+    // Contact shadows belong to the ground plane, so draw all of them before
+    // the Y-sorted sprites. This avoids a later object's shadow painting across
+    // the feet/body of an earlier object while still grounding every sprite.
+    for (const drawShadow of shadows) drawShadow();
 
     objects.sort((a, b) => a.sortY - b.sortY);
     for (const obj of objects) obj.draw();
@@ -166,6 +185,40 @@ export class Renderer {
     }
 
     this.drawFloatingTexts(camX, camY);
+  }
+
+  private drawGroundShadow(sx: number, sy: number, widthMul: number, heightMul: number, alpha: number) {
+    const ctx = this.ctx;
+    const cx = sx + TILE_SIZE / 2;
+    const cy = sy + TILE_SIZE * 0.91;
+    const rx = TILE_SIZE * widthMul * 0.5;
+    const ry = TILE_SIZE * heightMul * 0.5;
+
+    // Two cheap translucent ellipses read as a soft contact shadow without the
+    // per-frame cost and halo artifacts of Canvas shadowBlur on every sprite.
+    ctx.save();
+    ctx.fillStyle = `rgba(0,0,0,${alpha * 0.42})`;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = `rgba(0,0,0,${alpha})`;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, rx * 0.72, ry * 0.64, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  private drawResourceShadow(sx: number, sy: number, res: ResourceType) {
+    if (res.startsWith('fishing_') || res === 'farm_patch' || res === 'herb_patch') return;
+    if (res.startsWith('tree_')) {
+      this.drawGroundShadow(sx, sy, 1.18, 0.24, 0.22);
+      return;
+    }
+    if (res.startsWith('rock_')) {
+      this.drawGroundShadow(sx, sy, 0.72, 0.18, 0.22);
+      return;
+    }
+    this.drawGroundShadow(sx, sy, 0.44, 0.13, 0.17);
   }
 
   private drawSpriteOnTile(img: HTMLImageElement, sx: number, sy: number, widthMul = 1, flip = false) {
