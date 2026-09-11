@@ -58,6 +58,7 @@ for (let i = 0; i < METAL_TIERS.length; i++) {
     });
   }
 }
+reg({ id: 'smith_iron_nails', name: 'Iron nails', skill: 'smithing', levelRequired: 15, inputs: [{ item: 'iron_bar', qty: 1 }], outputItem: 'nails', outputQty: 15, xp: 12, station: 'anvil', toolRequired: 'hammer', ticks: 2, category: 'smithing_misc' });
 
 // ---- Cooking (campfire or cooking range) ----
 const FIREMAKING_XP: Record<string, number> = { normal: 40, oak: 60, willow: 90, maple: 135, yew: 202, magic: 303 };
