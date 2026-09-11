@@ -1,7 +1,7 @@
 import type { Player } from '../entities/Player';
 import type { World } from '../world/World';
 import { Monster } from '../entities/Monster';
-import { isAdjacent } from './Pathfinding';
+import { bfsPath, isAdjacent, type Point } from './Pathfinding';
 import { equippedBonus, removeItem, addItem } from './Inventory';
 import { addXp } from './Skills';
 import * as CM from './CombatMath';
@@ -43,6 +43,42 @@ function stepToward(x: number, y: number, tx: number, ty: number, world: World):
     if ((nx !== x || ny !== y) && world.canStep(x, y, nx, ny)) return { x: nx, y: ny };
   }
   return { x, y };
+}
+
+const APPROACH_OFFSETS: Point[] = [
+  { x: 1, y: 0 }, { x: -1, y: 0 }, { x: 0, y: 1 }, { x: 0, y: -1 },
+  { x: 1, y: 1 }, { x: 1, y: -1 }, { x: -1, y: 1 }, { x: -1, y: -1 },
+];
+
+/**
+ * Build a complete walk path to a reachable tile next to the monster. Player
+ * movement consumes the whole path continuously frame-by-frame, rather than
+ * receiving one new tile each combat tick. Rebuilding is only needed when the
+ * monster has moved far enough that the old path endpoint is no longer useful.
+ */
+function combatApproachPath(world: World, player: Player, monster: Monster): Point[] | null {
+  const start = { x: Math.round(player.x), y: Math.round(player.y) };
+  const target = { x: Math.round(monster.x), y: Math.round(monster.y) };
+  const candidates = APPROACH_OFFSETS
+    .map((offset) => ({ x: target.x + offset.x, y: target.y + offset.y }))
+    .filter((candidate) => world.isWalkable(candidate.x, candidate.y))
+    .sort((a, b) => {
+      const ad = (a.x - start.x) ** 2 + (a.y - start.y) ** 2;
+      const bd = (b.x - start.x) ** 2 + (b.y - start.y) ** 2;
+      return ad - bd;
+    });
+
+  for (const candidate of candidates) {
+    const path = bfsPath(world, start, candidate);
+    if (path) return path;
+  }
+  return null;
+}
+
+function pathStillApproachesMonster(player: Player, monster: Monster): boolean {
+  const endpoint = player.path[player.path.length - 1];
+  if (!endpoint) return false;
+  return isAdjacent(endpoint, { x: Math.round(monster.x), y: Math.round(monster.y) });
 }
 
 function styleAttackSpeed(style: Player['combatStyle']): number {
@@ -189,23 +225,29 @@ export function combatTick(world: World, player: Player) {
     }
   }
 
-  // Player's active combat follows the monster's live position instead of the
-  // tile it occupied when the player first clicked it.
+  // Player combat follows the monster's live position, but queues a complete
+  // approach path so the renderer can interpolate movement continuously between
+  // tiles. If the monster moves away from that endpoint, rebuild the remaining
+  // path instead of finishing a route to an obsolete position.
   if (player.combatTargetId) {
     const monster = world.monsters.find((m) => m.instanceId === player.combatTargetId);
     if (!monster || !monster.isAlive() || !player.isAlive()) {
       player.combatTargetId = null;
+      player.path = [];
     } else {
       const ranged = player.combatStyle !== 'melee';
       const adjacent = isAdjacent({ x: player.x, y: player.y }, { x: monster.x, y: monster.y });
       const inRange = ranged ? Math.max(Math.abs(player.x - monster.x), Math.abs(player.y - monster.y)) <= 6 : adjacent;
+
+      if (!inRange && (player.path.length === 0 || !pathStillApproachesMonster(player, monster))) {
+        const path = combatApproachPath(world, player, monster);
+        if (path) player.path = path;
+      }
+
       if (inRange && player.path.length === 0) {
         player.facing = facingFromDelta(monster.x - player.x, monster.y - player.y, player.facing);
       }
-      if (!inRange && player.path.length === 0) {
-        const next = stepToward(Math.round(player.x), Math.round(player.y), monster.x, monster.y, world);
-        if (next.x !== Math.round(player.x) || next.y !== Math.round(player.y)) player.path = [next];
-      } else if (inRange && world.tick - player.lastAttackTick >= styleAttackSpeed(player.combatStyle)) {
+      if (inRange && world.tick - player.lastAttackTick >= styleAttackSpeed(player.combatStyle)) {
         resolvePlayerHit(player, monster);
         player.lastAttackTick = world.tick;
         if (monster.currentHp <= 0) {
@@ -213,6 +255,7 @@ export function combatTick(world: World, player: Player) {
           grantLoot(player, monster);
           world.killMonster(monster);
           player.combatTargetId = null;
+          player.path = [];
         }
       }
     }
