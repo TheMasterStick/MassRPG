@@ -13,13 +13,15 @@ import { startAutosave, saveGame } from '../systems/Save';
 import { placeStructure } from '../systems/Construction';
 import { facingFromDelta } from '../systems/Facing';
 import type { Monster } from '../entities/Monster';
+import type { SkillId } from '../data/skills';
 
 export type PendingInteraction =
   | { type: 'gather'; x: number; y: number }
   | { type: 'harvest'; x: number; y: number }
   | { type: 'plant_menu'; x: number; y: number }
   | { type: 'structure'; x: number; y: number; structureType: StructureType }
-  | { type: 'plane_link'; x: number; y: number };
+  | { type: 'plane_link'; x: number; y: number }
+  | { type: 'use_item_world'; x: number; y: number; itemId: string };
 
 export interface GameContextMenuItem {
   label: string;
@@ -38,6 +40,7 @@ export class Game {
   hoverTile: Point | null = null;
   pendingInteraction: PendingInteraction | null = null;
   buildMode: StructureType | null = null;
+  selectedInventoryItemId: string | null = null;
   private keys = new Set<string>();
   private rafHandle = 0;
   paused = false;
@@ -75,6 +78,19 @@ export class Game {
 
   stop() { cancelAnimationFrame(this.rafHandle); }
   manualSave() { saveGame(this.world, this.player); }
+
+  selectInventoryItem(itemId: string) {
+    if (!this.player.hasItem(itemId)) return;
+    this.buildMode = null;
+    this.selectedInventoryItemId = itemId;
+    bus.emit('itemSelectionChanged', undefined);
+  }
+
+  clearInventoryItemSelection() {
+    if (!this.selectedInventoryItemId) return;
+    this.selectedInventoryItemId = null;
+    bus.emit('itemSelectionChanged', undefined);
+  }
 
   private update(dt: number) {
     this.handleKeyboardMovement();
@@ -196,6 +212,14 @@ export class Game {
       this.onOpenStructure?.(pi.x, pi.y, pi.structureType);
     } else if (pi.type === 'plane_link') {
       this.usePlaneLink(pi.x, pi.y);
+    } else if (pi.type === 'use_item_world') {
+      if (!player.hasItem(pi.itemId)) {
+        this.clearInventoryItemSelection();
+        return;
+      }
+      const handled = this.onUseInventoryItemOnWorld?.(pi.itemId, pi.x, pi.y) ?? false;
+      if (!handled) log('Nothing interesting happens.', 'info');
+      this.clearInventoryItemSelection();
     }
   }
 
@@ -222,6 +246,10 @@ export class Game {
   onOpenStructure: ((x: number, y: number, type: StructureType) => void) | null = null;
   onToggleWorldMap: (() => void) | null = null;
   onOpenContextMenu: ((x: number, y: number, items: GameContextMenuItem[]) => void) | null = null;
+  onUseInventoryItemOnWorld: ((itemId: string, x: number, y: number) => boolean) | null = null;
+  onUseInventoryItems: ((firstItemId: string, secondItemId: string) => boolean) | null = null;
+  onCraftInventoryItem: ((itemId: string) => boolean) | null = null;
+  onOpenSkillBook: ((skillId: SkillId) => void) | null = null;
 
   moveAdjacentThen(pi: PendingInteraction) {
     this.player.action = null;
@@ -285,6 +313,20 @@ export class Game {
     if (this.buildMode) {
       placeStructure(this.world, this.player, this.buildMode, tile.x, tile.y);
       this.buildMode = null;
+      return;
+    }
+
+    if (this.selectedInventoryItemId) {
+      const itemId = this.selectedInventoryItemId;
+      const monster = this.monsterAt(tile);
+      const structure = this.world.getStructure(tile.x, tile.y);
+      const resource = this.world.getResourceNode(tile.x, tile.y);
+      if (monster || structure || resource) {
+        this.moveAdjacentThen({ type: 'use_item_world', x: tile.x, y: tile.y, itemId });
+      } else {
+        log('Nothing interesting happens.', 'info');
+        this.clearInventoryItemSelection();
+      }
       return;
     }
 
@@ -435,6 +477,7 @@ export class Game {
       const key = e.key.toLowerCase();
       this.keys.add(key);
       if (key === 'shift') this.player.running = true;
+      if (key === 'escape') this.clearInventoryItemSelection();
     });
     window.addEventListener('keyup', (e) => {
       const key = e.key.toLowerCase();
