@@ -10,7 +10,7 @@ export interface InventorySlotData { itemId: string; qty: number }
 export interface ChunkDiffs {
   depletedResources: Record<string, number>;
   plantedCrops: Record<string, { cropId: string; plantedAtTick: number }>;
-  structures: Record<string, { type: StructureType; storage?: InventorySlotData[] }>;
+  structures: Record<string, { type: StructureType; storage?: InventorySlotData[]; expiresAtTick?: number }>;
   monsterCooldowns: Record<string, number>;
 }
 
