@@ -13,19 +13,16 @@ interface FloatingText { x: number; y: number; text: string; color: string; born
 // How many tiles wide one repeat of a ground texture spans. Sprite art
 // arrives at all kinds of resolutions (hand-drawn 32px pixel art, or a
 // large detailed digital painting meant to tile); rather than squishing
-// the whole image into a single 32px tile (which flattens detailed
-// textures into near-nothing), it's tiled as a repeating pattern anchored
-// to world space, so the same texture reads consistently across every
-// tile of that type without swimming as the camera pans.
+// the whole image into a single tile, it's tiled as a repeating pattern
+// anchored to world space.
 const TILE_TEXTURE_REPEAT_TILES = 6;
+const TREE_RENDER_SCALE = 2;
 
 // Monsters render a bit bigger than their tile, and with a red outline, so
 // they read clearly against busy ground textures instead of blending in.
 const MONSTER_RENDER_SCALE = 1.25;
 const MONSTER_OUTLINE_PX = 3;
 
-// Drawn only as a fallback until a matching PNG exists in public/sprites/
-// (see public/sprites/README.md for the exact filenames expected).
 const RESOURCE_GLYPH: Record<ResourceType, { glyph: string; color: string }> = {
   tree_normal: { glyph: '♣', color: '#2e6b2b' },
   tree_oak: { glyph: '♣', color: '#3f7d34' },
@@ -72,9 +69,6 @@ const STRUCTURE_GLYPH: Record<StructureType, { glyph: string; color: string }> =
   general_store: { glyph: '⚑', color: '#3a6ac0' },
 };
 
-// A y-sorted "world object" drawn after the ground plane, so tall sprites
-// (a tree taller than one tile, a big monster) occlude correctly against
-// whatever is a row above/below them instead of always drawing on top.
 interface Drawable { sortY: number; draw: () => void }
 
 export class Renderer {
@@ -101,9 +95,6 @@ export class Renderer {
     this.canvas.width = this.canvas.clientWidth * dpr;
     this.canvas.height = this.canvas.clientHeight * dpr;
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    // Sprite art here is large, detailed digital painting scaled down to
-    // tile size, not native small pixel grids - smooth, high-quality
-    // downscaling looks right for that; nearest-neighbour would alias badly.
     this.ctx.imageSmoothingEnabled = true;
     this.ctx.imageSmoothingQuality = 'high';
   }
@@ -155,8 +146,6 @@ export class Renderer {
           objects.push({ sortY: ty, draw: () => this.drawStructure(sx, sy, structure) });
         } else {
           const res = world.getResourceNode(tx, ty);
-          // Drawn even while depleted (dimmed, see drawResource) instead of
-          // vanishing entirely - a mined-out rock is still there, just spent.
           if (res) objects.push({ sortY: ty, draw: () => this.drawResource(sx, sy, res, tx, ty, world) });
         }
       }
@@ -186,7 +175,6 @@ export class Renderer {
     this.drawFloatingTexts(camX, camY);
   }
 
-  /** Draws an image anchored to the bottom-center of a tile, preserving its aspect ratio at a fixed tile-width. Lets tall art (trees, big monsters) rise above their own tile without distortion. `flip` mirrors art that's only drawn facing right (monsters) so it can face left too. */
   private drawSpriteOnTile(img: HTMLImageElement, sx: number, sy: number, widthMul = 1, flip = false) {
     const dw = TILE_SIZE * widthMul;
     const dh = dw * (img.naturalHeight / img.naturalWidth);
@@ -201,14 +189,10 @@ export class Renderer {
     ctx.restore();
   }
 
-  // The eave-trimmed "side" roof piece is drawn facing outward on whichever edge
-  // it's on (rotated so the trim always points away from the building's center),
-  // wrapping the whole perimeter instead of just the front row.
   private static readonly ROOF_EDGE_ROTATION: Record<'top' | 'bottom' | 'left' | 'right', number> = {
     bottom: 0, top: Math.PI, left: Math.PI / 2, right: -Math.PI / 2,
   };
 
-  /** Roofs draw as a final overlay above everything (walls, furniture, monsters, the player) so buildings read correctly from outside, but are skipped entirely for whichever single building the player is currently standing inside, so its interior is visible. Building footprints are tiny, so each tile is drawn individually (rather than pattern-tiled like ground textures) so the edge pieces can be rotated per side. */
   private drawRoofs(
     world: World, player: Player, camX: number, camY: number,
     minTX: number, maxTX: number, minTY: number, maxTY: number,
@@ -248,7 +232,6 @@ export class Renderer {
     return pattern;
   }
 
-  /** Fills every cell using this ground texture as one continuous pattern anchored to world space, rather than squishing the whole image into each 32px tile individually. */
   private paintTilePattern(img: HTMLImageElement, cells: { sx: number; sy: number }[], camX: number, camY: number) {
     const ctx = this.ctx;
     const pattern = this.getTilePattern(img);
@@ -278,7 +261,6 @@ export class Renderer {
       const sprite = (res === 'farm_patch' && getSprite('resources', `farm_patch_${stageId}`)) || getSprite('resources', res);
       if (sprite) ctx.drawImage(sprite, sx, sy, TILE_SIZE, TILE_SIZE);
       else { ctx.fillStyle = '#4a3323'; ctx.fillRect(sx + 3, sy + 3, TILE_SIZE - 6, TILE_SIZE - 6); }
-      // Only needed as an overlay when no dedicated per-stage art exists for this patch type (e.g. herb_patch).
       if (crop && !(res === 'farm_patch' && getSprite('resources', `farm_patch_${stageId}`))) {
         ctx.fillStyle = crop.ready ? '#5fbf4a' : '#3f7f3a';
         const size = 4 + crop.progress * 10;
@@ -289,15 +271,12 @@ export class Renderer {
       return;
     }
 
-    // Depleted resources (an ore vein just mined out, a tree just felled)
-    // stay put but render dimmed and desaturated, rather than vanishing
-    // outright, until they respawn.
     const available = world.isResourceAvailable(tx, ty);
     if (!available) { ctx.save(); ctx.filter = 'grayscale(0.9) brightness(0.55)'; ctx.globalAlpha = 0.85; }
 
     const sprite = getSprite('resources', res);
     if (sprite) {
-      this.drawSpriteOnTile(sprite, sx, sy);
+      this.drawSpriteOnTile(sprite, sx, sy, res.startsWith('tree_') ? TREE_RENDER_SCALE : 1);
     } else {
       const info = RESOURCE_GLYPH[res];
       ctx.fillStyle = info.color;
@@ -325,7 +304,6 @@ export class Renderer {
     ctx.fillText(info.glyph, sx + TILE_SIZE / 2, sy + TILE_SIZE / 2 + 1);
   }
 
-  /** Builds (and caches) a red-outlined version of a monster sprite at a fixed draw size: the sprite drawn several times around its own edge and flattened to solid red, then the real art on top. Cached per image/flip/size since none of those change between frames for a given monster type. */
   private getOutlinedMonsterSprite(img: HTMLImageElement, flip: boolean, dw: number, dh: number): HTMLCanvasElement {
     const key = `${img.src}|${flip}|${Math.round(dw)}x${Math.round(dh)}`;
     const cached = this.outlineCache.get(key);
@@ -399,16 +377,21 @@ export class Renderer {
     ctx.fillText(`${def.name} (${def.level})`, sx + TILE_SIZE / 2, sy - 9);
   }
 
+  private gatheringTool(player: Player): 'axe' | 'pickaxe' | null {
+    if (player.action?.type !== 'gather') return null;
+    const resource = player.action.resourceOrRecipeId;
+    if (resource.startsWith('tree_')) return 'axe';
+    if (resource.startsWith('rock_')) return 'pickaxe';
+    return null;
+  }
+
   /** Picks the right player frame: mid-gather tool animation, walk cycle while moving, or idle facing sprite. */
   private resolvePlayerSprite(player: Player): HTMLImageElement | null {
-    if (player.action?.type === 'gather') {
-      const resource = player.action.resourceOrRecipeId;
-      const tool = resource.startsWith('tree_') ? 'axe' : resource.startsWith('rock_') ? 'pickaxe' : null;
-      if (tool) {
-        const swinging = player.action.ticksRemaining <= 1;
-        const frame = getSprite('player', `${tool}_${swinging ? 'swing' : 'prepare'}`);
-        if (frame) return frame;
-      }
+    const tool = this.gatheringTool(player);
+    if (tool && (player.facing === 'left' || player.facing === 'right')) {
+      const swinging = player.action?.ticksRemaining !== undefined && player.action.ticksRemaining <= 1;
+      const frame = getSprite('player', `${tool}_${swinging ? 'swing' : 'prepare'}`);
+      if (frame) return frame;
     }
     if (player.path.length > 0) {
       const walkFrame = Math.floor(performance.now() / 220) % 2 === 0 ? '1' : '2';
@@ -422,7 +405,8 @@ export class Renderer {
     const ctx = this.ctx;
     const sprite = this.resolvePlayerSprite(player);
     if (sprite) {
-      this.drawSpriteOnTile(sprite, sx, sy);
+      const flipGather = this.gatheringTool(player) !== null && player.facing === 'left';
+      this.drawSpriteOnTile(sprite, sx, sy, 1, flipGather);
     } else {
       const cx = sx + TILE_SIZE / 2;
       const cy = sy + TILE_SIZE / 2;
