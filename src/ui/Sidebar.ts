@@ -8,6 +8,7 @@ import { buildEquipmentPanel } from './EquipmentPanel';
 import { buildBuildPanel } from './BuildPanel';
 import { buildCombatStyleTab } from './CombatStyleTab';
 import { buildQuestTab } from './QuestTab';
+import { buildSettingsPanel } from './SettingsPanel';
 
 interface Tab {
   id: string;
@@ -59,6 +60,7 @@ export function buildSidebar(uiRoot: HTMLElement, game: Game) {
   const inventory = buildInventoryPanel(tabContent, game);
   const equipment = buildEquipmentPanel(tabContent, game);
   const build = buildBuildPanel(tabContent, game);
+  const settings = buildSettingsPanel(tabContent);
 
   const tabs: Tab[] = [
     { id: 'combat', icon: '⚔', title: 'Combat', panel: combat.panel },
@@ -67,6 +69,7 @@ export function buildSidebar(uiRoot: HTMLElement, game: Game) {
     { id: 'inventory', icon: '🎒', title: 'Inventory', panel: inventory.panel },
     { id: 'equipment', icon: '🛡', title: 'Equipment', panel: equipment.panel },
     { id: 'build', icon: '🔨', title: 'Construction', panel: build.panel },
+    { id: 'settings', icon: '⚙', title: 'Settings', panel: settings.panel },
   ];
 
   const tabBar = el('div', { attrs: { id: 'sidebar-tabs' } });
@@ -81,6 +84,7 @@ export function buildSidebar(uiRoot: HTMLElement, game: Game) {
   }
 
   for (const t of tabs) {
+    if (t.id === 'settings') continue;
     const btn = el('button', { className: 'sidebar-tab-btn', text: t.icon, attrs: { title: t.title } });
     btn.addEventListener('click', () => selectTab(t.id));
     tabButtons.set(t.id, btn);
@@ -93,6 +97,11 @@ export function buildSidebar(uiRoot: HTMLElement, game: Game) {
   const saveBtn = el('button', { className: 'sidebar-tab-btn', text: '💾', attrs: { title: 'Save' } });
   saveBtn.addEventListener('click', () => game.manualSave());
   tabBar.append(saveBtn);
+
+  const settingsBtn = el('button', { className: 'sidebar-tab-btn', text: '⚙', attrs: { title: 'Settings' } });
+  settingsBtn.addEventListener('click', () => selectTab('settings'));
+  tabButtons.set('settings', settingsBtn);
+  tabBar.append(settingsBtn);
 
   sidebar.append(tabBar, tabContent);
   selectTab(activeTab);
