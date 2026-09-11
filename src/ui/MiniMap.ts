@@ -2,6 +2,7 @@ import { el } from './dom';
 import type { Game } from '../core/Game';
 import { WORLD_SIZE } from '../world/AeldorData';
 import { loadEditorWorld } from '../world/EditorWorld';
+import { isHighElevationBarrier } from '../world/World';
 import { TILE_MAP_COLORS } from './mapColors';
 
 const SIZE = 168;
@@ -64,13 +65,30 @@ export class MiniMap {
         const resource = world.getResourceNode(wx, wy);
         if (resource?.startsWith('rock_')) oreDots.push({ x: sx, y: sy });
 
+        const eastTile = world.getTile(wx + 1, wy);
+        const southTile = world.getTile(wx, wy + 1);
         const east = world.getElevation(wx + 1, wy);
         const south = world.getElevation(wx, wy + 1);
         const here = world.getElevation(wx, wy);
-        ctx.strokeStyle = 'rgba(20,15,10,.75)';
+        const hereBarrier = isHighElevationBarrier(here, tile, player.plane);
+        const eastBarrier = isHighElevationBarrier(east, eastTile, player.plane);
+        const southBarrier = isHighElevationBarrier(south, southTile, player.plane);
+
+        // Make authored high ground readable even when its base terrain is grass.
+        if (player.plane === 0 && here > 0) {
+          const alpha = hereBarrier ? Math.min(0.22, 0.10 + Math.max(0, here - 2) * 0.025) : 0.045;
+          ctx.fillStyle = `rgba(20,15,10,${alpha})`;
+          ctx.fillRect(sx - SCALE / 2, sy - SCALE / 2, SCALE, SCALE);
+        }
+
+        ctx.strokeStyle = 'rgba(20,15,10,.82)';
         ctx.lineWidth = 1;
-        if (Math.abs(east - here) >= 2) { ctx.beginPath(); ctx.moveTo(sx + SCALE / 2, sy - SCALE / 2); ctx.lineTo(sx + SCALE / 2, sy + SCALE / 2); ctx.stroke(); }
-        if (Math.abs(south - here) >= 2) { ctx.beginPath(); ctx.moveTo(sx - SCALE / 2, sy + SCALE / 2); ctx.lineTo(sx + SCALE / 2, sy + SCALE / 2); ctx.stroke(); }
+        if (Math.abs(east - here) >= 2 || hereBarrier !== eastBarrier) {
+          ctx.beginPath(); ctx.moveTo(sx + SCALE / 2, sy - SCALE / 2); ctx.lineTo(sx + SCALE / 2, sy + SCALE / 2); ctx.stroke();
+        }
+        if (Math.abs(south - here) >= 2 || hereBarrier !== southBarrier) {
+          ctx.beginPath(); ctx.moveTo(sx - SCALE / 2, sy + SCALE / 2); ctx.lineTo(sx + SCALE / 2, sy + SCALE / 2); ctx.stroke();
+        }
       }
     }
 
@@ -111,8 +129,5 @@ export class MiniMap {
 
     ctx.fillStyle = '#ffee55'; ctx.strokeStyle = '#000';
     ctx.beginPath(); ctx.arc(SIZE / 2, SIZE / 2, 3.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = 'rgba(0,0,0,.65)'; ctx.fillRect(3, 3, 60, 14);
-    ctx.fillStyle = '#fff'; ctx.font = '10px sans-serif'; ctx.textAlign = 'left';
-    ctx.fillText(player.plane === 0 ? 'Surface' : `Plane ${player.plane}`, 6, 13);
   }
 }
