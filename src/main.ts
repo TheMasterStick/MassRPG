@@ -8,6 +8,7 @@ import { hasSave, loadGame, deleteSave } from './systems/Save';
 import { el } from './ui/dom';
 import { TWIN_LANDS_SEED, WORLD_SIZE } from './world/AeldorData';
 import { getEditorMarkers, initializeEditorWorldStorage } from './world/EditorWorld';
+import { ensureCanonicalWorldInstalled } from './world/CanonicalWorld';
 import { launchWorldEditor } from './editor/WorldEditor';
 
 const app = document.getElementById('app')!;
@@ -46,7 +47,7 @@ function placeNewPlayerAtAuthoredStart(player: Player) {
   player.plane = 0;
   player.x = capital.x;
   player.y = capital.y;
-  player.respawnPoint = { x: capital.x, y: capital.y };
+  player.respawnPoint = { x: capital.x, y: capital.y, plane: 0 };
 }
 
 function newGame() {
@@ -93,7 +94,7 @@ function buildStartScreen() {
 
   box.append(el('div', {
     className: 'hint',
-    text: 'The playable world is the World Editor data. Import your Twin Lands JSON there, then Begin Adventure to play-test the same authored terrain, markers, resources and spawns.',
+    text: 'The Git repository contains the canonical Twin Lands world. The World Editor keeps your browser edits as a local working copy; export JSON when you want ChatGPT or Claude to promote those edits back into the canonical world.',
   }));
 
   startScreen.append(box);
@@ -101,6 +102,11 @@ function buildStartScreen() {
 
 async function bootstrap() {
   await initializeEditorWorldStorage(WORLD_SIZE);
+  const canonicalState = await ensureCanonicalWorldInstalled(WORLD_SIZE);
+  if (canonicalState === 'missing') {
+    console.error('MassRPG could not load its canonical Twin Lands world. The blank ocean fallback remains active.');
+  }
+
   if (new URLSearchParams(window.location.search).get('editor') === '1') {
     app.innerHTML = '';
     launchWorldEditor(app);
