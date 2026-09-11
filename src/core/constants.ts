@@ -1,4 +1,4 @@
-export const GAMEPLAY_ZOOM_LEVELS = [32, 40, 52, 64] as const;
+export const GAMEPLAY_ZOOM_LEVELS = [24, 32, 40, 52, 64, 80, 96] as const;
 export type GameplayTileSize = (typeof GAMEPLAY_ZOOM_LEVELS)[number];
 
 export let TILE_SIZE: GameplayTileSize = 40;
