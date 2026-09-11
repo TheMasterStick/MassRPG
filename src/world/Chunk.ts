@@ -43,7 +43,8 @@ export class Chunk {
       const edit = getEditorCell(wx, wy, WORLD_SIZE, plane);
       if (edit?.tile) return edit.tile;
       const stroke = getIndexedTerrainStrokeAt(wx, wy, WORLD_SIZE, plane);
-      return stroke?.tile ?? baseTileForPlane(plane);
+      const authored = stroke?.tile ?? baseTileForPlane(plane);
+      return plane === 0 ? gen.markerGroundAt(wx, wy, authored) ?? authored : authored;
     };
 
     for (let ly = 0; ly < CHUNK_SIZE; ly++) {
@@ -52,7 +53,10 @@ export class Chunk {
         const wy = cy * CHUNK_SIZE + ly;
         const edit = getEditorCell(wx, wy, WORLD_SIZE, plane);
         const terrainStroke = edit?.tile ? undefined : getIndexedTerrainStrokeAt(wx, wy, WORLD_SIZE, plane);
-        const tile = edit?.tile ?? terrainStroke?.tile ?? baseTileForPlane(plane);
+        const authoredTile = edit?.tile ?? terrainStroke?.tile ?? baseTileForPlane(plane);
+        const tile = edit?.tile || plane !== 0
+          ? authoredTile
+          : gen.markerGroundAt(wx, wy, authoredTile) ?? authoredTile;
         this.tiles[ly * CHUNK_SIZE + lx] = tile;
         const key = localKey(lx, ly);
 
@@ -66,7 +70,7 @@ export class Chunk {
 
         let resource: ResourceType | null = null;
         if (hasOwnEditorField(edit, 'resource')) resource = edit?.resource ?? null;
-        else resource = gen.resourceAt(wx, wy, getTile);
+        else resource = (plane === 0 ? gen.miningResourceAt(wx, wy) : null) ?? gen.resourceAt(wx, wy, getTile);
         if (resource) {
           this.resources.set(key, resource);
           continue;
