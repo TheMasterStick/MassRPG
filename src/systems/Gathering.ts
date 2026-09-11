@@ -168,7 +168,6 @@ export function processGatherTick(world: World, player: Player) {
       for (const g of GEM_ROLL) { roll -= g.weight; if (roll <= 0) { itemId = g.itemId; break; } }
     }
     addItem(player, itemId, outcome.qty);
-    if (resource.startsWith('rock_')) addItem(player, 'stone', 1);
     addXp(player, outcome.skill, outcome.xp);
     log(`You get some ${getItem(itemId).name.toLowerCase()}.`, 'info');
     if (outcome.depleteChance > 0 && Math.random() < outcome.depleteChance) {
