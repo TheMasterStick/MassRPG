@@ -10,8 +10,15 @@ import { openPlantMenu } from './PlantMenu';
 import { initContextPopup, showContextPopup } from './ContextPopup';
 import type { StructureType } from '../world/types';
 import { log } from '../core/EventBus';
+import { lightFire } from '../systems/Production';
 
 const CRAFTING_STRUCTURES: StructureType[] = ['furnace', 'anvil', 'cooking_range', 'campfire', 'tannery', 'loom'];
+
+function firemakingPair(firstItemId: string, secondItemId: string): string | null {
+  if (firstItemId === 'tinderbox' && secondItemId.endsWith('_logs')) return secondItemId;
+  if (secondItemId === 'tinderbox' && firstItemId.endsWith('_logs')) return firstItemId;
+  return null;
+}
 
 export function initUI(root: HTMLElement, game: Game) {
   initContextPopup(root);
@@ -35,6 +42,11 @@ export function initUI(root: HTMLElement, game: Game) {
   };
 
   game.onUseInventoryItems = (firstItemId, secondItemId) => {
+    const fireLogs = firemakingPair(firstItemId, secondItemId);
+    if (fireLogs) {
+      lightFire(game.world, game.player, fireLogs);
+      return true;
+    }
     const opened = station.openInventory([firstItemId, secondItemId]);
     if (opened) hideFloatingExcept(station.panel);
     return opened;
