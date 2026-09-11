@@ -29,5 +29,5 @@ export function placeStructure(world: World, player: Player, type: StructureType
   world.placeStructure(x, y, type);
   addXp(player, 'construction', cost.xp);
   log(`You build a ${cost.name}.`, 'info');
-  if (type === 'bed') { player.respawnPoint = { x, y }; log(`This is now your respawn point.`, 'info'); }
+  if (type === 'bed') { player.respawnPoint = { x, y, plane: player.plane }; log(`This is now your respawn point.`, 'info'); }
 }
