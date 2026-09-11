@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "nativeTileSize": 32,
+  "description": "Approved snowy elevation edge sprites derived from the approved generated PNG artwork and catalogued to match the desert cliff/crevice system. Canonical PNGs are stored once; mirrored orientations are derived at render time.",
+  "collision": {
+    "model": "edge_band",
+    "note": "The flat snow portion remains walkable. Only the rocky cliff or crevice edge should block crossing; movement/pathfinding should not treat the whole tile as solid."
+  },
+  "sprites": {
+    "snow_crevice_north": { "file": "snow_crevice_north.png", "kind": "crevice", "edge": ["north"] },
+    "snow_crevice_north_east": { "file": "snow_crevice_north_east.png", "kind": "crevice", "edge": ["north", "east"] },
+    "snow_crevice_north_west": { "file": "snow_crevice_north_west.png", "kind": "crevice", "edge": ["north", "west"] },
+    "snow_cliff_south": { "file": "snow_cliff_south.png", "kind": "cliff", "edge": ["south"] },
+    "snow_cliff_south_east": { "file": "snow_cliff_south_east.png", "kind": "cliff", "edge": ["south", "east"] },
+    "snow_cliff_south_west": { "file": "snow_cliff_south_west.png", "kind": "cliff", "edge": ["south", "west"] },
+    "snow_crevice_east": { "file": "snow_crevice_east.png", "kind": "crevice", "edge": ["east"] },
+    "snow_cliff_west": { "file": "snow_cliff_west.png", "kind": "cliff", "edge": ["west"] }
+  },
+  "derived": {
+    "snow_crevice_west": { "source": "snow_crevice_east", "transform": "flipX", "edge": ["west"] },
+    "snow_cliff_east": { "source": "snow_cliff_west", "transform": "flipX", "edge": ["east"] }
+  }
+}
