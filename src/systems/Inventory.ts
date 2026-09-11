@@ -50,6 +50,28 @@ export function removeFromSlot(player: Player, slotIndex: number, qty: number) {
   bus.emit('inventoryChanged', undefined);
 }
 
+/** Move, merge, or swap two inventory slots without changing item ownership. */
+export function moveInventorySlot(player: Player, fromIndex: number, toIndex: number): void {
+  if (fromIndex === toIndex) return;
+  if (fromIndex < 0 || toIndex < 0 || fromIndex >= player.inventory.length || toIndex >= player.inventory.length) return;
+
+  const from = player.inventory[fromIndex];
+  if (!from) return;
+  const to = player.inventory[toIndex];
+
+  if (!to) {
+    player.inventory[toIndex] = from;
+    player.inventory[fromIndex] = null;
+  } else if (to.itemId === from.itemId && getItem(from.itemId).stackable) {
+    to.qty += from.qty;
+    player.inventory[fromIndex] = null;
+  } else {
+    player.inventory[toIndex] = from;
+    player.inventory[fromIndex] = to;
+  }
+  bus.emit('inventoryChanged', undefined);
+}
+
 export function equip(player: Player, slotIndex: number) {
   const slot = player.inventory[slotIndex];
   if (!slot) return;
