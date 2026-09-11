@@ -17,6 +17,13 @@ function faceHorizontally(monster: Monster, dx: number) {
 }
 
 function findBestArrow(player: Player): string | null {
+  const readied = player.equipment.ammo;
+  if (readied) {
+    if (player.countItem(readied) > 0 && getItem(readied).bonuses?.rangedStrength !== undefined) return readied;
+    delete player.equipment.ammo;
+    bus.emit('equipmentChanged', undefined);
+  }
+
   let best: string | null = null;
   let bestBonus = -1;
   for (const slot of player.inventory) {
@@ -101,6 +108,10 @@ function resolvePlayerHit(player: Player, monster: Monster) {
     }
     if (!arrow) { log(`You have no arrows left!`, 'warning'); player.combatStyle = 'melee'; return; }
     removeItem(player, arrow, 1);
+    if (player.equipment.ammo === arrow && player.countItem(arrow) === 0) {
+      delete player.equipment.ammo;
+      bus.emit('equipmentChanged', undefined);
+    }
     atkLevel = player.level('ranged');
     atkBonus = equippedBonus(player, 'rangedAttack');
     maxHit = CM.maxHitRanged(atkLevel, equippedBonus(player, 'rangedStrength'));
