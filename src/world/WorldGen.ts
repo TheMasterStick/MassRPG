@@ -3,10 +3,10 @@ import { getEditorMarkers } from './EditorWorld';
 import { WORLD_SIZE } from './AeldorData';
 
 /**
- * Geography is entirely hand-authored. This class only supplies a deliberately
- * sparse ambient population layer in otherwise untouched authored tiles:
- * occasional trees and creatures. Exact editor resources/spawners always win,
- * and an explicit null in the editor suppresses this fallback for that tile.
+ * Geography is entirely hand-authored. This class supplies only a deterministic
+ * ambient dressing/population layer over that authored geography: scattered
+ * trees, tiny camp POIs, and sparse creatures. Exact editor resources/spawners
+ * always win, and an explicit null in the editor suppresses the fallback.
  */
 export class WorldGen {
   readonly seed: number;
@@ -30,8 +30,33 @@ export class WorldGen {
     return false;
   }
 
-  villageStructureAt(_x: number, _y: number): StructureType | null {
-    return null;
+  /**
+   * Rare deterministic micro-POIs. One candidate is chosen per 96x96 world-cell,
+   * so camps feel scattered rather than forming procedural clutter. These are
+   * intentionally only campfires for now: they add landmarks without blocking
+   * travel or pretending to be hand-authored towns/ruins.
+   */
+  villageStructureAt(x: number, y: number, tile: TileType): StructureType | null {
+    if (
+      tile !== 'grass'
+      && tile !== 'plains'
+      && tile !== 'forest'
+      && tile !== 'taiga'
+      && tile !== 'swamp'
+      && tile !== 'desert'
+      && tile !== 'snow'
+    ) return null;
+
+    const cellSize = 96;
+    const cellX = Math.floor(x / cellSize);
+    const cellY = Math.floor(y / cellSize);
+    const margin = 8;
+    const usable = cellSize - margin * 2;
+    const anchorX = cellX * cellSize + margin + Math.floor(this.roll(cellX, cellY, 61) * usable);
+    const anchorY = cellY * cellSize + margin + Math.floor(this.roll(cellX, cellY, 62) * usable);
+    if (x !== anchorX || y !== anchorY) return null;
+    if (this.isVillage(x, y)) return null;
+    return 'campfire';
   }
 
   roofCellAt(_x: number, _y: number): {
@@ -52,9 +77,9 @@ export class WorldGen {
   }
 
   /**
-   * Sparse deterministic ambient trees. The probabilities are intentionally
-   * low: even forests remain easy to walk through, while open country only
-   * receives an occasional tree for visual variety and early Woodcutting.
+   * Deterministic ambient trees. Forests look wooded without becoming walls,
+   * while grass/plains get enough isolated trees to break up the monotony and
+   * provide early Woodcutting. Even the densest biome is under 2% occupied.
    */
   resourceAt(
     x: number,
@@ -62,11 +87,11 @@ export class WorldGen {
     getTile: (x: number, y: number) => TileType,
   ): ResourceType | null {
     const tile = getTile(x, y);
-    const chance = tile === 'forest' ? 0.0045
-      : tile === 'taiga' ? 0.0035
-      : tile === 'swamp' ? 0.0010
-      : tile === 'grass' ? 0.00022
-      : tile === 'plains' ? 0.00018
+    const chance = tile === 'forest' ? 0.018
+      : tile === 'taiga' ? 0.014
+      : tile === 'swamp' ? 0.008
+      : tile === 'grass' ? 0.0030
+      : tile === 'plains' ? 0.0024
       : 0;
     if (chance <= 0 || this.roll(x, y, 11) >= chance) return null;
 
@@ -90,10 +115,10 @@ export class WorldGen {
   }
 
   /**
-   * Very sparse deterministic wildlife/enemy population. In a typical 5x5
-   * active-chunk area this should amount to only a few ambient creatures, not
-   * the old wall-to-wall combat field. Strong monsters are mostly left to the
-   * user's authored spawn anchors.
+   * Very sparse deterministic wildlife/enemy population. In a typical active
+   * area this should amount to only a few ambient creatures, not the old
+   * wall-to-wall combat field. Strong monsters are mostly left to authored
+   * spawn anchors.
    */
   monsterSpawnAt(x: number, y: number, tile: TileType): string | null {
     let chance = 0;
