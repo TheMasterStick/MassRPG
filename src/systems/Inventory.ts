@@ -72,6 +72,29 @@ function chooseSlot(player: Player, requested: EquipSlot): EquipSlot {
   return 'ring';
 }
 
+function equipAmmo(player: Player, slotIndex: number) {
+  const slot = player.inventory[slotIndex];
+  if (!slot) return;
+  const def = getItem(slot.itemId);
+  if (def.equipSlot !== 'ammo') return;
+
+  const oldAmmoId = player.equipment.ammo;
+  const oldAmmoQty = player.equippedAmmoQty;
+
+  player.inventory[slotIndex] = null;
+  if (oldAmmoId === slot.itemId) {
+    player.equippedAmmoQty += slot.qty;
+  } else {
+    player.equipment.ammo = slot.itemId;
+    player.equippedAmmoQty = slot.qty;
+    if (oldAmmoId && oldAmmoQty > 0) addItem(player, oldAmmoId, oldAmmoQty);
+  }
+
+  bus.emit('equipmentChanged', undefined);
+  bus.emit('inventoryChanged', undefined);
+  log(`You equip ${slot.qty} ${def.name}${slot.qty === 1 ? '' : 's'}.`, 'info');
+}
+
 export function equip(player: Player, slotIndex: number) {
   const slot = player.inventory[slotIndex];
   if (!slot) return;
@@ -79,9 +102,7 @@ export function equip(player: Player, slotIndex: number) {
   if (!def.equipSlot) { log(`You can't wear that.`, 'warning'); return; }
 
   if (def.equipSlot === 'ammo') {
-    player.equipment.ammo = slot.itemId;
-    bus.emit('equipmentChanged', undefined);
-    log(`You ready the ${def.name}.`, 'info');
+    equipAmmo(player, slotIndex);
     return;
   }
 
@@ -116,33 +137,48 @@ export function equip(player: Player, slotIndex: number) {
 export function unequip(player: Player, slot: EquipSlot) {
   const itemId = player.equipment[slot];
   if (!itemId) return;
+
   if (slot === 'ammo') {
+    const qty = player.equippedAmmoQty;
+    const canStore = player.inventory.some((entry) => entry?.itemId === itemId) || player.findEmptySlot() !== -1;
+    if (qty > 0 && !canStore) { log(`Your inventory is too full.`, 'warning'); return; }
     delete player.equipment.ammo;
+    player.equippedAmmoQty = 0;
+    if (qty > 0) addItem(player, itemId, qty);
     bus.emit('equipmentChanged', undefined);
     return;
   }
+
   if (player.findEmptySlot() === -1) { log(`Your inventory is too full.`, 'warning'); return; }
   delete player.equipment[slot];
   addItem(player, itemId, 1);
   bus.emit('equipmentChanged', undefined);
 }
 
+export function consumeEquippedAmmo(player: Player, qty = 1): boolean {
+  if (!player.equipment.ammo || player.equippedAmmoQty < qty) return false;
+  player.equippedAmmoQty -= qty;
+  if (player.equippedAmmoQty <= 0) {
+    player.equippedAmmoQty = 0;
+    delete player.equipment.ammo;
+  }
+  bus.emit('equipmentChanged', undefined);
+  return true;
+}
+
 export function dropSlot(player: Player, slotIndex: number) {
   const slot = player.inventory[slotIndex];
   if (!slot) return;
   player.inventory[slotIndex] = null;
-  if (player.equipment.ammo === slot.itemId && player.countItem(slot.itemId) === 0) {
-    delete player.equipment.ammo;
-    bus.emit('equipmentChanged', undefined);
-  }
   log(`You drop the ${getItem(slot.itemId).name}.`, 'info');
   bus.emit('inventoryChanged', undefined);
 }
 
 export function equippedBonus(player: Player, key: 'attack' | 'strength' | 'defence' | 'rangedAttack' | 'rangedStrength' | 'magic'): number {
   let total = 0;
-  for (const itemId of Object.values(player.equipment)) {
+  for (const [slot, itemId] of Object.entries(player.equipment)) {
     if (!itemId) continue;
+    if (slot === 'ammo' && player.equippedAmmoQty <= 0) continue;
     total += getItem(itemId).bonuses?.[key] ?? 0;
   }
   return total;
