@@ -9,18 +9,34 @@ interface ElevationArt {
   flipX?: boolean;
 }
 
-function elevationTheme(tile: TileType): ElevationTheme | null {
-  if (tile === 'grass' || tile === 'plains') return 'grass';
-  if (tile === 'snow') return 'snow';
+function directElevationTheme(tile: TileType): ElevationTheme | null {
+  if (tile === 'grass' || tile === 'plains' || tile === 'forest' || tile === 'swamp') return 'grass';
+  if (tile === 'snow' || tile === 'taiga') return 'snow';
   if (tile === 'desert') return 'desert';
   return null;
 }
 
+/** Mountain tiles borrow the dominant surrounding biome's approved cliff set. */
+function elevationTheme(tile: TileType, neighbours: TileType[]): ElevationTheme | null {
+  const direct = directElevationTheme(tile);
+  if (direct) return direct;
+  if (tile !== 'mountain') return null;
+
+  const counts: Record<ElevationTheme, number> = { grass: 0, snow: 0, desert: 0 };
+  for (const neighbour of neighbours) {
+    const theme = directElevationTheme(neighbour);
+    if (theme) counts[theme]++;
+  }
+  if (counts.snow > counts.grass && counts.snow >= counts.desert) return 'snow';
+  if (counts.desert > counts.grass && counts.desert > counts.snow) return 'desert';
+  return counts.grass > 0 ? 'grass' : null;
+}
+
 /**
- * Match the approved sprite catalogue: crevice art lives on the lower tile when
- * the high ground is north/east/west, while cliff art lives on the high tile
- * when the drop is south/east/west. East/west-only missing orientations are
- * mirrored from their approved canonical counterpart.
+ * Match the approved sprite catalogue. Besides raw two-level drops, a +1 -> +2
+ * transition is also a true cliff because +2 is where mountain-barrier terrain
+ * begins. Same-height path-vs-barrier transitions stay on the simple fallback
+ * line so mountain passes do not get painted over by misleading cliff faces.
  */
 function chooseElevationArt(
   here: number,
@@ -28,13 +44,23 @@ function chooseElevationArt(
   east: number,
   south: number,
   west: number,
+  hereBarrier: boolean,
+  northBarrier: boolean,
+  eastBarrier: boolean,
+  southBarrier: boolean,
+  westBarrier: boolean,
 ): ElevationArt | null {
-  const northHigher = north - here >= 2;
-  const eastHigher = east - here >= 2;
-  const westHigher = west - here >= 2;
-  const southLower = here - south >= 2;
-  const eastLower = here - east >= 2;
-  const westLower = here - west >= 2;
+  const higher = (other: number, otherBarrier: boolean) =>
+    other - here >= 2 || (other - here >= 1 && otherBarrier && !hereBarrier);
+  const lower = (other: number, otherBarrier: boolean) =>
+    here - other >= 2 || (here - other >= 1 && hereBarrier && !otherBarrier);
+
+  const northHigher = higher(north, northBarrier);
+  const eastHigher = higher(east, eastBarrier);
+  const westHigher = higher(west, westBarrier);
+  const southLower = lower(south, southBarrier);
+  const eastLower = lower(east, eastBarrier);
+  const westLower = lower(west, westBarrier);
 
   if (northHigher && eastHigher) return { suffix: 'crevice_north_east' };
   if (northHigher && westHigher) return { suffix: 'crevice_north_west' };
@@ -96,16 +122,20 @@ export function drawElevationAndLinks(canvas: HTMLCanvasElement, world: World, p
       const sx = tx * TILE_SIZE - camX;
       const sy = ty * TILE_SIZE - camY;
       const hereTile = world.getTile(tx, ty);
+      const northTile = world.getTile(tx, ty - 1);
       const eastTile = world.getTile(tx + 1, ty);
       const southTile = world.getTile(tx, ty + 1);
+      const westTile = world.getTile(tx - 1, ty);
       const here = world.getElevation(tx, ty);
       const north = world.getElevation(tx, ty - 1);
       const east = world.getElevation(tx + 1, ty);
       const south = world.getElevation(tx, ty + 1);
       const west = world.getElevation(tx - 1, ty);
       const hereBarrier = isHighElevationBarrier(here, hereTile, world.activePlane);
+      const northBarrier = isHighElevationBarrier(north, northTile, world.activePlane);
       const eastBarrier = isHighElevationBarrier(east, eastTile, world.activePlane);
       const southBarrier = isHighElevationBarrier(south, southTile, world.activePlane);
+      const westBarrier = isHighElevationBarrier(west, westTile, world.activePlane);
 
       if (world.activePlane === 0 && here > 0) {
         const alpha = hereBarrier ? Math.min(0.16, 0.075 + Math.max(0, here - 2) * 0.02) : 0.035;
@@ -118,14 +148,17 @@ export function drawElevationAndLinks(canvas: HTMLCanvasElement, world: World, p
 
       let usedSprite = false;
       if (world.activePlane === 0) {
-        const theme = elevationTheme(hereTile);
-        const art = chooseElevationArt(here, north, east, south, west);
+        const theme = elevationTheme(hereTile, [northTile, eastTile, southTile, westTile]);
+        const art = chooseElevationArt(
+          here, north, east, south, west,
+          hereBarrier, northBarrier, eastBarrier, southBarrier, westBarrier,
+        );
         if (theme && art) usedSprite = drawElevationSprite(ctx, theme, art, sx, sy);
       }
 
       // Keep the old edge treatment for terrain that does not yet have approved
       // cliff art, for loading/missing images, and for authored pass/barrier
-      // transitions that are not caused by a >=2 raw elevation difference.
+      // transitions that are not caused by a real height step.
       if (!usedSprite) {
         const eastEdge = Math.abs(east - here) >= 2 || hereBarrier !== eastBarrier;
         if (eastEdge) {
