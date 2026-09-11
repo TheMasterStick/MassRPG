@@ -7,7 +7,7 @@ import { addItem, equip } from './systems/Inventory';
 import { hasSave, loadGame, deleteSave } from './systems/Save';
 import { el } from './ui/dom';
 import { TWIN_LANDS_SEED, WORLD_SIZE } from './world/AeldorData';
-import { initializeEditorWorldStorage } from './world/EditorWorld';
+import { getEditorMarkers, initializeEditorWorldStorage } from './world/EditorWorld';
 import { launchWorldEditor } from './editor/WorldEditor';
 
 const app = document.getElementById('app')!;
@@ -36,9 +36,23 @@ function launchGame(world: World, player: Player) {
   (window as unknown as { __game: Game }).__game = game;
 }
 
+function placeNewPlayerAtAuthoredStart(player: Player) {
+  const markers = getEditorMarkers(WORLD_SIZE, 0);
+  const capital = markers.find((m) => m.name.trim().toLowerCase() === 'capital city')
+    ?? markers.find((m) => m.type === 'city')
+    ?? markers.find((m) => m.type === 'town')
+    ?? markers[0];
+  if (!capital) return;
+  player.plane = 0;
+  player.x = capital.x;
+  player.y = capital.y;
+  player.respawnPoint = { x: capital.x, y: capital.y };
+}
+
 function newGame() {
   const world = new World(TWIN_LANDS_SEED);
   const player = new Player();
+  placeNewPlayerAtAuthoredStart(player);
   giveStarterKit(player);
   launchGame(world, player);
 }
@@ -79,7 +93,7 @@ function buildStartScreen() {
 
   box.append(el('div', {
     className: 'hint',
-    text: 'The base world is a blank 180,000x180,000 ocean. Build terrain, elevation, settlements, mines, caves, structures and monster spawns in World Editor, then return here to play-test it.',
+    text: 'The playable world is the World Editor data. Import your Twin Lands JSON there, then Begin Adventure to play-test the same authored terrain, markers, resources and spawns.',
   }));
 
   startScreen.append(box);
