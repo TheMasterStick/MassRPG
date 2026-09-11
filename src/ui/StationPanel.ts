@@ -1,6 +1,12 @@
 import { el, clear } from './dom';
 import type { Game } from '../core/Game';
-import { recipesForPlayerAt, startProduction, type RecipeAvailability } from '../systems/Production';
+import {
+  inventoryRecipesForItems,
+  recipesForItemAt,
+  recipesForPlayerAt,
+  startProduction,
+  type RecipeAvailability,
+} from '../systems/Production';
 import { getItem } from '../data/items';
 import { bus } from '../core/EventBus';
 import type { StructureType } from '../world/types';
@@ -23,6 +29,7 @@ export function buildStationPanel(root: HTMLElement, game: Game) {
 
   let currentX = 0;
   let currentY = 0;
+  let entriesForCurrentView: () => RecipeAvailability[] = () => [];
 
   function makeRow(entry: RecipeAvailability): HTMLElement {
     const r = entry.recipe;
@@ -46,20 +53,41 @@ export function buildStationPanel(root: HTMLElement, game: Game) {
 
   function render() {
     clear(list);
-    for (const entry of recipesForPlayerAt(player, world, currentX, currentY)) {
-      list.append(makeRow(entry));
-    }
+    const entries = entriesForCurrentView();
+    for (const entry of entries) list.append(makeRow(entry));
+    if (entries.length === 0) list.append(el('div', { className: 'tooltip-desc', text: 'There is nothing you can make with that here.' }));
+  }
+
+  function show(viewTitle: string, source: () => RecipeAvailability[]): boolean {
+    const entries = source();
+    if (entries.length === 0) return false;
+    title.textContent = viewTitle;
+    entriesForCurrentView = source;
+    render();
+    panel.classList.remove('hidden');
+    return true;
   }
 
   function open(x: number, y: number, type: StructureType) {
     currentX = x; currentY = y;
-    title.textContent = STATION_NAMES[type] ?? 'Crafting';
-    render();
-    panel.classList.remove('hidden');
+    show(STATION_NAMES[type] ?? 'Crafting', () => recipesForPlayerAt(player, world, currentX, currentY));
+  }
+
+  function openForItem(x: number, y: number, type: StructureType, itemId: string): boolean {
+    currentX = x; currentY = y;
+    return show(`${STATION_NAMES[type] ?? 'Crafting'} · ${getItem(itemId).name}`, () => recipesForItemAt(player, world, currentX, currentY, itemId));
+  }
+
+  function openInventory(itemIds: string[]): boolean {
+    currentX = Math.round(player.x);
+    currentY = Math.round(player.y);
+    const names = itemIds.map((itemId) => getItem(itemId).name);
+    const viewTitle = names.length > 1 ? `${names[0]} + ${names[1]}` : `Craft · ${names[0]}`;
+    return show(viewTitle, () => inventoryRecipesForItems(player, itemIds));
   }
 
   bus.on('inventoryChanged', () => { if (!panel.classList.contains('hidden')) render(); });
   bus.on('skillsChanged', () => { if (!panel.classList.contains('hidden')) render(); });
 
-  return { panel, open };
+  return { panel, open, openForItem, openInventory };
 }
