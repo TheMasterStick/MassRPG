@@ -11,6 +11,7 @@ import { getEditorMarkers, initializeEditorWorldStorage } from './world/EditorWo
 import { ensureCanonicalWorldInstalled } from './world/CanonicalWorld';
 import { launchWorldEditor } from './editor/WorldEditor';
 import { registerUtilityTools } from './data/tools';
+import type { StructureType } from './world/types';
 
 registerUtilityTools();
 
@@ -18,6 +19,17 @@ const app = document.getElementById('app')!;
 const startScreen = document.getElementById('start-screen')!;
 const uiRoot = document.getElementById('ui-root')!;
 const canvas = document.getElementById('game-canvas') as HTMLCanvasElement;
+
+const STARTER_SERVICE_RADIUS = 12;
+const STARTER_SERVICES: { type: StructureType; dx: number; dy: number }[] = [
+  { type: 'general_store', dx: 4, dy: 0 },
+  { type: 'bank_chest', dx: -4, dy: 0 },
+  { type: 'cooking_range', dx: 0, dy: 4 },
+  { type: 'furnace', dx: 6, dy: 4 },
+  { type: 'anvil', dx: 7, dy: 4 },
+  { type: 'loom', dx: -6, dy: 4 },
+  { type: 'tannery', dx: -7, dy: 4 },
+];
 
 function giveStarterKit(player: Player) {
   addItem(player, 'bronze_hatchet', 1);
@@ -53,10 +65,37 @@ function placeNewPlayerAtAuthoredStart(player: Player) {
   player.respawnPoint = { x: capital.x, y: capital.y, plane: 0 };
 }
 
+function hasNearbyStructure(world: World, x: number, y: number, type: StructureType): boolean {
+  for (let dy = -STARTER_SERVICE_RADIUS; dy <= STARTER_SERVICE_RADIUS; dy++) {
+    for (let dx = -STARTER_SERVICE_RADIUS; dx <= STARTER_SERVICE_RADIUS; dx++) {
+      if (world.getStructure(x + dx, y + dy, 0) === type) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Settlement markers can exist before their buildings are hand-authored. Keep
+ * a fresh test character playable by filling only missing core services near
+ * the authored start. Once a real service is drawn in the editor, its fallback
+ * is no longer placed.
+ */
+function ensureStarterSettlementServices(world: World, player: Player) {
+  const x = Math.round(player.x);
+  const y = Math.round(player.y);
+  for (const service of STARTER_SERVICES) {
+    if (hasNearbyStructure(world, x, y, service.type)) continue;
+    const sx = x + service.dx;
+    const sy = y + service.dy;
+    if (!world.getStructure(sx, sy, 0)) world.placeStructure(sx, sy, service.type);
+  }
+}
+
 function newGame() {
   const world = new World(TWIN_LANDS_SEED);
   const player = new Player();
   placeNewPlayerAtAuthoredStart(player);
+  ensureStarterSettlementServices(world, player);
   giveStarterKit(player);
   launchGame(world, player);
 }
