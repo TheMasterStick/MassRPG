@@ -122,7 +122,6 @@ function gatheringUnlocks(skillId: SkillId): UnlockEntry[] {
         detail: 'Requires a pickaxe.',
       }));
     return [
-      { level: 1, name: 'Stone', category: 'Materials', detail: 'Recovered as a byproduct when mining rock.' },
       { level: 1, name: 'Mine Copper ore', category: 'Ores', detail: 'Requires a pickaxe.' },
       { level: 1, name: 'Mine Tin ore', category: 'Ores', detail: 'Requires a pickaxe.' },
       { level: 20, name: 'Mine Silver ore', category: 'Ores', detail: 'Requires a pickaxe.' },
