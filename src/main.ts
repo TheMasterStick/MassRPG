@@ -11,9 +11,11 @@ import { getEditorMarkers, initializeEditorWorldStorage } from './world/EditorWo
 import { ensureCanonicalWorldInstalled } from './world/CanonicalWorld';
 import { launchWorldEditor } from './editor/WorldEditor';
 import { registerUtilityTools } from './data/tools';
+import { registerArrowCrafting } from './data/arrowCrafting';
 import type { StructureType } from './world/types';
 
 registerUtilityTools();
+registerArrowCrafting();
 
 const app = document.getElementById('app')!;
 const startScreen = document.getElementById('start-screen')!;
