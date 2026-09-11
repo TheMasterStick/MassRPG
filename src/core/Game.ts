@@ -127,17 +127,22 @@ export class Game {
   }
 
   private handleKeyboardMovement() {
-    if (this.player.action || this.player.path.length > 0) return;
+    if (this.player.action) return;
     let dx = 0, dy = 0;
     if (this.keys.has('w') || this.keys.has('arrowup')) dy -= 1;
     if (this.keys.has('s') || this.keys.has('arrowdown')) dy += 1;
     if (this.keys.has('a') || this.keys.has('arrowleft')) dx -= 1;
     if (this.keys.has('d') || this.keys.has('arrowright')) dx += 1;
     if (dx === 0 && dy === 0) return;
-    const cur = { x: Math.round(this.player.x), y: Math.round(this.player.y) };
-    const next = { x: cur.x + dx, y: cur.y + dy };
+
+    // Direct keyboard movement always wins over a queued mouse path. This keeps
+    // WASD responsive even after a long click-to-move command.
+    this.player.path = [];
     this.pendingInteraction = null;
     this.player.combatTargetId = null;
+
+    const cur = { x: Math.round(this.player.x), y: Math.round(this.player.y) };
+    const next = { x: cur.x + dx, y: cur.y + dy };
     if (this.world.canStep(cur.x, cur.y, next.x, next.y)) {
       this.player.path = [next];
     } else if (dx !== 0 && this.world.canStep(cur.x, cur.y, cur.x + dx, cur.y)) {
@@ -161,6 +166,8 @@ export class Game {
 
   private executeInteraction(pi: PendingInteraction) {
     const { world, player } = this;
+    player.facing = facingFromDelta(pi.x - player.x, pi.y - player.y, player.facing);
+
     if (pi.type === 'gather') {
       const resource = world.getResourceNode(pi.x, pi.y);
       if (!resource || !world.isResourceAvailable(pi.x, pi.y)) { log('There is nothing left to gather there.', 'info'); return; }
@@ -245,13 +252,9 @@ export class Game {
     const monster = this.world.monsters.find((m) => m.isAlive() && Math.round(m.x) === tile.x && Math.round(m.y) === tile.y);
     if (monster) {
       this.player.action = null;
-      const start = { x: Math.round(this.player.x), y: Math.round(this.player.y) };
-      if (!isSameOrAdjacent(start, tile)) {
-        const target = nearestAdjacentWalkable(this.world, start, tile);
-        if (target) { const path = bfsPath(this.world, start, target); if (path) this.player.path = path; }
-      }
-      playerAttack(this.player, monster);
+      this.player.path = [];
       this.pendingInteraction = null;
+      playerAttack(this.player, monster);
       return;
     }
 
