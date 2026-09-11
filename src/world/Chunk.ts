@@ -1,7 +1,8 @@
 import { CHUNK_SIZE } from '../core/constants';
 import type { ResourceType, StructureType, TileType, WorldPlane } from './types';
 import { WorldGen } from './WorldGen';
-import { baseTileForPlane, getEditorCell, getEditorTerrainStrokeAt, hasOwnEditorField } from './EditorWorld';
+import { baseTileForPlane, getEditorCell, hasOwnEditorField } from './EditorWorld';
+import { getIndexedTerrainStrokeAt } from './EditorSpatialIndex';
 import { WORLD_SIZE } from './AeldorData';
 
 export interface InventorySlotData { itemId: string; qty: number }
@@ -41,7 +42,7 @@ export class Chunk {
     const getTile = (wx: number, wy: number): TileType => {
       const edit = getEditorCell(wx, wy, WORLD_SIZE, plane);
       if (edit?.tile) return edit.tile;
-      const stroke = getEditorTerrainStrokeAt(wx, wy, WORLD_SIZE, plane);
+      const stroke = getIndexedTerrainStrokeAt(wx, wy, WORLD_SIZE, plane);
       return stroke?.tile ?? baseTileForPlane(plane);
     };
 
@@ -50,7 +51,7 @@ export class Chunk {
         const wx = cx * CHUNK_SIZE + lx;
         const wy = cy * CHUNK_SIZE + ly;
         const edit = getEditorCell(wx, wy, WORLD_SIZE, plane);
-        const terrainStroke = edit?.tile ? undefined : getEditorTerrainStrokeAt(wx, wy, WORLD_SIZE, plane);
+        const terrainStroke = edit?.tile ? undefined : getIndexedTerrainStrokeAt(wx, wy, WORLD_SIZE, plane);
         const tile = edit?.tile ?? terrainStroke?.tile ?? baseTileForPlane(plane);
         this.tiles[ly * CHUNK_SIZE + lx] = tile;
         const key = localKey(lx, ly);
