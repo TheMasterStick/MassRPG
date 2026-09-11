@@ -58,7 +58,7 @@ export class Chunk {
 
         let structure: StructureType | null = null;
         if (hasOwnEditorField(edit, 'structure')) structure = edit?.structure ?? null;
-        else structure = gen.villageStructureAt(wx, wy);
+        else structure = gen.villageStructureAt(wx, wy, tile);
         if (structure) {
           this.naturalStructures.set(key, structure);
           continue;
