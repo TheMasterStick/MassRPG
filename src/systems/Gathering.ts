@@ -32,8 +32,8 @@ for (const t of TREE_TIERS) {
 }
 
 const MINING: Record<string, GatherOutcome> = {
-  rock_copper: { skill: 'mining', levelRequired: 1, xp: 17.5, itemId: 'copper_ore', qty: 1, toolIds: pickaxes(), depleteChance: 0.3, respawnTicks: RESOURCE_RESPAWN_TICKS },
-  rock_tin: { skill: 'mining', levelRequired: 1, xp: 17.5, itemId: 'tin_ore', qty: 1, toolIds: pickaxes(), depleteChance: 0.3, respawnTicks: RESOURCE_RESPAWN_TICKS },
+  rock_copper: { skill: 'mining', levelRequired: 1, xp: 18, itemId: 'copper_ore', qty: 1, toolIds: pickaxes(), depleteChance: 0.3, respawnTicks: RESOURCE_RESPAWN_TICKS },
+  rock_tin: { skill: 'mining', levelRequired: 1, xp: 18, itemId: 'tin_ore', qty: 1, toolIds: pickaxes(), depleteChance: 0.3, respawnTicks: RESOURCE_RESPAWN_TICKS },
   rock_iron: { skill: 'mining', levelRequired: 15, xp: 35, itemId: 'iron_ore', qty: 1, toolIds: pickaxes(), depleteChance: 0.25, respawnTicks: RESOURCE_RESPAWN_TICKS },
   rock_coal: { skill: 'mining', levelRequired: 30, xp: 50, itemId: 'coal', qty: 1, toolIds: pickaxes(), depleteChance: 0.2, respawnTicks: RESOURCE_RESPAWN_TICKS },
   rock_gold: { skill: 'mining', levelRequired: 40, xp: 65, itemId: 'gold_ore', qty: 1, toolIds: pickaxes(), depleteChance: 0.18, respawnTicks: RESOURCE_RESPAWN_TICKS },
