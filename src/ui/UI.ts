@@ -10,6 +10,8 @@ import { initContextPopup, showContextPopup } from './ContextPopup';
 import type { StructureType } from '../world/types';
 import { log } from '../core/EventBus';
 
+const CRAFTING_STRUCTURES: StructureType[] = ['furnace', 'anvil', 'cooking_range', 'campfire', 'tannery', 'loom'];
+
 export function initUI(root: HTMLElement, game: Game) {
   initContextPopup(root);
   game.onOpenContextMenu = (x, y, items) => showContextPopup(x, y, items);
@@ -24,6 +26,26 @@ export function initUI(root: HTMLElement, game: Game) {
   function hideFloatingExcept(keep?: HTMLElement) {
     for (const p of floatingPanels) if (p !== keep) p.classList.add('hidden');
   }
+
+  game.onUseInventoryItems = (firstItemId, secondItemId) => {
+    const opened = station.openInventory([firstItemId, secondItemId]);
+    if (opened) hideFloatingExcept(station.panel);
+    return opened;
+  };
+
+  game.onCraftInventoryItem = (itemId) => {
+    const opened = station.openInventory([itemId]);
+    if (opened) hideFloatingExcept(station.panel);
+    return opened;
+  };
+
+  game.onUseInventoryItemOnWorld = (itemId, x, y) => {
+    const structure = game.world.getStructure(x, y);
+    if (!structure || !CRAFTING_STRUCTURES.includes(structure)) return false;
+    const opened = station.openForItem(x, y, structure, itemId);
+    if (opened) hideFloatingExcept(station.panel);
+    return opened;
+  };
 
   game.onToggleWorldMap = () => {
     if (worldMap.panel.classList.contains('hidden')) {
@@ -41,7 +63,7 @@ export function initUI(root: HTMLElement, game: Game) {
     } else if (type === 'general_store') {
       hideFloatingExcept(shop.panel);
       shop.open();
-    } else if (['furnace', 'anvil', 'cooking_range', 'campfire', 'tannery', 'loom'].includes(type)) {
+    } else if (CRAFTING_STRUCTURES.includes(type)) {
       hideFloatingExcept(station.panel);
       station.open(x, y, type);
     } else if (type === 'bed') {
