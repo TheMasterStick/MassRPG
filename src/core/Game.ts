@@ -142,8 +142,6 @@ export class Game {
     if (this.keys.has('d') || this.keys.has('arrowright')) dx += 1;
     if (dx === 0 && dy === 0) return;
 
-    // Direct keyboard movement is an explicit interruption: cancel gathering,
-    // production, combat pursuit, pending interactions and mouse paths first.
     this.player.action = null;
     this.player.path = [];
     this.pendingInteraction = null;
@@ -172,15 +170,11 @@ export class Game {
     this.executeInteraction(pi);
   }
 
-  private faceGatheringTarget(x: number, y: number) {
+  private faceGatheringTarget(x: number, _y: number) {
     const dx = x - this.player.x;
     if (dx < 0) this.player.facing = 'left';
     else if (dx > 0) this.player.facing = 'right';
-    else if (this.player.facing !== 'left' && this.player.facing !== 'right') {
-      // With no dedicated north/south tool art yet, a directly vertical target
-      // uses the existing right-facing gather animation rather than dropping to idle.
-      this.player.facing = 'right';
-    }
+    else if (this.player.facing !== 'left' && this.player.facing !== 'right') this.player.facing = 'right';
   }
 
   private executeInteraction(pi: PendingInteraction) {
@@ -272,6 +266,21 @@ export class Game {
     return this.world.monsters.find((m) => m.isAlive() && Math.round(m.x) === tile.x && Math.round(m.y) === tile.y);
   }
 
+  private activateResource(tile: Point, resource: ResourceType) {
+    if (!this.world.isResourceAvailable(tile.x, tile.y)) {
+      log(`The ${resourceLabel(resource)} is exhausted.`, 'info');
+      return;
+    }
+    if (resource === 'farm_patch' || resource === 'herb_patch') {
+      const crop = this.world.getCropState(tile.x, tile.y);
+      if (crop && crop.ready) this.moveAdjacentThen({ type: 'harvest', x: tile.x, y: tile.y });
+      else if (crop) log('This patch is still growing.', 'info');
+      else this.moveAdjacentThen({ type: 'plant_menu', x: tile.x, y: tile.y });
+    } else {
+      this.moveAdjacentThen({ type: 'gather', x: tile.x, y: tile.y });
+    }
+  }
+
   private handleTileClick(tile: Point) {
     if (this.buildMode) {
       placeStructure(this.world, this.player, this.buildMode, tile.x, tile.y);
@@ -300,34 +309,27 @@ export class Game {
       return;
     }
 
-    if (this.world.isResourceAvailable(tile.x, tile.y)) {
-      const res = this.world.getResourceNode(tile.x, tile.y)!;
-      if (res === 'farm_patch' || res === 'herb_patch') {
-        const crop = this.world.getCropState(tile.x, tile.y);
-        if (crop && crop.ready) this.moveAdjacentThen({ type: 'harvest', x: tile.x, y: tile.y });
-        else if (crop) log('This patch is still growing.', 'info');
-        else this.moveAdjacentThen({ type: 'plant_menu', x: tile.x, y: tile.y });
-      } else {
-        this.moveAdjacentThen({ type: 'gather', x: tile.x, y: tile.y });
-      }
+    const resource = this.world.getResourceNode(tile.x, tile.y);
+    if (resource && this.world.isResourceAvailable(tile.x, tile.y)) {
+      this.activateResource(tile, resource);
       return;
     }
     this.moveTo(tile);
   }
 
-  private resourceActionLabel(resource: ResourceType): string {
+  private resourceActionLabel(resource: ResourceType, tile: Point): string {
     if (resource.startsWith('tree_')) {
-      const kind = resource.slice('tree_'.length);
-      return kind === 'normal' ? 'Cut Tree' : `Cut ${kind.charAt(0).toUpperCase()}${kind.slice(1)}`;
+      const name = resourceLabel(resource).replace(/ tree$/i, '');
+      return `Cut ${name}`;
     }
     if (resource.startsWith('rock_')) {
-      const kind = resource.slice('rock_'.length).replace(/_/g, ' ');
-      return `Mine ${kind.replace(/\b\w/g, (c) => c.toUpperCase())}`;
+      const name = resourceLabel(resource).replace(/ rock$/i, '');
+      return `Mine ${name}`;
     }
     if (resource.startsWith('fishing_')) return 'Fish';
     if (resource === 'flax_plant') return 'Pick Flax';
     if (resource === 'farm_patch' || resource === 'herb_patch') {
-      const crop = this.world.getCropState(Math.round(this.hoverTile?.x ?? this.player.x), Math.round(this.hoverTile?.y ?? this.player.y));
+      const crop = this.world.getCropState(tile.x, tile.y);
       return crop?.ready ? 'Harvest' : `Use ${resourceLabel(resource)}`;
     }
     return `Gather ${resourceLabel(resource)}`;
@@ -381,7 +383,7 @@ export class Game {
         onClick: () => this.moveAdjacentThen({ type: 'structure', x: tile.x, y: tile.y, structureType: structure }),
       });
     } else if (resource) {
-      items.push({ label: this.resourceActionLabel(resource), onClick: () => this.handleTileClick(tile) });
+      items.push({ label: this.resourceActionLabel(resource, tile), onClick: () => this.activateResource(tile, resource) });
     }
 
     const occupied = !!monster || !!structure || (!!resource && this.world.isResourceAvailable(tile.x, tile.y));
