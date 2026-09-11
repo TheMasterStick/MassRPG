@@ -2,7 +2,7 @@ import type { Player } from '../entities/Player';
 import type { World } from '../world/World';
 import { Monster } from '../entities/Monster';
 import { bfsPath, isAdjacent, type Point } from './Pathfinding';
-import { equippedBonus, removeItem, addItem } from './Inventory';
+import { equippedBonus, consumeEquippedAmmo, addItem } from './Inventory';
 import { addXp } from './Skills';
 import * as CM from './CombatMath';
 import { getItem, ITEMS } from '../data/items';
@@ -14,25 +14,6 @@ import { facingFromDelta } from './Facing';
 function faceHorizontally(monster: Monster, dx: number) {
   if (dx > 0) monster.facing = 'right';
   else if (dx < 0) monster.facing = 'left';
-}
-
-function findBestArrow(player: Player): string | null {
-  const readied = player.equipment.ammo;
-  if (readied) {
-    if (player.countItem(readied) > 0 && getItem(readied).bonuses?.rangedStrength !== undefined) return readied;
-    delete player.equipment.ammo;
-    bus.emit('equipmentChanged', undefined);
-  }
-
-  let best: string | null = null;
-  let bestBonus = -1;
-  for (const slot of player.inventory) {
-    if (!slot) continue;
-    const def = getItem(slot.itemId);
-    const bonus = def.bonuses?.rangedStrength;
-    if (bonus !== undefined && bonus > bestBonus) { bestBonus = bonus; best = slot.itemId; }
-  }
-  return best;
 }
 
 export function playerAttack(player: Player, monster: Monster) {
@@ -94,28 +75,41 @@ function styleAttackSpeed(style: Player['combatStyle']): number {
   return 4;
 }
 
-function resolvePlayerHit(player: Player, monster: Monster) {
+function stopInvalidRangedAttack(player: Player, message: string) {
+  log(message, 'warning');
+  player.combatTargetId = null;
+  player.path = [];
+}
+
+function resolvePlayerHit(player: Player, monster: Monster): boolean {
   const def = monster.def();
   let maxHit: number;
   let atkLevel: number;
   let atkBonus: number;
+
   if (player.combatStyle === 'ranged') {
-    const arrow = findBestArrow(player);
-    if (!player.equipment.weapon || !getItem(player.equipment.weapon).bonuses?.rangedAttack) {
-      log(`You need a bow equipped to fight with Ranged.`, 'warning');
-      player.combatStyle = 'melee';
-      return resolvePlayerHit(player, monster);
+    const weaponId = player.equipment.weapon;
+    if (!weaponId || getItem(weaponId).bonuses?.rangedAttack === undefined) {
+      stopInvalidRangedAttack(player, `You need a bow equipped to fight with Ranged.`);
+      return false;
     }
-    if (!arrow) { log(`You have no arrows left!`, 'warning'); player.combatStyle = 'melee'; return; }
-    removeItem(player, arrow, 1);
-    if (player.equipment.ammo === arrow && player.countItem(arrow) === 0) {
-      delete player.equipment.ammo;
-      bus.emit('equipmentChanged', undefined);
+
+    const ammoId = player.equipment.ammo;
+    if (!ammoId || player.equippedAmmoQty <= 0 || getItem(ammoId).bonuses?.rangedStrength === undefined) {
+      stopInvalidRangedAttack(player, `You need arrows equipped to fight with Ranged.`);
+      return false;
     }
+
     atkLevel = player.level('ranged');
     atkBonus = equippedBonus(player, 'rangedAttack');
-    maxHit = CM.maxHitRanged(atkLevel, equippedBonus(player, 'rangedStrength'));
+    const rangedStrength = equippedBonus(player, 'rangedStrength');
+    if (!consumeEquippedAmmo(player, 1)) {
+      stopInvalidRangedAttack(player, `You need arrows equipped to fight with Ranged.`);
+      return false;
+    }
+    maxHit = CM.maxHitRanged(atkLevel, rangedStrength);
   } else if (player.combatStyle === 'magic') {
+    // Placeholder until the real spellbook/staff/reagent system is implemented.
     atkLevel = player.level('magic');
     atkBonus = equippedBonus(player, 'magic');
     maxHit = CM.maxHitMagic(atkLevel);
@@ -145,6 +139,7 @@ function resolvePlayerHit(player: Player, monster: Monster) {
     addXp(player, skill, dmg * 1.33);
     addXp(player, 'hitpoints', dmg * 0.33);
   }
+  return true;
 }
 
 function resolveMonsterHit(player: Player, monster: Monster) {
@@ -259,8 +254,8 @@ export function combatTick(world: World, player: Player) {
         player.facing = facingFromDelta(monster.x - player.x, monster.y - player.y, player.facing);
       }
       if (inRange && world.tick - player.lastAttackTick >= styleAttackSpeed(player.combatStyle)) {
-        resolvePlayerHit(player, monster);
-        player.lastAttackTick = world.tick;
+        const attacked = resolvePlayerHit(player, monster);
+        if (attacked) player.lastAttackTick = world.tick;
         if (monster.currentHp <= 0) {
           log(`You have defeated the ${monster.def().name}!`, 'combat');
           grantLoot(player, monster);
