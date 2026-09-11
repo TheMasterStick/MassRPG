@@ -20,14 +20,29 @@ function stationMatches(station: StationRequirement, actual: string | undefined)
   return station === actual;
 }
 
+export function recipeUsesItem(recipe: Recipe, itemId: string): boolean {
+  return recipe.toolRequired === itemId || recipe.inputs.some((input) => input.item === itemId);
+}
+
 export function recipesForPlayerAt(player: Player, world: World, x: number, y: number): RecipeAvailability[] {
   const structure = world.getStructure(x, y);
   const list = RECIPES.filter((r) => stationMatches(r.station, structure));
   return list.map((recipe) => describe(player, recipe));
 }
 
+export function recipesForItemAt(player: Player, world: World, x: number, y: number, itemId: string): RecipeAvailability[] {
+  return recipesForPlayerAt(player, world, x, y).filter((entry) => recipeUsesItem(entry.recipe, itemId));
+}
+
 export function inventoryRecipes(player: Player, category: string): RecipeAvailability[] {
   return RECIPES.filter((r) => r.station === 'none' && r.category === category).map((r) => describe(player, r));
+}
+
+export function inventoryRecipesForItems(player: Player, itemIds: string[]): RecipeAvailability[] {
+  const required = [...new Set(itemIds)];
+  return RECIPES
+    .filter((recipe) => recipe.station === 'none' && required.every((itemId) => recipeUsesItem(recipe, itemId)))
+    .map((recipe) => describe(player, recipe));
 }
 
 function describe(player: Player, recipe: Recipe): RecipeAvailability {
