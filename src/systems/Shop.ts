@@ -4,9 +4,22 @@ import { addItem, removeItem } from './Inventory';
 import { log } from '../core/EventBus';
 
 export const SHOP_STOCK = [
-  'bronze_hatchet', 'bronze_pickaxe', 'small_fishing_net', 'fishing_rod', 'fishing_bait',
-  'tinderbox', 'hammer', 'chisel', 'needle', 'saw', 'knife', 'spade', 'seed_dibber',
-  'pestle_and_mortar', 'bronze_sword', 'bronze_shield', 'bread', 'vial_of_water',
+  // Gathering and fishing basics.
+  'bronze_hatchet', 'bronze_pickaxe', 'small_fishing_net', 'big_fishing_net',
+  'fishing_rod', 'fly_fishing_rod', 'fishing_bait', 'lobster_pot', 'harpoon',
+
+  // General workshop tools.
+  'tinderbox', 'hammer', 'chisel', 'needle', 'saw', 'knife', 'shears', 'bucket',
+  'pestle_and_mortar', 'glassblowing_pipe',
+
+  // Farming tools.
+  'rake', 'spade', 'seed_dibber', 'gardening_trowel', 'watering_can', 'secateurs',
+
+  // Common crafting moulds.
+  'ring_mold', 'amulet_mold', 'necklace_mold', 'bracelet_mold', 'tiara_mold', 'ammo_mold',
+
+  // Basic adventuring stock.
+  'bronze_sword', 'bronze_shield', 'bread', 'vial_of_water',
 ];
 
 export function buyItem(player: Player, itemId: string, qty: number) {
