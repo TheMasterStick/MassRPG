@@ -45,7 +45,7 @@ export function buildEquipmentPanel(root: HTMLElement, game: Game) {
     const def = getItem(itemId);
     const rect = cell.getBoundingClientRect();
     showContextPopup(rect.left, rect.bottom + 4, [
-      { label: slot === 'ammo' ? 'Clear' : 'Remove', onClick: () => unequip(player, slot) },
+      { label: 'Remove', onClick: () => unequip(player, slot) },
       { label: 'Examine', onClick: () => log(def.description, 'info') },
     ]);
   }
@@ -69,7 +69,7 @@ export function buildEquipmentPanel(root: HTMLElement, game: Game) {
 
       if (itemId) {
         const def = getItem(itemId);
-        const qty = entry.slot === 'ammo' ? player.countItem(itemId) : 1;
+        const qty = entry.slot === 'ammo' ? player.equippedAmmoQty : 1;
         cell.append(
           el('span', { className: 'equipment-slot-glyph', text: entry.glyph }),
           el('span', { className: 'equipment-slot-item', text: def.name }),
