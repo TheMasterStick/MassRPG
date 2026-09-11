@@ -22,33 +22,22 @@ export function buildInventoryPanel(root: HTMLElement, game: Game) {
     const def = getItem(slot.itemId);
     const actions: { label: string; onClick: () => void }[] = [];
 
-    if (def.equipSlot) {
-      actions.push({ label: 'Equip', onClick: () => equip(player, slotIndex) });
-    }
+    if (def.equipSlot) actions.push({ label: 'Equip', onClick: () => equip(player, slotIndex) });
     if (def.type === 'food' && def.heal !== undefined) {
       actions.push({
         label: 'Eat', onClick: () => {
           if (def.heal! > 0) {
             player.currentHp = Math.min(player.maxHp(), player.currentHp + def.heal!);
             log(`You eat the ${def.name}. It heals ${def.heal} HP.`, 'info');
-          } else {
-            log(`It's inedible.`, 'warning');
-          }
+          } else log(`It's inedible.`, 'warning');
           removeFromSlot(player, slotIndex, 1);
         },
       });
     }
     if (def.type === 'potion') {
-      actions.push({
-        label: 'Drink', onClick: () => {
-          log(`You drink the ${def.name}.`, 'info');
-          removeFromSlot(player, slotIndex, 1);
-        },
-      });
+      actions.push({ label: 'Drink', onClick: () => { log(`You drink the ${def.name}.`, 'info'); removeFromSlot(player, slotIndex, 1); } });
     }
-    if (slot.itemId.endsWith('_logs')) {
-      actions.push({ label: 'Light fire', onClick: () => lightFire(world, player, slot.itemId) });
-    }
+    if (slot.itemId.endsWith('_logs')) actions.push({ label: 'Light fire', onClick: () => lightFire(world, player, slot.itemId) });
     if (slot.itemId.startsWith('grimy_')) {
       const recipe = RECIPES.find((r) => r.inputs[0]?.item === slot.itemId && r.category === 'herblore_clean');
       if (recipe) actions.push({ label: 'Clean', onClick: () => startProduction(player, world, recipe.id, 1, Math.round(player.x), Math.round(player.y)) });
@@ -69,9 +58,14 @@ export function buildInventoryPanel(root: HTMLElement, game: Game) {
     cell.addEventListener('drop', (e) => {
       e.preventDefault();
       cell.style.borderColor = '';
-      const from = draggingIndex ?? Number(e.dataTransfer?.getData('text/plain'));
-      if (Number.isInteger(from)) moveInventorySlot(player, from, targetIndex);
+      const stored = Number(e.dataTransfer?.getData('text/plain'));
+      const from = draggingIndex ?? (Number.isInteger(stored) ? stored : null);
+      draggingIndex = null;
       suppressClick = true;
+      if (from !== null) moveInventorySlot(player, from, targetIndex);
+      // moveInventorySlot emits synchronously and rebuilds this grid, so do not
+      // rely on dragend firing on the now-detached source element to clear state.
+      setTimeout(() => { suppressClick = false; }, 0);
     });
   }
 
@@ -121,8 +115,5 @@ export function buildInventoryPanel(root: HTMLElement, game: Game) {
   bus.on('inventoryChanged', render);
   bus.on('equipmentChanged', render);
 
-  return {
-    panel,
-    toggle: () => panel.classList.toggle('hidden'),
-  };
+  return { panel, toggle: () => panel.classList.toggle('hidden') };
 }
