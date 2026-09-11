@@ -79,6 +79,7 @@ export class Game {
   private update(dt: number) {
     this.handleKeyboardMovement();
     this.updateMovement(dt);
+    this.checkArrival();
     this.tickAccumulator += dt * 1000;
     let iterations = 0;
     while (this.tickAccumulator >= TICK_MS && iterations < 5) {
@@ -131,7 +132,6 @@ export class Game {
         else if (this.player.action.type === 'produce') processProduceTick(this.player);
       }
     }
-    this.checkArrival();
   }
 
   private handleKeyboardMovement() {
