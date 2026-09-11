@@ -9,10 +9,9 @@ import type { ElevationLevel, WorldPlane } from './types';
 import { clampElevation } from './EditorWorld';
 
 // The authored Twin Lands map can contain tens of thousands of brush strokes.
-// Chunk generation used to scan that entire array for every single tile.  A
-// 32x32 chunk could therefore perform millions of shape tests.  These coarse
-// spatial buckets keep authored order/precedence intact while limiting each
-// tile lookup to nearby shapes only.
+// Chunk generation used to scan that entire array for every single tile. These
+// coarse spatial buckets keep authored order/precedence intact while limiting
+// each tile lookup to nearby shapes only.
 const BUCKET_SIZE = 2048;
 
 type IndexedShape = TerrainStroke | ElevationStroke;
@@ -103,25 +102,41 @@ export function getIndexedTerrainStrokeAt(
   return undefined;
 }
 
+/**
+ * Returns the authored elevation when at least one elevation stroke covers the
+ * tile. Undefined specifically means "no authored elevation here", which lets
+ * runtime ambience add gentle relief without ever replacing an authored zero.
+ */
+export function getIndexedElevationOverrideAt(
+  x: number,
+  y: number,
+  worldSize: number,
+  plane: WorldPlane = 0,
+): ElevationLevel | undefined {
+  const source = getPlaneData(loadEditorWorld(worldSize), plane).elevationStrokes;
+  const index = indexFor(elevationIndices, source, plane);
+  const candidates = index.buckets.get(bucketKey(Math.floor(x / BUCKET_SIZE), Math.floor(y / BUCKET_SIZE)));
+  if (!candidates) return undefined;
+
+  let elevation: ElevationLevel = 0;
+  let matched = false;
+  // Elevation deltas are cumulative, so evaluate matching strokes in original order.
+  for (const candidate of candidates) {
+    const stroke = source[candidate];
+    if (!shapeContains(stroke, x, y)) continue;
+    matched = true;
+    elevation = stroke.mode === 'set'
+      ? clampElevation(stroke.value)
+      : clampElevation(elevation + stroke.value);
+  }
+  return matched ? elevation : undefined;
+}
+
 export function getIndexedElevationAt(
   x: number,
   y: number,
   worldSize: number,
   plane: WorldPlane = 0,
 ): ElevationLevel {
-  const source = getPlaneData(loadEditorWorld(worldSize), plane).elevationStrokes;
-  const index = indexFor(elevationIndices, source, plane);
-  const candidates = index.buckets.get(bucketKey(Math.floor(x / BUCKET_SIZE), Math.floor(y / BUCKET_SIZE)));
-  if (!candidates) return 0;
-
-  let elevation: ElevationLevel = 0;
-  // Elevation deltas are cumulative, so evaluate matching strokes in original order.
-  for (const candidate of candidates) {
-    const stroke = source[candidate];
-    if (!shapeContains(stroke, x, y)) continue;
-    elevation = stroke.mode === 'set'
-      ? clampElevation(stroke.value)
-      : clampElevation(elevation + stroke.value);
-  }
-  return elevation;
+  return getIndexedElevationOverrideAt(x, y, worldSize, plane) ?? 0;
 }
