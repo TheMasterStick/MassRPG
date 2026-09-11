@@ -10,6 +10,9 @@ import { TWIN_LANDS_SEED, WORLD_SIZE } from './world/AeldorData';
 import { getEditorMarkers, initializeEditorWorldStorage } from './world/EditorWorld';
 import { ensureCanonicalWorldInstalled } from './world/CanonicalWorld';
 import { launchWorldEditor } from './editor/WorldEditor';
+import { registerUtilityTools } from './data/tools';
+
+registerUtilityTools();
 
 const app = document.getElementById('app')!;
 const startScreen = document.getElementById('start-screen')!;
