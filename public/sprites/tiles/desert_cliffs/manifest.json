@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "nativeTileSize": 32,
+  "description": "Approved desert elevation edge sprites derived from the user's supplied PNG artwork. Canonical PNGs are stored once; mirrored orientations are derived at render time.",
+  "collision": {
+    "model": "edge_band",
+    "note": "The flat desert portion remains walkable. Only the rocky cliff or crevice edge should block crossing; movement/pathfinding should not treat the whole tile as solid."
+  },
+  "sprites": {
+    "desert_crevice_north": { "file": "desert_crevice_north.png", "kind": "crevice", "edge": ["north"] },
+    "desert_crevice_north_east": { "file": "desert_crevice_north_east.png", "kind": "crevice", "edge": ["north", "east"] },
+    "desert_crevice_north_west": { "file": "desert_crevice_north_west.png", "kind": "crevice", "edge": ["north", "west"] },
+    "desert_cliff_south": { "file": "desert_cliff_south.png", "kind": "cliff", "edge": ["south"] },
+    "desert_cliff_south_east": { "file": "desert_cliff_south_east.png", "kind": "cliff", "edge": ["south", "east"] },
+    "desert_cliff_south_west": { "file": "desert_cliff_south_west.png", "kind": "cliff", "edge": ["south", "west"] },
+    "desert_crevice_east": { "file": "desert_crevice_east.png", "kind": "crevice", "edge": ["east"] },
+    "desert_cliff_west": { "file": "desert_cliff_west.png", "kind": "cliff", "edge": ["west"] }
+  },
+  "derived": {
+    "desert_crevice_west": { "source": "desert_crevice_east", "transform": "flipX", "edge": ["west"] },
+    "desert_cliff_east": { "source": "desert_cliff_west", "transform": "flipX", "edge": ["east"] }
+  }
+}
