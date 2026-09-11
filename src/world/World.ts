@@ -103,13 +103,27 @@ export class World {
     const { lx, ly } = worldToChunk(x, y);
     const chunk = this.getChunkAt(x, y, plane);
     const key = localKey(lx, ly);
-    return chunk.diffs.structures[key]?.type ?? chunk.naturalStructures.get(key);
+    const placed = chunk.diffs.structures[key];
+    if (placed?.expiresAtTick !== undefined && this.tick >= placed.expiresAtTick) {
+      delete chunk.diffs.structures[key];
+      return chunk.naturalStructures.get(key);
+    }
+    return placed?.type ?? chunk.naturalStructures.get(key);
   }
 
   placeStructure(x: number, y: number, type: StructureType) {
     const { lx, ly } = worldToChunk(x, y);
     const chunk = this.getChunkAt(x, y);
     chunk.diffs.structures[localKey(lx, ly)] = { type, storage: type === 'storage_chest' ? [] : undefined };
+  }
+
+  placeTemporaryStructure(x: number, y: number, type: StructureType, lifetimeTicks: number) {
+    const { lx, ly } = worldToChunk(x, y);
+    const chunk = this.getChunkAt(x, y);
+    chunk.diffs.structures[localKey(lx, ly)] = {
+      type,
+      expiresAtTick: this.tick + Math.max(1, lifetimeTicks),
+    };
   }
 
   getChestStorage(x: number, y: number): InventorySlotData[] | undefined {
@@ -241,6 +255,9 @@ export class World {
     const out: Record<string, ChunkDiffs> = {};
     for (const [key, chunk] of this.chunks) {
       const d = chunk.diffs;
+      for (const [structureKey, structure] of Object.entries(d.structures)) {
+        if (structure.expiresAtTick !== undefined && this.tick >= structure.expiresAtTick) delete d.structures[structureKey];
+      }
       const hasContent = Object.keys(d.depletedResources).length > 0
         || Object.keys(d.plantedCrops).length > 0
         || Object.keys(d.structures).length > 0
