@@ -91,6 +91,12 @@ export function loadGame(): { world: World; player: Player } | null {
     const player = new Player();
     player.name = data.player.name;
     player.skillsXp = { ...player.skillsXp, ...data.player.skillsXp };
+    // Older test saves may contain half-points from the previous XP rules.
+    // Whole-number XP is now a game-wide invariant, so normalize those values
+    // once on load using the same .5-up rounding used for new awards.
+    for (const skillId of Object.keys(player.skillsXp) as (keyof typeof player.skillsXp)[]) {
+      player.skillsXp[skillId] = Math.round(player.skillsXp[skillId]);
+    }
     player.currentHp = data.player.currentHp;
     player.combatStyle = data.player.combatStyle as Player['combatStyle'];
     player.inventory = data.player.inventory;
