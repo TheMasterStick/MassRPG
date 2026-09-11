@@ -1,4 +1,14 @@
-export const TILE_SIZE = 40;
+export const GAMEPLAY_ZOOM_LEVELS = [32, 40, 52, 64] as const;
+export type GameplayTileSize = (typeof GAMEPLAY_ZOOM_LEVELS)[number];
+
+export let TILE_SIZE: GameplayTileSize = 40;
+
+export function setGameplayTileSize(size: number): GameplayTileSize {
+  const next = GAMEPLAY_ZOOM_LEVELS.includes(size as GameplayTileSize) ? size as GameplayTileSize : 40;
+  TILE_SIZE = next;
+  return next;
+}
+
 export const CHUNK_SIZE = 16;
 export const TICK_MS = 600;
 export const VIEW_RADIUS_CHUNKS = 3;
