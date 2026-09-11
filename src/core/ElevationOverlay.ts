@@ -96,10 +96,8 @@ export function drawElevationAndLinks(canvas: HTMLCanvasElement, world: World, p
       const sx = tx * TILE_SIZE - camX;
       const sy = ty * TILE_SIZE - camY;
       const hereTile = world.getTile(tx, ty);
-      const northTile = world.getTile(tx, ty - 1);
       const eastTile = world.getTile(tx + 1, ty);
       const southTile = world.getTile(tx, ty + 1);
-      const westTile = world.getTile(tx - 1, ty);
       const here = world.getElevation(tx, ty);
       const north = world.getElevation(tx, ty - 1);
       const east = world.getElevation(tx + 1, ty);
