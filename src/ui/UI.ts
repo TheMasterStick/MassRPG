@@ -6,12 +6,13 @@ import { buildBankPanel } from './BankPanel';
 import { buildShopPanel } from './ShopPanel';
 import { buildWorldMap } from './WorldMap';
 import { openPlantMenu } from './PlantMenu';
-import { initContextPopup } from './ContextPopup';
+import { initContextPopup, showContextPopup } from './ContextPopup';
 import type { StructureType } from '../world/types';
 import { log } from '../core/EventBus';
 
 export function initUI(root: HTMLElement, game: Game) {
   initContextPopup(root);
+  game.onOpenContextMenu = (x, y, items) => showContextPopup(x, y, items);
   buildHud(root, game);
   buildSidebar(root, game);
 
