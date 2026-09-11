@@ -23,6 +23,7 @@ function recipeCategory(recipe: Recipe): string {
   if (recipe.skill === 'smithing') {
     if (recipe.category === 'smelting') return 'Smelting';
     if (recipe.category === 'smithing_misc') return 'Materials';
+    if (recipe.category === 'smithing_ammo') return 'Ammunition';
     return WEAPON_SUFFIXES.some((suffix) => recipe.outputItem.endsWith(suffix)) ? 'Weapons' : 'Armour';
   }
   const labels: Record<string, string> = {
@@ -49,7 +50,7 @@ function recipeDetail(recipe: Recipe): string {
 }
 
 function recipeUnlocks(skillId: SkillId): UnlockEntry[] {
-  return RECIPES
+  const entries = RECIPES
     .filter((recipe) => recipe.skill === skillId)
     .map((recipe) => ({
       level: recipe.levelRequired,
@@ -57,6 +58,17 @@ function recipeUnlocks(skillId: SkillId): UnlockEntry[] {
       category: recipeCategory(recipe),
       detail: recipeDetail(recipe),
     }));
+
+  // Multiple valid assembly paths can produce the same unlock (for example,
+  // completing arrows from either headless or pre-tipped shafts). The ledger
+  // should advertise the unlock once rather than repeat implementation routes.
+  const seen = new Set<string>();
+  return entries.filter((entry) => {
+    const key = `${entry.level}|${entry.category}|${entry.name}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function gatheringUnlocks(skillId: SkillId): UnlockEntry[] {
