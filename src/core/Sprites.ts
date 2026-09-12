@@ -6,6 +6,7 @@
 
 import type { ResourceType, StructureType, TileType } from '../world/types';
 import { MONSTERS } from '../data/monsters';
+import { getCustomPlayerSprite } from '../character/CharacterAppearance';
 
 export type SpriteCategory = 'tiles' | 'resources' | 'structures' | 'monsters' | 'player' | 'roof';
 export type Facing = 'up' | 'down' | 'left' | 'right';
@@ -51,8 +52,22 @@ function loadElevation(theme: ElevationTheme, id: string) {
   img.src = `/sprites/tiles/${theme}_cliffs/${id}.png`;
 }
 
+function customFacingFromPlayerId(id: string): Facing | null {
+  const match = /^(up|down|left|right)(?:_walk[12])?$/.exec(id);
+  if (!match) return null;
+  return match[1] as Facing;
+}
+
 /** Returns a loaded image ready to draw, or null if missing/not loaded yet (fall back to procedural rendering). */
 export function getSprite(category: SpriteCategory, id: string): HTMLImageElement | null {
+  if (category === 'player') {
+    const facing = customFacingFromPlayerId(id);
+    if (facing) {
+      const custom = getCustomPlayerSprite(facing);
+      if (custom) return custom;
+    }
+  }
+
   const entry = cache.get(key(category, id));
   return entry && entry.state === 'loaded' ? entry.img : null;
 }
@@ -64,7 +79,7 @@ export function getElevationSprite(theme: ElevationTheme, id: string): HTMLImage
 }
 
 export function getPlayerSprite(facing: Facing): HTMLImageElement | null {
-  return getSprite('player', facing) ?? getSprite('player', 'down');
+  return getCustomPlayerSprite(facing) ?? getSprite('player', facing) ?? getSprite('player', 'down');
 }
 
 const TILE_TYPES: TileType[] = [
