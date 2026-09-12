@@ -43,7 +43,8 @@ export class Chunk {
       const edit = getEditorCell(wx, wy, WORLD_SIZE, plane);
       if (edit?.tile) return edit.tile;
       const stroke = getIndexedTerrainStrokeAt(wx, wy, WORLD_SIZE, plane);
-      const authored = stroke?.tile ?? baseTileForPlane(plane);
+      if (stroke) return stroke.tile ?? baseTileForPlane(plane);
+      const authored = baseTileForPlane(plane);
       return plane === 0 ? gen.markerGroundAt(wx, wy, authored) ?? authored : authored;
     };
 
@@ -54,7 +55,7 @@ export class Chunk {
         const edit = getEditorCell(wx, wy, WORLD_SIZE, plane);
         const terrainStroke = edit?.tile ? undefined : getIndexedTerrainStrokeAt(wx, wy, WORLD_SIZE, plane);
         const authoredTile = edit?.tile ?? terrainStroke?.tile ?? baseTileForPlane(plane);
-        const tile = edit?.tile || plane !== 0
+        const tile = edit?.tile || terrainStroke || plane !== 0
           ? authoredTile
           : gen.markerGroundAt(wx, wy, authoredTile) ?? authoredTile;
         this.tiles[ly * CHUNK_SIZE + lx] = tile;
