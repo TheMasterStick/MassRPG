@@ -54,11 +54,9 @@
   padding: 16px;
 }
 
-.creator-preview {
-  width: min(100%, 640px);
-  aspect-ratio: 1;
+.creator-preview,
+.creator-face-preview {
   display: block;
-  margin: 0 auto;
   border: 1px solid #46505e;
   border-radius: 6px;
   background:
@@ -69,6 +67,33 @@
     #171c23;
   background-size: 24px 24px;
   background-position: 0 0, 0 12px, 12px -12px, -12px 0;
+}
+
+.creator-preview {
+  width: min(100%, 640px);
+  aspect-ratio: 1;
+  margin: 0 auto;
+  image-rendering: auto;
+}
+
+.creator-face-detail {
+  width: min(100%, 360px);
+  margin: 12px auto 0;
+}
+
+.creator-face-detail-label {
+  margin: 0 0 6px;
+  color: #d8b76a;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.creator-face-preview {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 3 / 2;
   image-rendering: pixelated;
 }
 
