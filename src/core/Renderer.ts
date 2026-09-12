@@ -70,6 +70,7 @@ export class Renderer {
   private floatingTexts: FloatingText[] = [];
   private patternCache = new Map<HTMLImageElement, CanvasPattern>();
   private outlineCache = new Map<string, HTMLCanvasElement>();
+  private shadowMaskCache = new Map<string, HTMLCanvasElement>();
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -109,10 +110,13 @@ export class Renderer {
     const camX = player.x * TILE_SIZE - w / 2;
     const camY = player.y * TILE_SIZE - h / 2;
 
-    const minTX = Math.floor(camX / TILE_SIZE) - 1;
-    const maxTX = Math.floor((camX + w) / TILE_SIZE) + 1;
-    const minTY = Math.floor(camY / TILE_SIZE) - 1;
-    const maxTY = Math.floor((camY + h) / TILE_SIZE) + 1;
+    // Directional tree shadows can stretch a couple of tiles away from their
+    // source, so render a slightly wider fringe than the immediately visible
+    // tile rectangle to avoid shadows popping in at the screen edge.
+    const minTX = Math.floor(camX / TILE_SIZE) - 3;
+    const maxTX = Math.floor((camX + w) / TILE_SIZE) + 3;
+    const minTY = Math.floor(camY / TILE_SIZE) - 3;
+    const maxTY = Math.floor((camY + h) / TILE_SIZE) + 3;
 
     const objects: Drawable[] = [];
     const shadows: (() => void)[] = [];
@@ -137,6 +141,7 @@ export class Renderer {
 
         const structure = world.getStructure(tx, ty);
         if (structure) {
+          shadows.push(() => this.drawStructureShadow(sx, sy, structure));
           objects.push({ sortY: ty, draw: () => this.drawStructure(sx, sy, structure) });
         } else {
           const res = world.getResourceNode(tx, ty);
@@ -166,9 +171,9 @@ export class Renderer {
     shadows.push(() => this.drawGroundShadow(playerSx, playerSy, 0.64, 0.18, 0.24));
     objects.push({ sortY: player.y, draw: () => this.drawPlayer(playerSx, playerSy, player) });
 
-    // Contact shadows belong to the ground plane, so draw all of them before
-    // the Y-sorted sprites. This avoids a later object's shadow painting across
-    // the feet/body of an earlier object while still grounding every sprite.
+    // Shadows belong to the ground plane. Drawing the complete shadow pass before
+    // the Y-sorted sprites lets long tree shadows pass underneath characters and
+    // other props instead of painting over their bodies.
     for (const drawShadow of shadows) drawShadow();
 
     objects.sort((a, b) => a.sortY - b.sortY);
@@ -194,8 +199,8 @@ export class Renderer {
     const rx = TILE_SIZE * widthMul * 0.5;
     const ry = TILE_SIZE * heightMul * 0.5;
 
-    // Two cheap translucent ellipses read as a soft contact shadow without the
-    // per-frame cost and halo artifacts of Canvas shadowBlur on every sprite.
+    // Moving actors use a small contact shadow; unlike static props, their
+    // continuously changing pose does not need an expensive cast silhouette.
     ctx.save();
     ctx.fillStyle = `rgba(0,0,0,${alpha * 0.42})`;
     ctx.beginPath();
@@ -208,17 +213,88 @@ export class Renderer {
     ctx.restore();
   }
 
+  /** Build a reusable black alpha-mask from the sprite itself. */
+  private getShadowMask(img: HTMLImageElement): HTMLCanvasElement {
+    const key = img.src;
+    const cached = this.shadowMaskCache.get(key);
+    if (cached) return cached;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, img.naturalWidth);
+    canvas.height = Math.max(1, img.naturalHeight);
+    const sctx = canvas.getContext('2d')!;
+    sctx.drawImage(img, 0, 0);
+    sctx.globalCompositeOperation = 'source-in';
+    sctx.fillStyle = '#000';
+    sctx.fillRect(0, 0, canvas.width, canvas.height);
+    sctx.globalCompositeOperation = 'source-over';
+    this.shadowMaskCache.set(key, canvas);
+    return canvas;
+  }
+
+  /**
+   * Project a sprite-shaped cast shadow from the object's base toward roughly
+   * 1–2 o'clock. The source silhouette is compressed vertically and sheared to
+   * the upper-right, keeping trunks, rocks and workshop props recognisable.
+   */
+  private drawProjectedShadow(
+    img: HTMLImageElement,
+    sx: number,
+    sy: number,
+    widthMul: number,
+    alpha: number,
+    verticalProjection: number,
+    rightLean: number,
+  ) {
+    if (!img.complete || img.naturalWidth <= 0 || img.naturalHeight <= 0) return;
+    const mask = this.getShadowMask(img);
+    const dw = TILE_SIZE * widthMul;
+    const dh = dw * (img.naturalHeight / img.naturalWidth);
+    const baseX = sx + TILE_SIZE / 2;
+    const baseY = sy + TILE_SIZE;
+
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.translate(baseX, baseY);
+    // Local y runs upward from the object's base. A negative x shear therefore
+    // pushes the top of the shadow right while the compressed y keeps it on the ground.
+    ctx.transform(0.94, 0, -rightLean, verticalProjection, 0, 0);
+    ctx.globalAlpha = alpha;
+    ctx.filter = `blur(${Math.max(0.45, TILE_SIZE * 0.018)}px)`;
+    ctx.drawImage(mask, -dw / 2, -dh, dw, dh);
+    ctx.restore();
+  }
+
   private drawResourceShadow(sx: number, sy: number, res: ResourceType) {
     if (res.startsWith('fishing_') || res === 'farm_patch' || res === 'herb_patch') return;
+    const sprite = getSprite('resources', res);
+    if (!sprite) {
+      const width = res.startsWith('tree_') ? 1.1 : res.startsWith('rock_') ? 0.68 : 0.42;
+      this.drawGroundShadow(sx, sy, width, width * 0.22, res.startsWith('tree_') ? 0.2 : 0.16);
+      return;
+    }
+
     if (res.startsWith('tree_')) {
-      this.drawGroundShadow(sx, sy, 1.18, 0.24, 0.22);
+      this.drawProjectedShadow(sprite, sx, sy, TREE_RENDER_SCALE, 0.23, 0.30, 0.52);
       return;
     }
     if (res.startsWith('rock_')) {
-      this.drawGroundShadow(sx, sy, 0.72, 0.18, 0.22);
+      this.drawProjectedShadow(sprite, sx, sy, 1, 0.20, 0.32, 0.44);
       return;
     }
-    this.drawGroundShadow(sx, sy, 0.44, 0.13, 0.17);
+    this.drawProjectedShadow(sprite, sx, sy, 1, 0.15, 0.28, 0.38);
+  }
+
+  private drawStructureShadow(sx: number, sy: number, type: StructureType) {
+    if (type === 'blocker' || type === 'campfire') return;
+    const sprite = getSprite('structures', type);
+    if (sprite) {
+      // Props and workshop furniture cast the same directional silhouette as
+      // resources, but shorter and lighter so structures do not overpower the scene.
+      this.drawProjectedShadow(sprite, sx, sy, 1, 0.12, 0.22, 0.32);
+      return;
+    }
+    if (STRUCTURE_GLYPH[type]) this.drawGroundShadow(sx, sy, 0.56, 0.13, 0.10);
   }
 
   private drawSpriteOnTile(img: HTMLImageElement, sx: number, sy: number, widthMul = 1, flip = false) {
