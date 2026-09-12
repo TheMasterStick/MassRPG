@@ -141,7 +141,11 @@ function equipmentUnlocks(skillId: SkillId): UnlockEntry[] {
     .filter(([, requirement]) => requirement.skill === skillId)
     .map(([itemId, requirement]) => {
       const item = getItem(itemId);
-      const category = skillId === 'attack' ? 'Weapons' : skillId === 'defence' ? 'Armour' : 'Bows';
+      const category = skillId === 'attack'
+        ? 'Weapons'
+        : skillId === 'defence'
+          ? 'Armour'
+          : item.equipSlot === 'ammo' ? 'Ammunition' : 'Bows';
       return {
         level: requirement.level,
         name: `Equip ${item.name}`,
