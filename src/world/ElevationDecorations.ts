@@ -53,7 +53,9 @@ export const EDGE_TILE_DEFINITIONS: readonly EdgeTileDefinition[] = THEMES.flatM
   })),
 );
 
-const EDGE_BY_SPRITE = new Map(EDGE_TILE_DEFINITIONS.map((definition) => [definition.spriteId, definition]));
+const EDGE_BY_SPRITE = new Map<string, EdgeTileDefinition>(
+  EDGE_TILE_DEFINITIONS.map((definition) => [definition.spriteId, definition] as const),
+);
 
 export function edgeTileDefinition(spriteId: string): EdgeTileDefinition | undefined {
   return EDGE_BY_SPRITE.get(spriteId);
