@@ -6,6 +6,7 @@ import { equippedBonus, consumeEquippedAmmo, addItem } from './Inventory';
 import { addXp } from './Skills';
 import * as CM from './CombatMath';
 import { getItem, ITEMS } from '../data/items';
+import { weaponProfile } from '../data/equipmentProgression';
 import { bus, log } from '../core/EventBus';
 import { MONSTER_AGGRO_RANGE, MONSTER_LEASH_RANGE, MONSTER_AGGRO_COOLDOWN_TICKS } from '../core/constants';
 import { facingFromDelta } from './Facing';
@@ -69,10 +70,11 @@ function pathStillApproachesMonster(player: Player, monster: Monster): boolean {
   return isAdjacent(endpoint, { x: Math.round(monster.x), y: Math.round(monster.y) });
 }
 
-function styleAttackSpeed(style: Player['combatStyle']): number {
-  if (style === 'ranged') return 5;
-  if (style === 'magic') return 5;
-  return 4;
+function playerAttackSpeed(player: Player): number {
+  if (player.combatStyle === 'magic') return 5;
+  const profile = weaponProfile(player.equipment.weapon);
+  if (profile) return profile.speedTicks;
+  return player.combatStyle === 'ranged' ? 5 : 4;
 }
 
 function stopInvalidRangedAttack(player: Player, message: string) {
@@ -253,7 +255,7 @@ export function combatTick(world: World, player: Player) {
       if (inRange && player.path.length === 0) {
         player.facing = facingFromDelta(monster.x - player.x, monster.y - player.y, player.facing);
       }
-      if (inRange && world.tick - player.lastAttackTick >= styleAttackSpeed(player.combatStyle)) {
+      if (inRange && world.tick - player.lastAttackTick >= playerAttackSpeed(player)) {
         const attacked = resolvePlayerHit(player, monster);
         if (attacked) player.lastAttackTick = world.tick;
         if (monster.currentHp <= 0) {
