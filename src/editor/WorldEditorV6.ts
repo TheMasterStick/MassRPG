@@ -24,6 +24,7 @@ import {
   type TerrainStrokeKind,
 } from '../world/EditorWorld';
 import type { ResourceType, StructureType, TileType, WorldPlane } from '../world/types';
+import type { ObjectTransform, TransformableEditorCell } from '../world/EditorObjects';
 import { createEditorNavigatorV5, type EditorNavigatorHandle } from './EditorNavigatorV5';
 
 const SURFACE_TILES: TileType[] = [
@@ -1545,22 +1546,38 @@ export function launchWorldEditor(root: HTMLElement): void {
       for (let col = 0; col < cols; col++) {
         const x = startX + col;
         const y = startY + row;
-        const cell = currentLayer().cells[cellKey(x, y)];
+        const cell = currentLayer().cells[cellKey(x, y)] as TransformableEditorCell | undefined;
         if (!cell) continue;
         const sx = originX + col * tilePx;
         const sy = originY + row * tilePx;
-        if (cell.structure) drawSprite(`/sprites/structures/${cell.structure}.png`, sx, sy, tilePx, '#d8c9a1');
+        if (cell.structure) drawSprite(`/sprites/structures/${cell.structure}.png`, sx, sy, tilePx, '#d8c9a1', cell.structureTransform);
         else if (cell.resource) drawSprite(`/sprites/resources/${cell.resource}.png`, sx, sy, tilePx, cell.resource.startsWith('rock_') ? '#222' : '#356c36');
         else if (cell.spawner) drawSprite(`/sprites/monsters/${cell.spawner}.png`, sx, sy, tilePx, '#aa3030');
       }
     }
   }
 
-  function drawSprite(path: string, sx: number, sy: number, tilePx: number, fallback: string): void {
+  function drawSprite(
+    path: string,
+    sx: number,
+    sy: number,
+    tilePx: number,
+    fallback: string,
+    transform?: ObjectTransform,
+  ): void {
     const img = imageFor(path, draw);
     if (img.complete && img.naturalWidth > 0) {
       const h = Math.max(tilePx, tilePx * img.naturalHeight / img.naturalWidth);
-      ctx.drawImage(img, sx, sy + tilePx - h, tilePx, h);
+      if (transform) {
+        ctx.save();
+        ctx.translate(sx + tilePx / 2, sy + tilePx - h / 2);
+        ctx.rotate(transform.rotation * Math.PI / 180);
+        ctx.scale(transform.flipX ? -1 : 1, transform.flipY ? -1 : 1);
+        ctx.drawImage(img, -tilePx / 2, -h / 2, tilePx, h);
+        ctx.restore();
+      } else {
+        ctx.drawImage(img, sx, sy + tilePx - h, tilePx, h);
+      }
     } else {
       ctx.fillStyle = fallback;
       ctx.beginPath();

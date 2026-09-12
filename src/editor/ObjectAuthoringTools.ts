@@ -7,7 +7,7 @@ import {
   type RoofPieceId,
   type TransformableEditorCell,
 } from '../world/EditorObjects';
-import type { StructureType, WorldPlane } from '../world/types';
+import type { WorldPlane } from '../world/types';
 
 type RoofMode = 'off' | 'erase' | RoofPieceId;
 
@@ -24,7 +24,7 @@ const ROOF_OPTIONS: { id: RoofMode; label: string }[] = [
  * Doodad-style transforms for authored structures and roofs. The normal V6
  * structure palette remains the placement UI; these controls attach the active
  * rotation/mirror transform as structures are painted. Roof pieces are their own
- * visual layer. A transparent overlay previews both layers in editor space.
+ * visual layer. The base editor renderer owns structure transforms; this overlay renders roofs only.
  */
 export function installObjectAuthoringTools(root: HTMLElement): void {
   const canvas = root.querySelector<HTMLCanvasElement>('.editor-canvas')!;
@@ -299,10 +299,6 @@ export function installObjectAuthoringTools(root: HTMLElement): void {
     overlayCtx.restore();
   }
 
-  function isIdentity(value: ObjectTransform | undefined): boolean {
-    return !value || (value.rotation === 0 && !value.flipX && !value.flipY);
-  }
-
   function redraw(): void {
     if (frame) cancelAnimationFrame(frame);
     frame = requestAnimationFrame(() => {
@@ -334,18 +330,6 @@ export function installObjectAuthoringTools(root: HTMLElement): void {
           const cell = layer.cells[cellKey(x, y)] as TransformableEditorCell | undefined;
           if (!cell) continue;
           const p = toScreen(x, y);
-
-          if (cell.structure && cell.structure !== 'blocker' && !isIdentity(cell.structureTransform)) {
-            // V6 already drew the untransformed structure below. Dim that cell so
-            // the authoritative transformed preview is visually unambiguous.
-            overlayCtx.fillStyle = 'rgba(14,16,18,.54)';
-            overlayCtx.fillRect(p.x, p.y, tilePx, tilePx);
-            const image = imageFor(`/sprites/structures/${cell.structure as StructureType}.png`);
-            drawTransformedImage(image, p.x, p.y, tilePx, cell.structureTransform!, true);
-            overlayCtx.strokeStyle = 'rgba(238,195,76,.72)';
-            overlayCtx.lineWidth = 1;
-            overlayCtx.strokeRect(p.x + 1, p.y + 1, Math.max(1, tilePx - 2), Math.max(1, tilePx - 2));
-          }
 
           if (cell.roof) {
             const image = imageFor(`/sprites/roof/${cell.roof.id}.png`);
