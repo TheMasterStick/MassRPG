@@ -7,6 +7,7 @@
 import type { ResourceType, StructureType, TileType } from '../world/types';
 import { MONSTERS } from '../data/monsters';
 import { getCustomPlayerSprite } from '../character/CharacterAppearance';
+import { getSpriteAnimationImageFrame, preloadSpriteAnimationSet } from './SpriteAnimation';
 
 export type SpriteCategory = 'tiles' | 'resources' | 'structures' | 'monsters' | 'player' | 'roof';
 export type Facing = 'up' | 'down' | 'left' | 'right';
@@ -58,13 +59,27 @@ function customFacingFromPlayerId(id: string): Facing | null {
   return match[1] as Facing;
 }
 
+function playerAnimationFromId(id: string): 'idle' | 'walk' | null {
+  if (/^(up|down|left|right)$/.test(id)) return 'idle';
+  if (/^(up|down|left|right)_walk[12]$/.test(id)) return 'walk';
+  return null;
+}
+
 /** Returns a loaded image ready to draw, or null if missing/not loaded yet (fall back to procedural rendering). */
 export function getSprite(category: SpriteCategory, id: string): HTMLImageElement | null {
   if (category === 'player') {
     const facing = customFacingFromPlayerId(id);
     if (facing) {
+      // A character-creator appearance currently supplies static directional composites.
+      // Keep those authoritative until layered animation sheets are added for custom characters.
       const custom = getCustomPlayerSprite(facing);
       if (custom) return custom;
+
+      const animation = playerAnimationFromId(id);
+      if (animation) {
+        const animated = getSpriteAnimationImageFrame('player', animation, facing, performance.now());
+        if (animated) return animated.image;
+      }
     }
   }
 
@@ -116,6 +131,10 @@ const GATHER_TOOLS: GatherTool[] = ['axe', 'pickaxe'];
 
 /** Kicks off loading every known sprite once at startup. Missing files fail silently per-file. */
 export function preloadAllSprites() {
+  // Optional metadata-driven player sheet. If animation.json is absent the existing
+  // directional PNGs and two-frame walking system continue to work unchanged.
+  preloadSpriteAnimationSet('player');
+
   for (const t of TILE_TYPES) {
     load('tiles', t);
     // Optional extra ground-texture variants (tile_1.png, tile_2.png) for visual variety.
@@ -130,7 +149,8 @@ export function preloadAllSprites() {
   for (const m of MONSTERS) load('monsters', m.id);
   for (const f of PLAYER_FACINGS) {
     load('player', f);
-    // Optional two-frame walk cycle per facing, alternated while moving.
+    // Optional legacy two-frame walk cycle per facing. A spritesheet manifest takes
+    // precedence and can provide any number of frames.
     load('player', `${f}_walk1`);
     load('player', `${f}_walk2`);
   }
