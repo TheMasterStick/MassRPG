@@ -38,6 +38,7 @@ export function installEditorToolbarPolish(root: HTMLElement): void {
 
   // Everything appended by the blocker/edge/resource/object/spawn adapters starts
   // at Blockers. Collapse that large second toolbar row into one discoverable tray.
+  let advancedDetails: HTMLDetailsElement | null = null;
   const blockerSelect = [...toolbar.querySelectorAll<HTMLSelectElement>('select')]
     .find((select) => [...select.options].some((option) => option.textContent?.startsWith('Blockers:')));
   if (blockerSelect) {
@@ -45,6 +46,7 @@ export function installEditorToolbarPolish(root: HTMLElement): void {
       'World Layers',
       'Cliffs/pathing, object transforms, roofs, renewable resource areas and painted spawn zones.',
     );
+    advancedDetails = advanced.details;
     const nodes: Node[] = [];
     let cursor: ChildNode | null = blockerSelect;
     while (cursor) {
@@ -98,7 +100,13 @@ export function installEditorToolbarPolish(root: HTMLElement): void {
     if (text === 'X' || text === 'Y') node.remove();
   }
 
-  if (moved > 0) toolbar.append(more.details);
+  // Keep X/Y inputs before the advanced group's numeric fields in DOM order.
+  // Several legacy adapters intentionally discover the camera coordinates as the
+  // first two numeric toolbar inputs.
+  if (moved > 0) {
+    if (advancedDetails) toolbar.insertBefore(more.details, advancedDetails);
+    else toolbar.append(more.details);
+  }
 
   // The primary tool selector is important enough to advertise its shortcuts.
   const tool = [...toolbar.querySelectorAll<HTMLSelectElement>(':scope > select')]
