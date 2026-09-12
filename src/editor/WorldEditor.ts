@@ -39,9 +39,9 @@ const RESOURCE_AREA_OPTIONS: { id: ResourceAreaMode; label: string; name: string
  */
 export function launchWorldEditor(root: HTMLElement): void {
   launchWorldEditorV6(root);
-  const canvas = root.querySelector<HTMLCanvasElement>('.editor-canvas');
-  const toolbar = root.querySelector<HTMLElement>('.editor-toolbar');
-  const canvasWrap = canvas?.parentElement;
+  const canvas = root.querySelector<HTMLCanvasElement>('.editor-canvas')!;
+  const toolbar = root.querySelector<HTMLElement>('.editor-toolbar')!;
+  const canvasWrap = canvas.parentElement!;
   if (!canvas || !toolbar || !canvasWrap) return;
 
   let blockerMode: BlockerMode = 'off';
@@ -69,7 +69,7 @@ export function launchWorldEditor(root: HTMLElement): void {
   canvasWrap.append(overlay);
   const help = canvasWrap.querySelector<HTMLElement>('.editor-overlay-help');
   if (help) help.style.zIndex = '2';
-  const overlayCtx = overlay.getContext('2d');
+  const overlayCtx = overlay.getContext('2d')!;
   if (!overlayCtx) return;
 
   const imageCache = new Map<string, HTMLImageElement>();

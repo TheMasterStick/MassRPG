@@ -7,9 +7,9 @@
  * previous palette selection on release.
  */
 export function installEditorWorkflowShortcuts(root: HTMLElement): void {
-  const toolbar = root.querySelector<HTMLElement>('.editor-toolbar');
-  const palette = root.querySelector<HTMLElement>('.editor-palette');
-  const canvas = root.querySelector<HTMLCanvasElement>('.editor-canvas');
+  const toolbar = root.querySelector<HTMLElement>('.editor-toolbar')!;
+  const palette = root.querySelector<HTMLElement>('.editor-palette')!;
+  const canvas = root.querySelector<HTMLCanvasElement>('.editor-canvas')!;
   if (!toolbar || !palette || !canvas) return;
 
   const help = root.querySelector<HTMLElement>('.editor-overlay-help');

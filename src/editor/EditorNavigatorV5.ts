@@ -25,7 +25,7 @@ const MINI_SIZE = 220;
 const LARGE_SIZE = 760;
 const MAP_EDIT_REFRESH_MS = 120;
 const MARKER_COLORS: Record<EditorMarkerType, string> = {
-  settlement: '#f2f2f2', village: '#8ee28e', town: '#f1d56b', city: '#ff7777', castle: '#c391ff', mining_area: '#ff8a32',
+  settlement: '#f2f2f2', village: '#8ee28e', town: '#f1d56b', city: '#ff7777', castle: '#c391ff', mining_area: '#ff8a32', resource_area: '#55c878',
 };
 
 export function createEditorNavigatorV5(options: NavigatorOptions): EditorNavigatorHandle {

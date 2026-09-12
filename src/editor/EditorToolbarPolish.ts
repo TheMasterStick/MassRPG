@@ -50,7 +50,7 @@ export function installEditorToolbarPolish(root: HTMLElement): void {
     const nodes: Node[] = [];
     let cursor: ChildNode | null = blockerSelect;
     while (cursor) {
-      const next = cursor.nextSibling;
+      const next: ChildNode | null = cursor.nextSibling;
       nodes.push(cursor);
       cursor = next;
     }

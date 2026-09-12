@@ -12,9 +12,9 @@ const CAPITAL_SAFE_RADIUS = 64;
  * footprint at runtime.
  */
 export function installEditorReferenceOverlay(root: HTMLElement): void {
-  const canvas = root.querySelector<HTMLCanvasElement>('.editor-canvas');
-  const toolbar = root.querySelector<HTMLElement>('.editor-toolbar');
-  const wrap = canvas?.parentElement;
+  const canvas = root.querySelector<HTMLCanvasElement>('.editor-canvas')!;
+  const toolbar = root.querySelector<HTMLElement>('.editor-toolbar')!;
+  const wrap = canvas.parentElement!;
   if (!canvas || !toolbar || !wrap) return;
 
   const overlay = document.createElement('canvas');
@@ -25,7 +25,7 @@ export function installEditorReferenceOverlay(root: HTMLElement): void {
   overlay.style.pointerEvents = 'none';
   overlay.style.zIndex = '1';
   wrap.append(overlay);
-  const ctx = overlay.getContext('2d');
+  const ctx = overlay.getContext('2d')!;
   if (!ctx) return;
 
   let frame = 0;

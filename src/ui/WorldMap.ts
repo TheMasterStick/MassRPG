@@ -9,7 +9,7 @@ import { log } from '../core/EventBus';
 const CANVAS_SIZE = 560;
 const ZOOM_SPANS = [WORLD_SIZE, WORLD_SIZE / 3, WORLD_SIZE / 9];
 const MARKER_COLORS: Record<EditorMarkerType, string> = {
-  settlement: '#f2f2f2', village: '#8ee28e', town: '#f1d56b', city: '#ff7777', castle: '#c391ff', mining_area: '#ff8a32',
+  settlement: '#f2f2f2', village: '#8ee28e', town: '#f1d56b', city: '#ff7777', castle: '#c391ff', mining_area: '#ff8a32', resource_area: '#55c878',
 };
 
 export function buildWorldMap(root: HTMLElement, game: Game) {

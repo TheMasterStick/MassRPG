@@ -10,17 +10,17 @@ import { WORLD_SIZE } from '../world/AeldorData';
  * drag remains available as a secondary grab-pan control.
  */
 export function installEditorCameraControls(root: HTMLElement): void {
-  const toolbar = root.querySelector<HTMLElement>('.editor-toolbar');
-  const canvas = root.querySelector<HTMLCanvasElement>('.editor-canvas');
+  const toolbar = root.querySelector<HTMLElement>('.editor-toolbar')!;
+  const canvas = root.querySelector<HTMLCanvasElement>('.editor-canvas')!;
   if (!toolbar || !canvas) return;
 
   const numberInputs = [...toolbar.querySelectorAll<HTMLInputElement>('input[type="number"]')];
   const xInput = numberInputs[0];
   const yInput = numberInputs[1];
   const goButton = [...toolbar.querySelectorAll<HTMLButtonElement>('button')]
-    .find((button) => button.textContent?.trim() === 'Go');
+    .find((button) => button.textContent?.trim() === 'Go')!;
   const zoomSelect = [...toolbar.querySelectorAll<HTMLSelectElement>('select')]
-    .find((select) => select.selectedOptions[0]?.textContent?.includes('px / tile'));
+    .find((select) => select.selectedOptions[0]?.textContent?.includes('px / tile'))!;
   if (!xInput || !yInput || !goButton || !zoomSelect) return;
 
   const help = root.querySelector<HTMLElement>('.editor-overlay-help');

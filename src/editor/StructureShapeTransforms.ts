@@ -12,8 +12,8 @@ interface Point { x: number; y: number }
  * tools as soon as V6 commits them.
  */
 export function installStructureShapeTransforms(root: HTMLElement): void {
-  const canvas = root.querySelector<HTMLCanvasElement>('.editor-canvas');
-  const toolbar = root.querySelector<HTMLElement>('.editor-toolbar');
+  const canvas = root.querySelector<HTMLCanvasElement>('.editor-canvas')!;
+  const toolbar = root.querySelector<HTMLElement>('.editor-toolbar')!;
   if (!canvas || !toolbar) return;
 
   let start: Point | null = null;

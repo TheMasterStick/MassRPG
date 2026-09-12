@@ -6,8 +6,8 @@
  * coordinates, so this does not create gaps in painted lines.
  */
 export function installEditorPerformanceGuard(root: HTMLElement): void {
-  const canvas = root.querySelector<HTMLCanvasElement>('.editor-canvas');
-  const toolbar = root.querySelector<HTMLElement>('.editor-toolbar');
+  const canvas = root.querySelector<HTMLCanvasElement>('.editor-canvas')!;
+  const toolbar = root.querySelector<HTMLElement>('.editor-toolbar')!;
   if (!canvas || !toolbar) return;
 
   let lastAccepted = 0;

@@ -27,9 +27,9 @@ const ROOF_OPTIONS: { id: RoofMode; label: string }[] = [
  * visual layer. A transparent overlay previews both layers in editor space.
  */
 export function installObjectAuthoringTools(root: HTMLElement): void {
-  const canvas = root.querySelector<HTMLCanvasElement>('.editor-canvas');
-  const toolbar = root.querySelector<HTMLElement>('.editor-toolbar');
-  const wrap = canvas?.parentElement;
+  const canvas = root.querySelector<HTMLCanvasElement>('.editor-canvas')!;
+  const toolbar = root.querySelector<HTMLElement>('.editor-toolbar')!;
+  const wrap = canvas.parentElement!;
   if (!canvas || !toolbar || !wrap) return;
 
   let rotation: ObjectRotation = 0;
@@ -79,7 +79,7 @@ export function installObjectAuthoringTools(root: HTMLElement): void {
   overlay.style.zIndex = '1';
   overlay.style.imageRendering = 'pixelated';
   wrap.append(overlay);
-  const overlayCtx = overlay.getContext('2d');
+  const overlayCtx = overlay.getContext('2d')!;
   if (!overlayCtx) return;
   const imageCache = new Map<string, HTMLImageElement>();
 

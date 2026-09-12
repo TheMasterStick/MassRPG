@@ -44,9 +44,9 @@ type ZoneMode = 'off' | 'paint' | 'erase';
  * from that shape, so map authors never need to hand-place dozens of spawners.
  */
 export function installSpawnZoneTools(root: HTMLElement): void {
-  const canvas = root.querySelector<HTMLCanvasElement>('.editor-canvas');
-  const toolbar = root.querySelector<HTMLElement>('.editor-toolbar');
-  const wrap = canvas?.parentElement;
+  const canvas = root.querySelector<HTMLCanvasElement>('.editor-canvas')!;
+  const toolbar = root.querySelector<HTMLElement>('.editor-toolbar')!;
+  const wrap = canvas.parentElement!;
   if (!canvas || !toolbar || !wrap) return;
 
   let mode: ZoneMode = 'off';
@@ -128,7 +128,7 @@ export function installSpawnZoneTools(root: HTMLElement): void {
   overlay.style.pointerEvents = 'none';
   overlay.style.zIndex = '1';
   wrap.append(overlay);
-  const ctx = overlay.getContext('2d');
+  const ctx = overlay.getContext('2d')!;
   if (!ctx) return;
 
   function currentPlane(): WorldPlane {

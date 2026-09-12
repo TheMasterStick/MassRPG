@@ -38,7 +38,7 @@ const MARKER_COLORS: Record<EditorMarkerType, string> = {
   town: '#f1d56b',
   city: '#ff7777',
   castle: '#c391ff',
-  mining_area: '#ff8a32',
+  mining_area: '#ff8a32', resource_area: '#55c878',
 };
 
 export function createEditorNavigator(options: NavigatorOptions): EditorNavigatorHandle {
