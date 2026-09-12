@@ -24,13 +24,12 @@ const ROOF_OPTIONS: { id: RoofMode; label: string }[] = [
  * Doodad-style transforms for authored structures and roofs. The normal V6
  * structure palette remains the placement UI; these controls attach the active
  * rotation/mirror transform as structures are painted. Roof pieces are their own
- * visual layer. The base editor renderer owns structure transforms; this overlay renders roofs only.
+ * visual layer. The base editor renderer owns both structure transforms and authored roofs.
  */
 export function installObjectAuthoringTools(root: HTMLElement): void {
   const canvas = root.querySelector<HTMLCanvasElement>('.editor-canvas')!;
   const toolbar = root.querySelector<HTMLElement>('.editor-toolbar')!;
-  const wrap = canvas.parentElement!;
-  if (!canvas || !toolbar || !wrap) return;
+  if (!canvas || !toolbar) return;
 
   let rotation: ObjectRotation = 0;
   let flipX = false;
@@ -39,7 +38,6 @@ export function installObjectAuthoringTools(root: HTMLElement): void {
   let roofPainting = false;
   let lastRoofPoint: { x: number; y: number } | null = null;
   let saveTimer: ReturnType<typeof setTimeout> | null = null;
-  let frame = 0;
 
   const rotateBtn = document.createElement('button');
   rotateBtn.type = 'button';
@@ -60,28 +58,23 @@ export function installObjectAuthoringTools(root: HTMLElement): void {
     roofSelect.append(option);
   }
 
+  const ROOF_VISIBILITY_KEY = 'massrpg.editor.roofsVisible';
+  let roofsVisible = window.localStorage.getItem(ROOF_VISIBILITY_KEY) !== 'false';
+  const roofVisibilityBtn = document.createElement('button');
+  roofVisibilityBtn.type = 'button';
+  roofVisibilityBtn.title = 'Hide/show authored roofs in the editor without deleting them.';
+
   function refreshButtons(): void {
     rotateBtn.textContent = `Object ${rotation}°`;
     flipXBtn.textContent = `Obj Flip X${flipX ? ' ✓' : ''}`;
     flipYBtn.textContent = `Obj Flip Y${flipY ? ' ✓' : ''}`;
     flipXBtn.style.outline = flipX ? '2px solid #e5b84f' : '';
     flipYBtn.style.outline = flipY ? '2px solid #e5b84f' : '';
+    roofVisibilityBtn.textContent = roofsVisible ? 'Roofs: Visible' : 'Roofs: Hidden';
+    roofVisibilityBtn.style.outline = roofsVisible ? '' : '2px solid #e5b84f';
   }
   refreshButtons();
-  toolbar.append(rotateBtn, flipXBtn, flipYBtn, roofSelect);
-
-  const overlay = document.createElement('canvas');
-  overlay.style.position = 'absolute';
-  overlay.style.inset = '0';
-  overlay.style.width = '100%';
-  overlay.style.height = '100%';
-  overlay.style.pointerEvents = 'none';
-  overlay.style.zIndex = '1';
-  overlay.style.imageRendering = 'pixelated';
-  wrap.append(overlay);
-  const overlayCtx = overlay.getContext('2d')!;
-  if (!overlayCtx) return;
-  const imageCache = new Map<string, HTMLImageElement>();
+  toolbar.append(rotateBtn, flipXBtn, flipYBtn, roofSelect, roofVisibilityBtn);
 
   function currentPlane(): WorldPlane {
     const planeSelect = [...toolbar.querySelectorAll<HTMLSelectElement>('select')]
@@ -207,7 +200,23 @@ export function installObjectAuthoringTools(root: HTMLElement): void {
   });
   roofSelect.addEventListener('change', () => {
     roofMode = roofSelect.value as RoofMode;
+    if (roofMode !== 'off' && !roofsVisible) {
+      roofsVisible = true;
+      window.localStorage.setItem(ROOF_VISIBILITY_KEY, 'true');
+      refreshButtons();
+    }
     canvas.style.cursor = roofMode === 'off' ? '' : 'crosshair';
+    redraw();
+  });
+  roofVisibilityBtn.addEventListener('click', () => {
+    roofsVisible = !roofsVisible;
+    window.localStorage.setItem(ROOF_VISIBILITY_KEY, roofsVisible ? 'true' : 'false');
+    if (!roofsVisible && roofMode !== 'off') {
+      roofMode = 'off';
+      roofSelect.value = 'off';
+      canvas.style.cursor = '';
+    }
+    refreshButtons();
     redraw();
   });
 
@@ -269,81 +278,9 @@ export function installObjectAuthoringTools(root: HTMLElement): void {
     }
   });
 
-  function imageFor(path: string): HTMLImageElement {
-    let image = imageCache.get(path);
-    if (image) return image;
-    image = new Image();
-    image.src = path;
-    image.onload = redraw;
-    imageCache.set(path, image);
-    return image;
-  }
-
-  function drawTransformedImage(
-    image: HTMLImageElement,
-    sx: number,
-    sy: number,
-    tilePx: number,
-    objectTransform: ObjectTransform,
-    preserveAspect: boolean,
-  ): void {
-    if (!image.complete || image.naturalWidth <= 0) return;
-    const dw = tilePx;
-    const dh = preserveAspect ? Math.max(tilePx, tilePx * image.naturalHeight / image.naturalWidth) : tilePx;
-    overlayCtx.save();
-    overlayCtx.imageSmoothingEnabled = false;
-    overlayCtx.translate(sx + tilePx / 2, sy + tilePx - dh / 2);
-    overlayCtx.rotate(objectTransform.rotation * Math.PI / 180);
-    overlayCtx.scale(objectTransform.flipX ? -1 : 1, objectTransform.flipY ? -1 : 1);
-    overlayCtx.drawImage(image, -dw / 2, -dh / 2, dw, dh);
-    overlayCtx.restore();
-  }
-
   function redraw(): void {
-    if (frame) cancelAnimationFrame(frame);
-    frame = requestAnimationFrame(() => {
-      frame = 0;
-      const rect = canvas.getBoundingClientRect();
-      const dpr = Math.min(2, window.devicePixelRatio || 1);
-      const width = Math.max(1, Math.round(rect.width));
-      const height = Math.max(1, Math.round(rect.height));
-      if (overlay.width !== Math.round(width * dpr) || overlay.height !== Math.round(height * dpr)) {
-        overlay.width = Math.round(width * dpr);
-        overlay.height = Math.round(height * dpr);
-      }
-      overlayCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      overlayCtx.clearRect(0, 0, width, height);
-
-      const tilePx = currentZoom();
-      if (tilePx < 4) return;
-      const center = currentCenter();
-      const plane = currentPlane();
-      const layer = getPlaneData(loadEditorWorld(WORLD_SIZE), plane);
-      const minX = Math.max(0, Math.floor(center.x - width / (2 * tilePx)) - 2);
-      const maxX = Math.min(WORLD_SIZE - 1, Math.ceil(center.x + width / (2 * tilePx)) + 2);
-      const minY = Math.max(0, Math.floor(center.y - height / (2 * tilePx)) - 2);
-      const maxY = Math.min(WORLD_SIZE - 1, Math.ceil(center.y + height / (2 * tilePx)) + 2);
-      const toScreen = (x: number, y: number) => ({ x: width / 2 + (x - center.x) * tilePx, y: height / 2 + (y - center.y) * tilePx });
-
-      for (let y = minY; y <= maxY; y++) {
-        for (let x = minX; x <= maxX; x++) {
-          const cell = layer.cells[cellKey(x, y)] as TransformableEditorCell | undefined;
-          if (!cell) continue;
-          const p = toScreen(x, y);
-
-          if (cell.roof) {
-            const image = imageFor(`/sprites/roof/${cell.roof.id}.png`);
-            drawTransformedImage(image, p.x, p.y, tilePx, cell.roof.transform, false);
-          }
-        }
-      }
-    });
+    canvas.dispatchEvent(new CustomEvent('massrpg-editor-redraw'));
   }
 
-  toolbar.addEventListener('change', redraw);
-  toolbar.addEventListener('input', redraw);
-  toolbar.addEventListener('click', redraw);
-  canvas.addEventListener('wheel', redraw, { passive: true });
-  window.addEventListener('resize', redraw);
   redraw();
 }

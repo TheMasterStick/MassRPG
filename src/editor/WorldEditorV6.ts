@@ -488,6 +488,7 @@ export function launchWorldEditor(root: HTMLElement): void {
   window.addEventListener('resize', resizeCanvas);
 
   canvas.addEventListener('contextmenu', (event) => event.preventDefault());
+  canvas.addEventListener('massrpg-editor-redraw', () => draw());
   canvas.addEventListener('mousedown', (event) => {
     if (event.button === 2 || event.button === 1) {
       isPanning = true;
@@ -1561,6 +1562,21 @@ export function launchWorldEditor(root: HTMLElement): void {
         if (cell.structure) drawStructureSprite(cell.structure, sx, sy, tilePx, cell.structureTransform);
         else if (cell.resource) drawSprite(`/sprites/resources/${cell.resource}.png`, sx, sy, tilePx, cell.resource.startsWith('rock_') ? '#222' : '#356c36');
         else if (cell.spawner) drawSprite(`/sprites/monsters/${cell.spawner}.png`, sx, sy, tilePx, '#aa3030');
+      }
+    }
+
+    // Authored roofs belong to the same authoritative camera/render pass as the
+    // terrain and structures. They can be hidden while furnishing interiors.
+    if (window.localStorage.getItem('massrpg.editor.roofsVisible') === 'false') return;
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        const x = startX + col;
+        const y = startY + row;
+        const cell = currentLayer().cells[cellKey(x, y)] as TransformableEditorCell | undefined;
+        if (!cell?.roof) continue;
+        const sx = originX + col * tilePx;
+        const sy = originY + row * tilePx;
+        drawSprite(`/sprites/roof/${cell.roof.id}.png`, sx, sy, tilePx, '#8d6b46', cell.roof.transform);
       }
     }
   }
