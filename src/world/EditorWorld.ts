@@ -280,8 +280,6 @@ export async function initializeEditorWorldStorage(worldSize: number): Promise<v
 
 export function loadEditorWorld(worldSize: number): EditorWorldData {
   if (cached) return cached;
-  // Bootstrap should initialize IndexedDB before runtime/editor construction. This
-  // fallback keeps tests and direct module consumers safe without touching storage.
   return (cached = blankEditorWorld(worldSize));
 }
 
@@ -323,7 +321,7 @@ export function shapeContains(stroke: Pick<TerrainStroke, 'kind' | 'x' | 'y' | '
   if (stroke.kind === 'line') return distanceToSegment(x, y, stroke.x, stroke.y, x2, y2) <= half;
   const left = Math.min(stroke.x, x2);
   const right = Math.max(stroke.x, x2);
-  const top = Math.min(stroke.y, x2);
+  const top = Math.min(stroke.y, y2);
   const bottom = Math.max(stroke.y, y2);
   if (stroke.kind === 'rect_fill') return x >= left && x <= right && y >= top && y <= bottom;
   if (x < left - half || x > right + half || y < top - half || y > bottom + half) return false;
