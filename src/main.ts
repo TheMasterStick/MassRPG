@@ -12,6 +12,7 @@ import { ensureCanonicalWorldInstalled } from './world/CanonicalWorld';
 import { launchWorldEditor } from './editor/WorldEditor';
 import { installSpawnZoneTools } from './editor/SpawnZoneTools';
 import { installObjectAuthoringTools } from './editor/ObjectAuthoringTools';
+import { installEditorCameraControls } from './editor/EditorCameraControls';
 import { registerUtilityTools } from './data/tools';
 import { registerCombatEquipment } from './data/equipmentProgression';
 import { registerArrowCrafting } from './data/arrowCrafting';
@@ -162,6 +163,7 @@ async function bootstrap() {
     launchWorldEditor(app);
     installObjectAuthoringTools(app);
     installSpawnZoneTools(app);
+    installEditorCameraControls(app);
   } else {
     buildStartScreen();
   }
