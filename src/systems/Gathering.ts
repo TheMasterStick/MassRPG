@@ -6,7 +6,7 @@ import { RESOURCE_NAMES } from '../data/biomes';
 import { addItem, removeItem } from './Inventory';
 import { addXp } from './Skills';
 import { log } from '../core/EventBus';
-import { RESOURCE_RESPAWN_TICKS, FISHING_RESPAWN_TICKS } from '../core/constants';
+import { RESOURCE_RESPAWN_TICKS, FLAX_RESPAWN_TICKS, FISHING_RESPAWN_TICKS } from '../core/constants';
 import type { SkillId } from '../data/skills';
 
 const GATHER_TICKS = 3;
@@ -147,8 +147,11 @@ export function processGatherTick(world: World, player: Player) {
 
   if (resource === 'flax_plant') {
     addItem(player, 'flax', 1);
-    addXp(player, 'farming', 5);
-    world.depleteResource(action.targetX, action.targetY, RESOURCE_RESPAWN_TICKS);
+    // Picking wild flax is material gathering, not crop cultivation. Farming XP
+    // belongs to planting/harvesting cultivated patches; a future Foraging skill
+    // can own wild-plant progression if that system is added.
+    world.depleteResource(action.targetX, action.targetY, FLAX_RESPAWN_TICKS);
+    log('You pick some flax.', 'info');
     player.action = null;
     return;
   }
