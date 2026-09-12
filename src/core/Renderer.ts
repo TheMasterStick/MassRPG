@@ -111,7 +111,7 @@ export class Renderer {
     const camX = player.x * TILE_SIZE - w / 2;
     const camY = player.y * TILE_SIZE - h / 2;
 
-    // Keep ordinary terrain/object work close to the actual viewport. Long cast
+    // Keep ordinary terrain/object work close to the actual viewport. Long tree
     // shadows get a separate one-sided fringe below/left, where their sources can
     // actually project into view toward the upper-right.
     const minTX = Math.floor(camX / TILE_SIZE) - 1;
@@ -154,8 +154,9 @@ export class Renderer {
       }
     }
 
-    // Only scan off-screen cells that can cast a shadow into the visible area.
-    // This avoids doing full terrain generation/render work for a 3-tile border.
+    // Only tall trees need the wider off-screen shadow fringe. Rocks and ordinary
+    // props now use compact grounding shadows and are already covered by the normal
+    // one-tile viewport margin.
     const shadowMinTX = minTX - 3;
     const shadowMaxTX = maxTX;
     const shadowMinTY = minTY;
@@ -163,15 +164,11 @@ export class Renderer {
     for (let ty = shadowMinTY; ty <= shadowMaxTY; ty++) {
       for (let tx = shadowMinTX; tx <= shadowMaxTX; tx++) {
         if (tx >= minTX && tx <= maxTX && ty >= minTY && ty <= maxTY) continue;
+        const res = world.getResourceNode(tx, ty);
+        if (!res?.startsWith('tree_')) continue;
         const sx = tx * TILE_SIZE - camX;
         const sy = ty * TILE_SIZE - camY;
-        const structure = world.getStructure(tx, ty);
-        if (structure) {
-          shadows.push(() => this.drawStructureShadow(sx, sy, structure));
-          continue;
-        }
-        const res = world.getResourceNode(tx, ty);
-        if (res) shadows.push(() => this.drawResourceShadow(sx, sy, res));
+        shadows.push(() => this.drawResourceShadow(sx, sy, res));
       }
     }
 
@@ -322,8 +319,8 @@ export class Renderer {
     if (res.startsWith('fishing_') || res === 'farm_patch' || res === 'herb_patch') return;
     const sprite = getSprite('resources', res);
     if (!sprite) {
-      const width = res.startsWith('tree_') ? 1.1 : res.startsWith('rock_') ? 0.68 : 0.42;
-      this.drawGroundShadow(sx, sy, width, width * 0.22, res.startsWith('tree_') ? 0.2 : 0.16);
+      const width = res.startsWith('tree_') ? 1.1 : res.startsWith('rock_') ? 0.74 : 0.42;
+      this.drawGroundShadow(sx, sy, width, width * 0.22, res.startsWith('tree_') ? 0.2 : 0.18);
       return;
     }
 
@@ -332,20 +329,29 @@ export class Renderer {
       return;
     }
     if (res.startsWith('rock_')) {
-      this.drawProjectedShadow(sprite, sx, sy, 1, 0.20, 0.32, 0.44);
+      // Ore nodes are low, heavy objects. Most of their shadow should hug the
+      // base; a faint, very short cast keeps them consistent with the world's
+      // upper-right light direction without making the rock look suspended.
+      this.drawGroundShadow(sx, sy, 0.78, 0.22, 0.25);
+      this.drawProjectedShadow(sprite, sx, sy, 1, 0.055, 0.13, 0.16);
       return;
     }
-    this.drawProjectedShadow(sprite, sx, sy, 1, 0.15, 0.28, 0.38);
+    this.drawGroundShadow(sx, sy, 0.48, 0.14, 0.17);
+    this.drawProjectedShadow(sprite, sx, sy, 1, 0.05, 0.12, 0.15);
   }
 
   private drawStructureShadow(sx: number, sy: number, type: StructureType) {
     if (type === 'blocker' || type === 'campfire') return;
     const sprite = getSprite('structures', type);
     if (sprite) {
-      this.drawProjectedShadow(sprite, sx, sy, 1, 0.12, 0.22, 0.32);
+      // Workshop props and containers get a subdued base shadow first, with only
+      // a hint of directional cast. This keeps them grounded without competing
+      // visually with the much taller tree shadows.
+      this.drawGroundShadow(sx, sy, 0.64, 0.17, 0.13);
+      this.drawProjectedShadow(sprite, sx, sy, 1, 0.04, 0.11, 0.14);
       return;
     }
-    if (STRUCTURE_GLYPH[type]) this.drawGroundShadow(sx, sy, 0.56, 0.13, 0.10);
+    if (STRUCTURE_GLYPH[type]) this.drawGroundShadow(sx, sy, 0.58, 0.14, 0.10);
   }
 
   private drawSpriteOnTile(img: HTMLImageElement, sx: number, sy: number, widthMul = 1, flip = false) {
