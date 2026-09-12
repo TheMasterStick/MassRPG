@@ -31,7 +31,7 @@ export const DEFAULT_CHARACTER_APPEARANCE: CharacterAppearance = {
 };
 
 const ATLAS_ROOT = '/sprites/characters';
-const TILE = 256;
+const TILE = 128;
 const CREATOR_DRAFT_KEY = 'massrpg_character_creator_draft_v1';
 
 const ATLAS_COLS = {
@@ -200,7 +200,7 @@ async function getLayer(name: AtlasName, index: number, tintMode: TintMode = 'no
     canvas.height = TILE;
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('Canvas 2D context unavailable');
-    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingEnabled = false;
     ctx.drawImage(atlas, rect.sx, rect.sy, rect.sw, rect.sh, 0, 0, TILE, TILE);
 
     if (tintMode !== 'none') {
@@ -235,7 +235,7 @@ export async function composeCharacterCanvas(
     canvas.height = TILE;
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('Canvas 2D context unavailable');
-    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingEnabled = false;
 
     const base = await getLayer('base', baseIndex(appearance.sex, facing));
     ctx.drawImage(base, 0, 0);
