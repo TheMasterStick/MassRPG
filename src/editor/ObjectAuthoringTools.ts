@@ -3,10 +3,11 @@ import { cellKey, getPlaneData, loadEditorWorld, saveEditorWorld } from '../worl
 import {
   IDENTITY_OBJECT_TRANSFORM,
   type ObjectRotation,
+  type ObjectTransform,
   type RoofPieceId,
   type TransformableEditorCell,
 } from '../world/EditorObjects';
-import type { WorldPlane } from '../world/types';
+import type { StructureType, WorldPlane } from '../world/types';
 
 type RoofMode = 'off' | 'erase' | RoofPieceId;
 
@@ -21,14 +22,15 @@ const ROOF_OPTIONS: { id: RoofMode; label: string }[] = [
 
 /**
  * Doodad-style transforms for authored structures and roofs. The normal V6
- * structure palette remains the placement UI; these controls simply attach the
- * active rotation/mirror transform to structures as they are painted. Roof pieces
- * use the same transform and are painted as their own editor layer.
+ * structure palette remains the placement UI; these controls attach the active
+ * rotation/mirror transform as structures are painted. Roof pieces are their own
+ * visual layer. A transparent overlay previews both layers in editor space.
  */
 export function installObjectAuthoringTools(root: HTMLElement): void {
   const canvas = root.querySelector<HTMLCanvasElement>('.editor-canvas');
   const toolbar = root.querySelector<HTMLElement>('.editor-toolbar');
-  if (!canvas || !toolbar) return;
+  const wrap = canvas?.parentElement;
+  if (!canvas || !toolbar || !wrap) return;
 
   let rotation: ObjectRotation = 0;
   let flipX = false;
@@ -37,16 +39,17 @@ export function installObjectAuthoringTools(root: HTMLElement): void {
   let roofPainting = false;
   let lastRoofPoint: { x: number; y: number } | null = null;
   let saveTimer: ReturnType<typeof setTimeout> | null = null;
+  let frame = 0;
 
   const rotateBtn = document.createElement('button');
   rotateBtn.type = 'button';
-  rotateBtn.title = 'Rotate subsequently placed structures/roofs 90° clockwise. Shortcut: R when not editing cliff edges.';
+  rotateBtn.title = 'Rotate subsequently placed structures/roofs 90° clockwise. Shortcut: R.';
   const flipXBtn = document.createElement('button');
   flipXBtn.type = 'button';
-  flipXBtn.title = 'Mirror subsequently placed structures/roofs horizontally.';
+  flipXBtn.title = 'Mirror subsequently placed structures/roofs horizontally. Shortcut: X.';
   const flipYBtn = document.createElement('button');
   flipYBtn.type = 'button';
-  flipYBtn.title = 'Mirror subsequently placed structures/roofs vertically.';
+  flipYBtn.title = 'Mirror subsequently placed structures/roofs vertically. Shortcut: Y.';
 
   const roofSelect = document.createElement('select');
   roofSelect.title = 'Paint authored roof pieces using the current rotation/mirror transform.';
@@ -65,8 +68,20 @@ export function installObjectAuthoringTools(root: HTMLElement): void {
     flipYBtn.style.outline = flipY ? '2px solid #e5b84f' : '';
   }
   refreshButtons();
-
   toolbar.append(rotateBtn, flipXBtn, flipYBtn, roofSelect);
+
+  const overlay = document.createElement('canvas');
+  overlay.style.position = 'absolute';
+  overlay.style.inset = '0';
+  overlay.style.width = '100%';
+  overlay.style.height = '100%';
+  overlay.style.pointerEvents = 'none';
+  overlay.style.zIndex = '1';
+  overlay.style.imageRendering = 'pixelated';
+  wrap.append(overlay);
+  const overlayCtx = overlay.getContext('2d');
+  if (!overlayCtx) return;
+  const imageCache = new Map<string, HTMLImageElement>();
 
   function currentPlane(): WorldPlane {
     const planeSelect = [...toolbar.querySelectorAll<HTMLSelectElement>('select')]
@@ -95,6 +110,11 @@ export function installObjectAuthoringTools(root: HTMLElement): void {
     return Math.max(1, Number(select?.value ?? 1));
   }
 
+  function edgeToolActive(): boolean {
+    return [...toolbar.querySelectorAll<HTMLSelectElement>('select')]
+      .some((select) => select.selectedOptions[0]?.textContent?.startsWith('Edge tiles:') && select.value !== 'off');
+  }
+
   function eventPoint(event: MouseEvent): { x: number; y: number } {
     const rect = canvas.getBoundingClientRect();
     const tilePx = currentZoom();
@@ -105,7 +125,7 @@ export function installObjectAuthoringTools(root: HTMLElement): void {
     };
   }
 
-  function transform() {
+  function transform(): ObjectTransform {
     return { rotation, flipX, flipY };
   }
 
@@ -119,12 +139,10 @@ export function installObjectAuthoringTools(root: HTMLElement): void {
 
   function applyTransformToStructure(point: { x: number; y: number }): void {
     if (roofMode !== 'off') return;
-    const data = loadEditorWorld(WORLD_SIZE);
-    const layer = getPlaneData(data, currentPlane());
+    const layer = getPlaneData(loadEditorWorld(WORLD_SIZE), currentPlane());
     const size = currentBrushSize();
     const half = Math.floor(size / 2);
     let changed = false;
-    // Extremely large macro brushes are terrain tools; never scan them for objects.
     const radius = size > 129 ? 0 : half;
     for (let oy = -radius; oy <= radius; oy++) {
       for (let ox = -radius; ox <= radius; ox++) {
@@ -135,13 +153,15 @@ export function installObjectAuthoringTools(root: HTMLElement): void {
         changed = true;
       }
     }
-    if (changed) scheduleSave();
+    if (changed) {
+      scheduleSave();
+      redraw();
+    }
   }
 
   function paintRoof(point: { x: number; y: number }): void {
     if (roofMode === 'off') return;
-    const data = loadEditorWorld(WORLD_SIZE);
-    const layer = getPlaneData(data, currentPlane());
+    const layer = getPlaneData(loadEditorWorld(WORLD_SIZE), currentPlane());
     const key = cellKey(point.x, point.y);
     const cell = (layer.cells[key] ?? {}) as TransformableEditorCell;
     if (roofMode === 'erase') delete cell.roof;
@@ -149,6 +169,7 @@ export function installObjectAuthoringTools(root: HTMLElement): void {
     if (Object.keys(cell).length === 0) delete layer.cells[key];
     else layer.cells[key] = cell;
     scheduleSave();
+    redraw();
   }
 
   function paintRoofSegment(point: { x: number; y: number }): void {
@@ -172,21 +193,24 @@ export function installObjectAuthoringTools(root: HTMLElement): void {
   rotateBtn.addEventListener('click', () => {
     rotation = ((rotation + 90) % 360) as ObjectRotation;
     refreshButtons();
+    redraw();
   });
   flipXBtn.addEventListener('click', () => {
     flipX = !flipX;
     refreshButtons();
+    redraw();
   });
   flipYBtn.addEventListener('click', () => {
     flipY = !flipY;
     refreshButtons();
+    redraw();
   });
   roofSelect.addEventListener('change', () => {
     roofMode = roofSelect.value as RoofMode;
     canvas.style.cursor = roofMode === 'off' ? '' : 'crosshair';
+    redraw();
   });
 
-  // Roof mode is a dedicated layer, so suppress the underlying terrain/object tool.
   canvas.addEventListener('mousedown', (event) => {
     if (roofMode === 'off' || event.button !== 0) return;
     event.preventDefault();
@@ -206,10 +230,10 @@ export function installObjectAuthoringTools(root: HTMLElement): void {
     roofPainting = false;
     lastRoofPoint = null;
     scheduleSave();
+    redraw();
   });
 
-  // These bubble listeners run after V6's normal structure painting. If the
-  // clicked/dragged cells now contain structures, attach the active transform.
+  // V6 paints the normal structure first; then this listener attaches transform metadata.
   canvas.addEventListener('mousedown', (event) => {
     if (roofMode !== 'off' || event.button !== 0) return;
     queueMicrotask(() => applyTransformToStructure(eventPoint(event)));
@@ -220,24 +244,122 @@ export function installObjectAuthoringTools(root: HTMLElement): void {
   });
 
   window.addEventListener('keydown', (event) => {
-    if (event.ctrlKey || event.metaKey || event.altKey) return;
+    if (event.ctrlKey || event.metaKey || event.altKey || edgeToolActive()) return;
     const target = event.target;
     if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) return;
     const key = event.key.toLowerCase();
     if (key === 'r') {
       rotation = ((rotation + 90) % 360) as ObjectRotation;
       refreshButtons();
+      redraw();
     } else if (key === 'x') {
       flipX = !flipX;
       refreshButtons();
+      redraw();
     } else if (key === 'y') {
       flipY = !flipY;
       refreshButtons();
+      redraw();
     } else if (key === '0') {
       rotation = IDENTITY_OBJECT_TRANSFORM.rotation;
       flipX = false;
       flipY = false;
       refreshButtons();
+      redraw();
     }
   });
+
+  function imageFor(path: string): HTMLImageElement {
+    let image = imageCache.get(path);
+    if (image) return image;
+    image = new Image();
+    image.src = path;
+    image.onload = redraw;
+    imageCache.set(path, image);
+    return image;
+  }
+
+  function drawTransformedImage(
+    image: HTMLImageElement,
+    sx: number,
+    sy: number,
+    tilePx: number,
+    objectTransform: ObjectTransform,
+    preserveAspect: boolean,
+  ): void {
+    if (!image.complete || image.naturalWidth <= 0) return;
+    const dw = tilePx;
+    const dh = preserveAspect ? Math.max(tilePx, tilePx * image.naturalHeight / image.naturalWidth) : tilePx;
+    overlayCtx.save();
+    overlayCtx.imageSmoothingEnabled = false;
+    overlayCtx.translate(sx + tilePx / 2, sy + tilePx - dh / 2);
+    overlayCtx.rotate(objectTransform.rotation * Math.PI / 180);
+    overlayCtx.scale(objectTransform.flipX ? -1 : 1, objectTransform.flipY ? -1 : 1);
+    overlayCtx.drawImage(image, -dw / 2, -dh / 2, dw, dh);
+    overlayCtx.restore();
+  }
+
+  function isIdentity(value: ObjectTransform | undefined): boolean {
+    return !value || (value.rotation === 0 && !value.flipX && !value.flipY);
+  }
+
+  function redraw(): void {
+    if (frame) cancelAnimationFrame(frame);
+    frame = requestAnimationFrame(() => {
+      frame = 0;
+      const rect = canvas.getBoundingClientRect();
+      const dpr = Math.min(2, window.devicePixelRatio || 1);
+      const width = Math.max(1, Math.round(rect.width));
+      const height = Math.max(1, Math.round(rect.height));
+      if (overlay.width !== Math.round(width * dpr) || overlay.height !== Math.round(height * dpr)) {
+        overlay.width = Math.round(width * dpr);
+        overlay.height = Math.round(height * dpr);
+      }
+      overlayCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      overlayCtx.clearRect(0, 0, width, height);
+
+      const tilePx = currentZoom();
+      if (tilePx < 4) return;
+      const center = currentCenter();
+      const plane = currentPlane();
+      const layer = getPlaneData(loadEditorWorld(WORLD_SIZE), plane);
+      const minX = Math.max(0, Math.floor(center.x - width / (2 * tilePx)) - 2);
+      const maxX = Math.min(WORLD_SIZE - 1, Math.ceil(center.x + width / (2 * tilePx)) + 2);
+      const minY = Math.max(0, Math.floor(center.y - height / (2 * tilePx)) - 2);
+      const maxY = Math.min(WORLD_SIZE - 1, Math.ceil(center.y + height / (2 * tilePx)) + 2);
+      const toScreen = (x: number, y: number) => ({ x: width / 2 + (x - center.x) * tilePx, y: height / 2 + (y - center.y) * tilePx });
+
+      for (let y = minY; y <= maxY; y++) {
+        for (let x = minX; x <= maxX; x++) {
+          const cell = layer.cells[cellKey(x, y)] as TransformableEditorCell | undefined;
+          if (!cell) continue;
+          const p = toScreen(x, y);
+
+          if (cell.structure && cell.structure !== 'blocker' && !isIdentity(cell.structureTransform)) {
+            // V6 already drew the untransformed structure below. Dim that cell so
+            // the authoritative transformed preview is visually unambiguous.
+            overlayCtx.fillStyle = 'rgba(14,16,18,.54)';
+            overlayCtx.fillRect(p.x, p.y, tilePx, tilePx);
+            const image = imageFor(`/sprites/structures/${cell.structure as StructureType}.png`);
+            drawTransformedImage(image, p.x, p.y, tilePx, cell.structureTransform!, true);
+            overlayCtx.strokeStyle = 'rgba(238,195,76,.72)';
+            overlayCtx.lineWidth = 1;
+            overlayCtx.strokeRect(p.x + 1, p.y + 1, Math.max(1, tilePx - 2), Math.max(1, tilePx - 2));
+          }
+
+          if (cell.roof) {
+            const image = imageFor(`/sprites/roof/${cell.roof.id}.png`);
+            drawTransformedImage(image, p.x, p.y, tilePx, cell.roof.transform, false);
+          }
+        }
+      }
+    });
+  }
+
+  toolbar.addEventListener('change', redraw);
+  toolbar.addEventListener('input', redraw);
+  toolbar.addEventListener('click', redraw);
+  canvas.addEventListener('wheel', redraw, { passive: true });
+  window.addEventListener('resize', redraw);
+  redraw();
 }
