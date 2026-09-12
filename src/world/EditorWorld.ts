@@ -40,6 +40,8 @@ export interface EditorCell {
   resource?: ResourceType | null;
   structure?: StructureType | null;
   spawner?: string | null;
+  /** Additional editor layers (object transforms, roofs, cliff decorations) are additive and migrate transparently. */
+  [key: string]: unknown;
 }
 
 export type TerrainStrokeKind = 'square' | 'line' | 'rect_fill' | 'rect_outline';
@@ -84,6 +86,8 @@ export interface EditorWorldData {
   planes: Record<'-1' | '-2', EditorPlaneData>;
   markers: EditorMarker[];
   links: EditorPlaneLink[];
+  /** Paintable logical population regions. Typed by SpawnZones.ts; kept here as migration-safe world data. */
+  spawnZones?: unknown[];
 }
 
 let cached: EditorWorldData | null = null;
@@ -116,6 +120,7 @@ export function blankEditorWorld(worldSize: number): EditorWorldData {
     planes: { '-1': blankPlane(), '-2': blankPlane() },
     markers: [],
     links: [],
+    spawnZones: [],
   };
 }
 
@@ -177,6 +182,7 @@ function migrateParsedWorld(parsed: unknown, worldSize: number): EditorWorldData
     planes?: unknown;
     markers?: unknown;
     links?: unknown;
+    spawnZones?: unknown;
   };
   if (!candidate.cells || typeof candidate.cells !== 'object') return blankEditorWorld(worldSize);
 
@@ -213,7 +219,9 @@ function migrateParsedWorld(parsed: unknown, worldSize: number): EditorWorldData
       }))
     : [];
 
-  for (const plane of [surface, normalizePlaneData(rawPlanes['-1']), normalizePlaneData(rawPlanes['-2'])]) {
+  const underground1 = normalizePlaneData(rawPlanes['-1']);
+  const underground2 = normalizePlaneData(rawPlanes['-2']);
+  for (const plane of [surface, underground1, underground2]) {
     for (const cell of Object.values(plane.cells)) delete (cell as EditorCell & { suppressProcedural?: boolean }).suppressProcedural;
   }
 
@@ -224,9 +232,10 @@ function migrateParsedWorld(parsed: unknown, worldSize: number): EditorWorldData
     cells: surface.cells,
     terrainStrokes: surface.terrainStrokes,
     elevationStrokes: surface.elevationStrokes,
-    planes: { '-1': normalizePlaneData(rawPlanes['-1']), '-2': normalizePlaneData(rawPlanes['-2']) },
+    planes: { '-1': underground1, '-2': underground2 },
     markers,
     links,
+    spawnZones: Array.isArray(candidate.spawnZones) ? candidate.spawnZones : [],
   };
 }
 
@@ -314,7 +323,7 @@ export function shapeContains(stroke: Pick<TerrainStroke, 'kind' | 'x' | 'y' | '
   if (stroke.kind === 'line') return distanceToSegment(x, y, stroke.x, stroke.y, x2, y2) <= half;
   const left = Math.min(stroke.x, x2);
   const right = Math.max(stroke.x, x2);
-  const top = Math.min(stroke.y, y2);
+  const top = Math.min(stroke.y, x2);
   const bottom = Math.max(stroke.y, y2);
   if (stroke.kind === 'rect_fill') return x >= left && x <= right && y >= top && y <= bottom;
   if (x < left - half || x > right + half || y < top - half || y > bottom + half) return false;
