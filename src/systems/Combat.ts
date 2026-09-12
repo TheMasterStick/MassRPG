@@ -136,7 +136,13 @@ function resolvePlayerHit(player: Player, monster: Monster): boolean {
   if (dmg > 0) log(`You hit the ${def.name} for ${dmg}.`, 'combat');
   else log(`You miss the ${def.name}.`, 'combat');
 
-  const skill = player.combatStyle === 'ranged' ? 'ranged' : player.combatStyle === 'magic' ? 'magic' : 'strength';
+  let skill: 'attack' | 'strength' | 'defence' | 'ranged' | 'magic';
+  if (player.combatStyle === 'ranged') skill = 'ranged';
+  else if (player.combatStyle === 'magic') skill = 'magic';
+  else if (player.meleeTrainingStyle === 'accurate') skill = 'attack';
+  else if (player.meleeTrainingStyle === 'defensive') skill = 'defence';
+  else skill = 'strength';
+
   if (dmg > 0) {
     addXp(player, skill, dmg * 1.33);
     addXp(player, 'hitpoints', dmg * 0.33);
