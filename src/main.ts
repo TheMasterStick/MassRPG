@@ -10,6 +10,8 @@ import { TWIN_LANDS_SEED, WORLD_SIZE } from './world/AeldorData';
 import { getEditorMarkers, initializeEditorWorldStorage } from './world/EditorWorld';
 import { ensureCanonicalWorldInstalled } from './world/CanonicalWorld';
 import { launchWorldEditor } from './editor/WorldEditor';
+import { installSpawnZoneTools } from './editor/SpawnZoneTools';
+import { installObjectAuthoringTools } from './editor/ObjectAuthoringTools';
 import { registerUtilityTools } from './data/tools';
 import { registerCombatEquipment } from './data/equipmentProgression';
 import { registerArrowCrafting } from './data/arrowCrafting';
@@ -158,6 +160,8 @@ async function bootstrap() {
   if (new URLSearchParams(window.location.search).get('editor') === '1') {
     app.innerHTML = '';
     launchWorldEditor(app);
+    installObjectAuthoringTools(app);
+    installSpawnZoneTools(app);
   } else {
     buildStartScreen();
   }
