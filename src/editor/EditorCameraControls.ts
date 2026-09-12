@@ -28,13 +28,20 @@ export function installEditorCameraControls(root: HTMLElement): void {
     help.textContent = (help.textContent ?? '').replace('right-drag pans', 'WASD / right-drag pans');
   }
 
+  // Canvas normally is not focusable. Explicit focus is important because a
+  // previously used select/input could otherwise keep receiving W/A/S/D while
+  // the user is actively left-dragging structures on the map.
+  canvas.tabIndex = 0;
+  canvas.style.outline = 'none';
+  canvas.addEventListener('mousedown', () => canvas.focus({ preventScroll: true }), { capture: true });
+
   const held = new Set<string>();
   let frame = 0;
   let lastTime = 0;
   let preciseX = Number(xInput.value) || WORLD_SIZE / 2;
   let preciseY = Number(yInput.value) || WORLD_SIZE / 2;
 
-  function isFormTarget(target: EventTarget | null): boolean {
+  function isTypingTarget(target: EventTarget | null): boolean {
     return target instanceof HTMLInputElement
       || target instanceof HTMLTextAreaElement
       || target instanceof HTMLSelectElement;
@@ -73,9 +80,6 @@ export function installEditorCameraControls(root: HTMLElement): void {
     lastTime = now;
     const dir = direction();
     if (dt > 0 && (dir.x !== 0 || dir.y !== 0)) {
-      // Keep camera travel roughly constant in screen space. At close zoom this
-      // is about ten tiles/second; at world-scale zoom it naturally traverses
-      // thousands of tiles/second instead of becoming imperceptibly slow.
       const screenPixelsPerSecond = held.has('ShiftLeft') || held.has('ShiftRight') ? 1050 : 520;
       const tilesPerSecond = screenPixelsPerSecond / tilePixels();
       preciseX = clamp(preciseX + dir.x * tilesPerSecond * dt);
@@ -96,8 +100,10 @@ export function installEditorCameraControls(root: HTMLElement): void {
     if (!frame) frame = requestAnimationFrame(tick);
   }
 
+  // Capture navigation before object/spawn shortcut handlers. Only genuine form
+  // editing suppresses WASD; map painting always leaves camera movement active.
   window.addEventListener('keydown', (event) => {
-    if (event.ctrlKey || event.metaKey || event.altKey || isFormTarget(event.target)) return;
+    if (event.ctrlKey || event.metaKey || event.altKey || isTypingTarget(event.target)) return;
     if (!['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ShiftLeft', 'ShiftRight'].includes(event.code)) return;
 
     if (event.code.startsWith('Key')) {
@@ -106,11 +112,11 @@ export function installEditorCameraControls(root: HTMLElement): void {
     }
     held.add(event.code);
     ensureLoop();
-  });
+  }, { capture: true });
 
   window.addEventListener('keyup', (event) => {
     held.delete(event.code);
-  });
+  }, { capture: true });
 
   window.addEventListener('blur', () => {
     held.clear();
