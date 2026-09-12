@@ -1,5 +1,6 @@
 import type { Player, InventorySlot } from '../entities/Player';
 import { getItem, type EquipSlot } from '../data/items';
+import { equipmentRequirement } from '../data/equipmentProgression';
 import { bus, log } from '../core/EventBus';
 
 export function addItem(player: Player, itemId: string, qty: number): number {
@@ -100,6 +101,13 @@ export function equip(player: Player, slotIndex: number) {
   if (!slot) return;
   const def = getItem(slot.itemId);
   if (!def.equipSlot) { log(`You can't wear that.`, 'warning'); return; }
+
+  const requirement = equipmentRequirement(slot.itemId);
+  if (requirement && player.level(requirement.skill) < requirement.level) {
+    const skillName = requirement.skill[0].toUpperCase() + requirement.skill.slice(1);
+    log(`You need ${skillName} level ${requirement.level} to equip the ${def.name}.`, 'warning');
+    return;
+  }
 
   if (def.equipSlot === 'ammo') {
     equipAmmo(player, slotIndex);
