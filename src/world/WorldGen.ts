@@ -1,5 +1,12 @@
-import type { ElevationLevel, ResourceType, StructureType, TileType } from './types';
+import type { ElevationLevel, ResourceType, StructureType, TileType, WorldPlane } from './types';
 import { getEditorMarkers, type EditorMarker } from './EditorWorld';
+import {
+  getEditorSpawnZones,
+  isResourceTarget,
+  spawnZoneBounds,
+  spawnZoneContains,
+  type EditorSpawnZone,
+} from './SpawnZones';
 import { WORLD_SIZE } from './AeldorData';
 
 interface ResourceAreaNode {
@@ -28,27 +35,30 @@ const RESOURCE_AREA_ALIASES: Array<[RegExp, ResourceType]> = [
 ];
 
 /**
- * Geography is entirely hand-authored. This class supplies only a deterministic
- * ambient dressing/population layer over that authored geography: scattered
- * trees and test-fallback flax, small camp POIs, marker-driven resource sites,
- * gentle un-authored relief, mining clusters, and restrained creatures. Exact
- * editor cells always win, and explicit null resource/structure/spawner fields
- * suppress fallback.
+ * Geography is entirely hand-authored. This class supplies only deterministic
+ * ambient dressing/population over that geography: scattered trees and fallback
+ * flax, marker-driven sites, paintable spawn zones, gentle relief, mining
+ * clusters, and restrained ambient creatures. Exact editor cells always win.
  */
 export class WorldGen {
   readonly seed: number;
   private readonly markers: readonly EditorMarker[];
+  private readonly spawnZones: readonly EditorSpawnZone[];
   private readonly capital: EditorMarker | undefined;
   private readonly miningNodes = new Map<string, ResourceType>();
   private readonly resourceAreaNodes = new Map<string, ResourceAreaNode>();
+  private readonly paintedResourceNodes = new Map<string, ResourceType>();
+  private readonly paintedMonsterSpawns = new Map<string, string>();
   private hasAuthoredFlaxAreas = false;
 
   constructor(seed: number) {
     this.seed = seed >>> 0;
     this.markers = [...getEditorMarkers(WORLD_SIZE, 0)];
+    this.spawnZones = [...getEditorSpawnZones(WORLD_SIZE)];
     this.capital = this.markers.find((m) => m.name.trim().toLowerCase() === 'capital city');
     this.buildMiningNodes();
     this.buildResourceAreaNodes();
+    this.buildPaintedSpawnZones();
   }
 
   /**
@@ -99,6 +109,17 @@ export class WorldGen {
   /** Marker-authored mine areas get compact deterministic ore clusters. */
   miningResourceAt(x: number, y: number): ResourceType | null {
     return this.miningNodes.get(`${x},${y}`) ?? null;
+  }
+
+  /** Paintable resource zones are plane-aware and take priority over ambient population. */
+  paintedResourceAt(plane: WorldPlane, x: number, y: number, tile: TileType): ResourceType | null {
+    const resource = this.paintedResourceNodes.get(`${plane}:${x},${y}`) ?? null;
+    return resource && this.resourceAllowedOnTile(resource, tile) ? resource : null;
+  }
+
+  /** Paintable monster zones are plane-aware and become ordinary authored spawn points. */
+  paintedMonsterAt(plane: WorldPlane, x: number, y: number): string | null {
+    return this.paintedMonsterSpawns.get(`${plane}:${x},${y}`) ?? null;
   }
 
   /**
@@ -167,8 +188,8 @@ export class WorldGen {
 
   /**
    * Transitional fallback for worlds that have not authored flax resource areas
-   * yet. As soon as at least one flax resource-area marker exists, this ambient
-   * generator switches off globally and flax comes only from explicit sites.
+   * yet. As soon as an authored flax marker or painted flax zone exists, ambient
+   * flax switches off globally and flax comes only from deliberate sites.
    */
   private flaxAt(x: number, y: number, tile: TileType): boolean {
     if (this.hasAuthoredFlaxAreas || (tile !== 'grass' && tile !== 'plains')) return false;
@@ -192,9 +213,7 @@ export class WorldGen {
 
   /**
    * Deterministic ambient vegetation plus authored renewable-resource sites.
-   * Authored resource areas are checked first. This lets the world designer
-   * define economically meaningful gathering locations without painting every
-   * individual renewable node into the map.
+   * Painted resource zones are resolved by paintedResourceAt() before this path.
    */
   resourceAt(
     x: number,
@@ -236,10 +255,8 @@ export class WorldGen {
   }
 
   /**
-   * Sparse deterministic wildlife/enemy population. The active 9x9 chunk area
-   * should normally contain several actors, while ordinary travel still has lots
-   * of open space. Authored spawns remain the tool for deliberate hotspots and
-   * exceptional encounters.
+   * Sparse deterministic wildlife/enemy population. Painted monster zones are
+   * resolved separately and therefore work on settlement/floor/cave terrain too.
    */
   monsterSpawnAt(x: number, y: number, tile: TileType): string | null {
     let chance = 0;
@@ -250,9 +267,8 @@ export class WorldGen {
     else if (tile === 'mountain') chance = 1 / 3400;
     else if (tile === 'snow') chance = 1 / 3800;
     else if (tile === 'desert') chance = 1 / 3300;
-    else return null; // paths, settlements, beaches, water, rubble/floors stay quiet
+    else return null;
 
-    // Cheap hash rejection first; marker scanning only happens for candidates.
     if (this.roll(x, y, 31) >= chance) return null;
     if (this.isVillage(x, y)) return null;
 
@@ -342,6 +358,37 @@ export class WorldGen {
         if (occupied.has(key)) continue;
         occupied.add(key);
         this.resourceAreaNodes.set(key, { resource: config.resource, areaId: marker.id, slot: placed });
+        placed++;
+      }
+    }
+  }
+
+  private buildPaintedSpawnZones(): void {
+    const occupiedResources = new Set<string>();
+    const occupiedMonsters = new Set<string>();
+
+    for (let zoneIndex = 0; zoneIndex < this.spawnZones.length; zoneIndex++) {
+      const zone = this.spawnZones[zoneIndex];
+      const bounds = spawnZoneBounds(zone);
+      if (!bounds || zone.count <= 0) continue;
+      if (zone.kind === 'resource' && zone.targetId === 'flax_plant') this.hasAuthoredFlaxAreas = true;
+      if (zone.kind === 'resource' && !isResourceTarget(zone.targetId)) continue;
+
+      const width = Math.max(1, bounds.right - bounds.left + 1);
+      const height = Math.max(1, bounds.bottom - bounds.top + 1);
+      const desired = Math.max(1, Math.min(100, Math.round(zone.count)));
+      let placed = 0;
+      const occupied = zone.kind === 'resource' ? occupiedResources : occupiedMonsters;
+
+      for (let attempt = 0; attempt < desired * 160 && placed < desired; attempt++) {
+        const nx = bounds.left + Math.floor(this.roll(zoneIndex * 97 + attempt, zone.plane * 113 + placed, 601) * width);
+        const ny = bounds.top + Math.floor(this.roll(zoneIndex * 131 + placed, zone.plane * 157 + attempt, 602) * height);
+        if (!spawnZoneContains(zone, nx, ny)) continue;
+        const key = `${zone.plane}:${nx},${ny}`;
+        if (occupied.has(key)) continue;
+        occupied.add(key);
+        if (zone.kind === 'resource') this.paintedResourceNodes.set(key, zone.targetId as ResourceType);
+        else this.paintedMonsterSpawns.set(key, zone.targetId);
         placed++;
       }
     }
