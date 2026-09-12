@@ -5,9 +5,10 @@ import { WORLD_SIZE } from './AeldorData';
 /**
  * Geography is entirely hand-authored. This class supplies only a deterministic
  * ambient dressing/population layer over that authored geography: scattered
- * trees, small camp POIs, marker-driven placeholder sites, gentle un-authored
- * relief, mining clusters, and restrained creatures. Exact editor cells always
- * win, and explicit null resource/structure/spawner fields suppress fallback.
+ * trees and flax, small camp POIs, marker-driven placeholder sites, gentle
+ * un-authored relief, mining clusters, and restrained creatures. Exact editor
+ * cells always win, and explicit null resource/structure/spawner fields suppress
+ * fallback.
  */
 export class WorldGen {
   readonly seed: number;
@@ -139,9 +140,35 @@ export class WorldGen {
   }
 
   /**
-   * Deterministic ambient trees. Grass and plains now carry enough isolated
-   * trees to keep travel visually varied, while forest/taiga remain clearly
-   * denser without becoming solid walls of resource nodes.
+   * Flax grows in small deterministic patches rather than as evenly scattered
+   * single plants. Roughly a third of 22x22 grass/plains cells can contain a
+   * patch, and each patch resolves to only a few actual plants. This makes flax
+   * findable without turning open country into a carpet of crafting resources.
+   */
+  private flaxAt(x: number, y: number, tile: TileType): boolean {
+    if (tile !== 'grass' && tile !== 'plains') return false;
+
+    const cellSize = 22;
+    const cellX = Math.floor(x / cellSize);
+    const cellY = Math.floor(y / cellSize);
+    const patchChance = tile === 'grass' ? 0.38 : 0.28;
+    if (this.roll(cellX, cellY, 81) >= patchChance) return false;
+
+    const margin = 4;
+    const usable = cellSize - margin * 2;
+    const anchorX = cellX * cellSize + margin + Math.floor(this.roll(cellX, cellY, 82) * usable);
+    const anchorY = cellY * cellSize + margin + Math.floor(this.roll(cellX, cellY, 83) * usable);
+    const dx = x - anchorX;
+    const dy = y - anchorY;
+    if (dx * dx + dy * dy > 5) return false;
+
+    return this.roll(x, y, 84) < 0.58;
+  }
+
+  /**
+   * Deterministic ambient vegetation. Grass and plains carry enough isolated
+   * trees to keep travel visually varied, forest/taiga are clearly denser, and
+   * flax appears in sparse harvestable patches on open grassland.
    */
   resourceAt(
     x: number,
@@ -149,6 +176,11 @@ export class WorldGen {
     getTile: (x: number, y: number) => TileType,
   ): ResourceType | null {
     const tile = getTile(x, y);
+
+    // Check low vegetation first so a valid flax patch does not get erased by
+    // the independent ambient-tree roll at the same coordinate.
+    if (this.flaxAt(x, y, tile)) return 'flax_plant';
+
     const chance = tile === 'forest' ? 0.045
       : tile === 'taiga' ? 0.036
       : tile === 'swamp' ? 0.018
