@@ -21,14 +21,14 @@ function worldToChunk(x: number, y: number): { cx: number; cy: number; lx: numbe
   return { cx, cy, lx, ly };
 }
 
-/** Explicit authored travel surfaces can act as a mountain pass. */
+/** Explicit authored travel surfaces can act as a gradual mountain pass. */
 export function isElevationPassTerrain(tile: TileType): boolean {
   return tile === 'path' || tile === 'floor_cobble' || tile === 'floor_brick' || tile === 'floor_wood';
 }
 
-/** Surface elevation +2 and above is mountain-barrier terrain unless a pass was authored through it. */
-export function isHighElevationBarrier(elevation: number, tile: TileType, plane: WorldPlane): boolean {
-  return plane === 0 && elevation >= 2 && !isElevationPassTerrain(tile);
+/** Surface elevation +2 and above is mountain-barrier terrain. */
+export function isHighElevationBarrier(elevation: number, _tile: TileType, plane: WorldPlane): boolean {
+  return plane === 0 && elevation >= 2;
 }
 
 const GROW_TICKS: Record<string, number> = {};
@@ -59,8 +59,6 @@ export class World {
   setActivePlane(plane: WorldPlane) {
     if (this.activePlane === plane) return;
     this.activePlane = plane;
-    // Monsters are simulated only on the currently occupied plane. They will
-    // respawn from authored spawners when that plane becomes active again.
     this.monsters = [];
   }
 
@@ -198,9 +196,6 @@ export class World {
     const dy = Math.sign(toY - fromY);
     const from = this.getDecoration(fromX, fromY);
     const to = this.getDecoration(toX, toY);
-
-    // Diagonal movement crosses both relevant cardinal edge bands. If either
-    // band is rocky/blocked, the diagonal is blocked too, preventing corner cuts.
     if (dx > 0 && (decorationBlocksEdge(from, 'east') || decorationBlocksEdge(to, 'west'))) return true;
     if (dx < 0 && (decorationBlocksEdge(from, 'west') || decorationBlocksEdge(to, 'east'))) return true;
     if (dy > 0 && (decorationBlocksEdge(from, 'south') || decorationBlocksEdge(to, 'north'))) return true;
@@ -210,11 +205,8 @@ export class World {
 
   /**
    * Elevation +1 is ordinary traversable hillside. Surface +2 and above is an
-   * impassable mountain barrier unless the player is following an explicitly
-   * authored path/cobblestone/floor pass. Authored cliff/crevice decorations use
-   * edge-band collision: their flat part stays walkable while crossing the rocky
-   * decorated edge is blocked. Full-tile invisible blockers remain available for
-   * arbitrary pathing control.
+   * impassable mountain barrier unless a gradual authored path/cobblestone/floor
+   * pass connects elevated cells. A path never bypasses a two-level step.
    */
   canStep(fromX: number, fromY: number, toX: number, toY: number): boolean {
     if (!this.isWalkable(toX, toY)) return false;
@@ -225,9 +217,11 @@ export class World {
     const fromElevation = this.getElevation(fromX, fromY);
     const toElevation = this.getElevation(toX, toY);
 
-    if (this.activePlane === 0 && (isElevationPassTerrain(fromTile) || isElevationPassTerrain(toTile))) return true;
     if (Math.abs(toElevation - fromElevation) > 1) return false;
-    if (isHighElevationBarrier(toElevation, toTile, this.activePlane)) return false;
+    const traversingPass = this.activePlane === 0
+      && isElevationPassTerrain(fromTile)
+      && isElevationPassTerrain(toTile);
+    if (isHighElevationBarrier(toElevation, toTile, this.activePlane) && !traversingPass) return false;
     return true;
   }
 
@@ -235,7 +229,6 @@ export class World {
     return getPlaneLinkAt(x, y, WORLD_SIZE, this.activePlane);
   }
 
-  // ---- Monsters ----
   ensureSpawns(activeChunks: Chunk[]) {
     for (const chunk of activeChunks) {
       if (chunk.plane !== this.activePlane) continue;
