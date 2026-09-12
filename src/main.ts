@@ -13,6 +13,11 @@ import { launchWorldEditor } from './editor/WorldEditor';
 import { installSpawnZoneTools } from './editor/SpawnZoneTools';
 import { installObjectAuthoringTools } from './editor/ObjectAuthoringTools';
 import { installEditorCameraControls } from './editor/EditorCameraControls';
+import { installEditorWorkflowShortcuts } from './editor/EditorWorkflowShortcuts';
+import { installEditorReferenceOverlay } from './editor/EditorReferenceOverlay';
+import { installEditorToolbarPolish } from './editor/EditorToolbarPolish';
+import { installEditorPerformanceGuard } from './editor/EditorPerformanceGuard';
+import { installStructureShapeTransforms } from './editor/StructureShapeTransforms';
 import { registerUtilityTools } from './data/tools';
 import { registerCombatEquipment } from './data/equipmentProgression';
 import { registerArrowCrafting } from './data/arrowCrafting';
@@ -163,7 +168,13 @@ async function bootstrap() {
     launchWorldEditor(app);
     installObjectAuthoringTools(app);
     installSpawnZoneTools(app);
+    installStructureShapeTransforms(app);
     installEditorCameraControls(app);
+    installEditorReferenceOverlay(app);
+    installEditorWorkflowShortcuts(app);
+    installEditorPerformanceGuard(app);
+    // Run last so it can collect all controls added by the authoring adapters.
+    installEditorToolbarPolish(app);
   } else {
     buildStartScreen();
   }
