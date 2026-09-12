@@ -18,6 +18,7 @@ interface GatherOutcome {
   itemId: string;
   qty: number;
   toolIds?: string[]; // any one of these tools satisfies the requirement
+  consumableId?: string; // consumed only when gathering succeeds
   depleteChance: number;
   respawnTicks: number;
 }
@@ -68,15 +69,16 @@ export function toolTierOwned(player: Player, toolIds: string[] | undefined): st
 
 function fishOutcome(player: Player, spot: ResourceType): GatherOutcome | null {
   const hasRod = player.hasItem('fishing_rod') || player.equipment.weapon === 'fishing_rod';
+  const hasBait = player.hasItem('fishing_bait');
   const hasNet = player.hasItem('small_fishing_net');
   const hasPot = player.hasItem('lobster_pot');
   const hasHarpoon = player.hasItem('harpoon');
 
   const byId = (id: string) => FISH_TIERS.find((f) => f.id === id)!;
   if (spot === 'fishing_shrimp') {
-    if (hasRod && player.level('fishing') >= 20) {
+    if (hasRod && hasBait && player.level('fishing') >= 20) {
       const f = player.level('fishing') >= 30 ? byId('salmon') : byId('trout');
-      return { skill: 'fishing', levelRequired: f.level, xp: f.xp, itemId: `raw_${f.id}`, qty: 1, depleteChance: 0, respawnTicks: FISHING_RESPAWN_TICKS };
+      return { skill: 'fishing', levelRequired: f.level, xp: f.xp, itemId: `raw_${f.id}`, qty: 1, consumableId: 'fishing_bait', depleteChance: 0, respawnTicks: FISHING_RESPAWN_TICKS };
     }
     if (hasNet) {
       const f = player.level('fishing') >= 5 ? byId('sardine') : byId('shrimp');
@@ -86,7 +88,7 @@ function fishOutcome(player: Player, spot: ResourceType): GatherOutcome | null {
   }
   if (spot === 'fishing_lobster') {
     if (hasPot) { const f = byId('lobster'); return { skill: 'fishing', levelRequired: f.level, xp: f.xp, itemId: `raw_${f.id}`, qty: 1, depleteChance: 0, respawnTicks: FISHING_RESPAWN_TICKS }; }
-    if (hasRod) { const f = byId('salmon'); return { skill: 'fishing', levelRequired: f.level, xp: f.xp, itemId: `raw_${f.id}`, qty: 1, depleteChance: 0, respawnTicks: FISHING_RESPAWN_TICKS }; }
+    if (hasRod && hasBait) { const f = byId('salmon'); return { skill: 'fishing', levelRequired: f.level, xp: f.xp, itemId: `raw_${f.id}`, qty: 1, consumableId: 'fishing_bait', depleteChance: 0, respawnTicks: FISHING_RESPAWN_TICKS }; }
     return null;
   }
   if (spot === 'fishing_swordfish') {
@@ -113,6 +115,10 @@ export function canGather(player: Player, resource: ResourceType): { ok: boolean
     return { ok: true };
   }
   if (resource.startsWith('fishing_')) {
+    const hasRod = player.hasItem('fishing_rod') || player.equipment.weapon === 'fishing_rod';
+    if (hasRod && !player.hasItem('fishing_bait') && resource !== 'fishing_swordfish') {
+      return { ok: false, reason: 'You need fishing bait to use your fishing rod here.' };
+    }
     const o = fishOutcome(player, resource);
     if (!o) return { ok: false, reason: 'You need the right fishing equipment here.' };
     if (player.level('fishing') < o.levelRequired) return { ok: false, reason: `You need Fishing level ${o.levelRequired}.` };
@@ -167,6 +173,11 @@ export function processGatherTick(world: World, player: Player) {
       let roll = Math.random() * totalW;
       for (const g of GEM_ROLL) { roll -= g.weight; if (roll <= 0) { itemId = g.itemId; break; } }
     }
+    if (outcome.consumableId && !removeItem(player, outcome.consumableId, 1)) {
+      log(`You've run out of ${getItem(outcome.consumableId).name.toLowerCase()}.`, 'warning');
+      player.action = null;
+      return;
+    }
     addItem(player, itemId, outcome.qty);
     addXp(player, outcome.skill, outcome.xp);
     log(`You get some ${getItem(itemId).name.toLowerCase()}.`, 'info');
@@ -183,10 +194,25 @@ export function processGatherTick(world: World, player: Player) {
 // ---- Farming ----
 export function plantableSeeds(player: Player, patchType: ResourceType): { id: string; name: string }[] {
   const tiers = patchType === 'farm_patch' ? CROP_TIERS : HERB_TIERS;
-  return tiers.filter((t) => player.hasItem(`${t.id}_seed`)).map((t) => ({ id: t.id, name: t.name }));
+  return tiers
+    .filter((t) => player.level('farming') >= t.level && player.hasItem(`${t.id}_seed`))
+    .map((t) => ({ id: t.id, name: t.name }));
 }
 
 export function plant(world: World, player: Player, x: number, y: number, cropId: string) {
+  const patchType = world.getResourceNode(x, y);
+  const tiers = patchType === 'herb_patch' ? HERB_TIERS : CROP_TIERS;
+  const tier = tiers.find((entry) => entry.id === cropId);
+  if (!tier) { log(`You can't plant that here.`, 'warning'); return; }
+  if (player.level('farming') < tier.level) {
+    log(`You need Farming level ${tier.level} to plant ${tier.name.toLowerCase()}.`, 'warning');
+    return;
+  }
+  if (!player.hasItem('seed_dibber')) {
+    log(`You need a seed dibber to plant seeds.`, 'warning');
+    return;
+  }
+
   const seedId = `${cropId}_seed`;
   if (!removeItem(player, seedId, 1)) return;
   world.plantCrop(x, y, cropId);
