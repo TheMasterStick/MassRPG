@@ -68,9 +68,20 @@ export function mountCharacterCreator(root: HTMLElement, callbacks: CharacterCre
   const previewPanel = document.createElement('section');
   previewPanel.className = 'creator-preview-panel';
   const previewCanvas = document.createElement('canvas');
-  previewCanvas.width = 512;
-  previewCanvas.height = 512;
+  previewCanvas.width = 768;
+  previewCanvas.height = 768;
   previewCanvas.className = 'creator-preview';
+
+  const faceDetail = document.createElement('div');
+  faceDetail.className = 'creator-face-detail';
+  const faceLabel = document.createElement('div');
+  faceLabel.className = 'creator-face-detail-label';
+  faceLabel.textContent = 'Face detail';
+  const faceCanvas = document.createElement('canvas');
+  faceCanvas.width = 360;
+  faceCanvas.height = 240;
+  faceCanvas.className = 'creator-face-preview';
+  faceDetail.append(faceLabel, faceCanvas);
 
   const facingRow = document.createElement('div');
   facingRow.className = 'creator-facing-row';
@@ -96,9 +107,9 @@ export function mountCharacterCreator(root: HTMLElement, callbacks: CharacterCre
 
   const previewHint = document.createElement('p');
   previewHint.className = 'creator-preview-hint';
-  previewHint.textContent = 'Current face features are front-view assets. Body and hair already support front, back, left and right.';
+  previewHint.textContent = 'Face detail always shows the front view. Body and hair support front, back, left and right; current facial feature assets are front-view only.';
 
-  previewPanel.append(previewCanvas, facingRow, previewHint);
+  previewPanel.append(previewCanvas, faceDetail, facingRow, previewHint);
 
   const controls = document.createElement('section');
   controls.className = 'creator-controls';
@@ -196,13 +207,35 @@ export function mountCharacterCreator(root: HTMLElement, callbacks: CharacterCre
 
   async function renderPreview() {
     const token = ++renderToken;
-    const preview = await composeCharacterCanvas(appearance, facing);
+    const [preview, front] = await Promise.all([
+      composeCharacterCanvas(appearance, facing),
+      composeCharacterCanvas(appearance, 'down'),
+    ]);
     if (token !== renderToken) return;
+
     const ctx = previewCanvas.getContext('2d');
-    if (!ctx) return;
-    ctx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
-    ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(preview, 0, 0, previewCanvas.width, previewCanvas.height);
+    if (ctx) {
+      ctx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(preview, 0, 0, previewCanvas.width, previewCanvas.height);
+    }
+
+    const faceCtx = faceCanvas.getContext('2d');
+    if (faceCtx) {
+      faceCtx.clearRect(0, 0, faceCanvas.width, faceCanvas.height);
+      faceCtx.imageSmoothingEnabled = false;
+      const sourceX = 39;
+      const sourceY = appearance.sex === 'male' ? 3 : 5;
+      const sourceWidth = 50;
+      const sourceHeight = 43;
+      const scale = Math.min(faceCanvas.width / sourceWidth, faceCanvas.height / sourceHeight);
+      const drawWidth = sourceWidth * scale;
+      const drawHeight = sourceHeight * scale;
+      const drawX = (faceCanvas.width - drawWidth) / 2;
+      const drawY = (faceCanvas.height - drawHeight) / 2;
+      faceCtx.drawImage(front, sourceX, sourceY, sourceWidth, sourceHeight, drawX, drawY, drawWidth, drawHeight);
+    }
   }
 
   function changed() {
