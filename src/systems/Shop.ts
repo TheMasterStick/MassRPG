@@ -12,8 +12,10 @@ export const SHOP_STOCK = [
   'tinderbox', 'hammer', 'chisel', 'needle', 'saw', 'knife', 'shears', 'bucket',
   'pestle_and_mortar', 'glassblowing_pipe',
 
-  // Farming tools.
+  // Farming tools and ordinary starter seeds. Higher-tier seed acquisition can
+  // come from the deeper Farming/world-content pass rather than an infinite shop.
   'rake', 'spade', 'seed_dibber', 'gardening_trowel', 'watering_can', 'secateurs',
+  'potato_seed', 'onion_seed', 'cabbage_seed',
 
   // Common crafting moulds.
   'ring_mold', 'amulet_mold', 'necklace_mold', 'bracelet_mold', 'tiara_mold', 'ammo_mold',
