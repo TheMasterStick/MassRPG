@@ -2,36 +2,62 @@ import type { ElevationLevel, ResourceType, StructureType, TileType } from './ty
 import { getEditorMarkers, type EditorMarker } from './EditorWorld';
 import { WORLD_SIZE } from './AeldorData';
 
+interface ResourceAreaNode {
+  resource: ResourceType;
+  areaId: string;
+  slot: number;
+}
+
+interface ResourceAreaConfig {
+  resource: ResourceType;
+  radius: number;
+  count: number;
+}
+
+const RESOURCE_AREA_ALIASES: Array<[RegExp, ResourceType]> = [
+  [/flax/, 'flax_plant'],
+  [/magic\s+tree|tree_magic/, 'tree_magic'],
+  [/\byew\b|tree_yew/, 'tree_yew'],
+  [/\bmaple\b|tree_maple/, 'tree_maple'],
+  [/\bwillow\b|tree_willow/, 'tree_willow'],
+  [/\boak\b|tree_oak/, 'tree_oak'],
+  [/normal\s+tree|tree_normal/, 'tree_normal'],
+  [/shrimp|fishing_shrimp/, 'fishing_shrimp'],
+  [/lobster|fishing_lobster/, 'fishing_lobster'],
+  [/swordfish|fishing_swordfish/, 'fishing_swordfish'],
+];
+
 /**
  * Geography is entirely hand-authored. This class supplies only a deterministic
  * ambient dressing/population layer over that authored geography: scattered
- * trees and flax, small camp POIs, marker-driven placeholder sites, gentle
- * un-authored relief, mining clusters, and restrained creatures. Exact editor
- * cells always win, and explicit null resource/structure/spawner fields suppress
- * fallback.
+ * trees and test-fallback flax, small camp POIs, marker-driven resource sites,
+ * gentle un-authored relief, mining clusters, and restrained creatures. Exact
+ * editor cells always win, and explicit null resource/structure/spawner fields
+ * suppress fallback.
  */
 export class WorldGen {
   readonly seed: number;
   private readonly markers: readonly EditorMarker[];
   private readonly capital: EditorMarker | undefined;
   private readonly miningNodes = new Map<string, ResourceType>();
+  private readonly resourceAreaNodes = new Map<string, ResourceAreaNode>();
+  private hasAuthoredFlaxAreas = false;
 
   constructor(seed: number) {
     this.seed = seed >>> 0;
     this.markers = [...getEditorMarkers(WORLD_SIZE, 0)];
     this.capital = this.markers.find((m) => m.name.trim().toLowerCase() === 'capital city');
     this.buildMiningNodes();
+    this.buildResourceAreaNodes();
   }
 
   /**
    * Settlement markers suppress ambient monsters inside the settlement footprint
-   * plus a modest breathing-space buffer. The previous radii were several times
-   * larger than the actual town footprints, creating very large sterile zones.
-   * Mining areas remain wild.
+   * plus a modest breathing-space buffer. Mining/resource areas remain wild.
    */
   isVillage(x: number, y: number): boolean {
     for (const marker of this.markers) {
-      if (marker.type === 'mining_area') continue;
+      if (marker.type === 'mining_area' || marker.type === 'resource_area') continue;
       const radius = marker.name.trim().toLowerCase() === 'capital city' ? 64
         : marker.type === 'city' ? 48
         : marker.type === 'castle' ? 40
@@ -44,10 +70,9 @@ export class WorldGen {
   }
 
   /**
-   * Runtime placeholder ground for reference markers. This deliberately lives
-   * above natural authored terrain but below explicit path/floor construction,
-   * so existing editor work remains authoritative while unbuilt settlement and
-   * mine markers are actually visible during play.
+   * Runtime placeholder ground for reference settlements/mines. Resource-area
+   * markers are deliberately excluded: a flax field or grove should inherit the
+   * authored terrain beneath it rather than turning into a cobblestone square.
    */
   markerGroundAt(x: number, y: number, tile: TileType): TileType | null {
     if (
@@ -57,6 +82,7 @@ export class WorldGen {
     ) return null;
 
     for (const marker of this.markers) {
+      if (marker.type === 'resource_area') continue;
       const capital = marker.name.trim().toLowerCase() === 'capital city';
       const radius = marker.type === 'mining_area' ? 12
         : capital ? 48
@@ -140,13 +166,12 @@ export class WorldGen {
   }
 
   /**
-   * Flax grows in small deterministic patches rather than as evenly scattered
-   * single plants. Roughly a third of 22x22 grass/plains cells can contain a
-   * patch, and each patch resolves to only a few actual plants. This makes flax
-   * findable without turning open country into a carpet of crafting resources.
+   * Transitional fallback for worlds that have not authored flax resource areas
+   * yet. As soon as at least one flax resource-area marker exists, this ambient
+   * generator switches off globally and flax comes only from explicit sites.
    */
   private flaxAt(x: number, y: number, tile: TileType): boolean {
-    if (tile !== 'grass' && tile !== 'plains') return false;
+    if (this.hasAuthoredFlaxAreas || (tile !== 'grass' && tile !== 'plains')) return false;
 
     const cellSize = 22;
     const cellX = Math.floor(x / cellSize);
@@ -166,9 +191,10 @@ export class WorldGen {
   }
 
   /**
-   * Deterministic ambient vegetation. Grass and plains carry enough isolated
-   * trees to keep travel visually varied, forest/taiga are clearly denser, and
-   * flax appears in sparse harvestable patches on open grassland.
+   * Deterministic ambient vegetation plus authored renewable-resource sites.
+   * Authored resource areas are checked first. This lets the world designer
+   * define economically meaningful gathering locations without painting every
+   * individual renewable node into the map.
    */
   resourceAt(
     x: number,
@@ -177,8 +203,9 @@ export class WorldGen {
   ): ResourceType | null {
     const tile = getTile(x, y);
 
-    // Check low vegetation first so a valid flax patch does not get erased by
-    // the independent ambient-tree roll at the same coordinate.
+    const authored = this.resourceAreaNodes.get(`${x},${y}`)?.resource;
+    if (authored && this.resourceAllowedOnTile(authored, tile)) return authored;
+
     if (this.flaxAt(x, y, tile)) return 'flax_plant';
 
     const chance = tile === 'forest' ? 0.045
@@ -293,6 +320,55 @@ export class WorldGen {
         }
       }
     }
+  }
+
+  private buildResourceAreaNodes(): void {
+    const occupied = new Set<string>();
+    const areas = this.markers.filter((marker) => marker.type === 'resource_area');
+    for (let areaIndex = 0; areaIndex < areas.length; areaIndex++) {
+      const marker = areas[areaIndex];
+      const config = this.resourceAreaConfig(marker);
+      if (!config) continue;
+      if (config.resource === 'flax_plant') this.hasAuthoredFlaxAreas = true;
+
+      let placed = 0;
+      for (let attempt = 0; attempt < config.count * 24 && placed < config.count; attempt++) {
+        const angle = this.roll(marker.x + areaIndex * 31, marker.y + attempt * 7, 401 + attempt) * Math.PI * 2;
+        const radial = Math.sqrt(this.roll(marker.x - attempt * 11, marker.y + areaIndex * 17, 451 + attempt));
+        const radius = Math.max(1, Math.round(radial * config.radius));
+        const nx = marker.x + Math.round(Math.cos(angle) * radius);
+        const ny = marker.y + Math.round(Math.sin(angle) * radius);
+        const key = `${nx},${ny}`;
+        if (occupied.has(key)) continue;
+        occupied.add(key);
+        this.resourceAreaNodes.set(key, { resource: config.resource, areaId: marker.id, slot: placed });
+        placed++;
+      }
+    }
+  }
+
+  private resourceAreaConfig(marker: EditorMarker): ResourceAreaConfig | null {
+    const text = `${marker.name} ${marker.notes ?? ''}`.toLowerCase();
+    const explicit = /resource\s*=\s*([a-z0-9_]+)/.exec(text)?.[1];
+    let resource: ResourceType | undefined;
+    if (explicit && RESOURCE_AREA_ALIASES.some(([, id]) => id === explicit)) resource = explicit as ResourceType;
+    if (!resource) resource = RESOURCE_AREA_ALIASES.find(([pattern]) => pattern.test(text))?.[1];
+    if (!resource) return null;
+
+    const radiusMatch = /radius\s*=\s*(\d+)/.exec(text);
+    const countMatch = /count\s*=\s*(\d+)/.exec(text);
+    const radius = Math.max(3, Math.min(40, Number(radiusMatch?.[1] ?? 10)));
+    const count = Math.max(1, Math.min(24, Number(countMatch?.[1] ?? 5)));
+    return { resource, radius, count };
+  }
+
+  private resourceAllowedOnTile(resource: ResourceType, tile: TileType): boolean {
+    if (resource === 'flax_plant') return tile === 'grass' || tile === 'plains';
+    if (resource.startsWith('fishing_')) return tile === 'water' || tile === 'deep_water';
+    if (resource.startsWith('tree_')) {
+      return tile === 'grass' || tile === 'plains' || tile === 'forest' || tile === 'taiga' || tile === 'swamp';
+    }
+    return true;
   }
 
   private oresForMarker(marker: EditorMarker): ResourceType[] {
