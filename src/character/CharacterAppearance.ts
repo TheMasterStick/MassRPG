@@ -31,6 +31,7 @@ export const DEFAULT_CHARACTER_APPEARANCE: CharacterAppearance = {
 };
 
 const ATLAS_ROOT = '/sprites/characters';
+const ATLAS_VERSION = '3';
 const TILE = 128;
 const CREATOR_DRAFT_KEY = 'massrpg_character_creator_draft_v1';
 
@@ -97,7 +98,7 @@ function loadAtlas(name: AtlasName): Promise<HTMLImageElement> {
     const img = new Image();
     img.onload = () => resolve(img);
     img.onerror = () => reject(new Error(`Could not load character atlas: ${name}`));
-    img.src = `${ATLAS_ROOT}/${name}.png`;
+    img.src = `${ATLAS_ROOT}/${name}.png?v=${ATLAS_VERSION}`;
   });
   atlasCache.set(name, promise);
   return promise;
@@ -242,21 +243,11 @@ export async function composeCharacterCanvas(
 
     if (facing === 'down') {
       if (appearance.eyeStyle > 0) {
-        const eyes = await getLayer(
-          'eyes',
-          featureIndex(appearance.sex, appearance.eyeStyle, 8),
-          'green',
-          appearance.eyeColor,
-        );
+        const eyes = await getLayer('eyes', featureIndex(appearance.sex, appearance.eyeStyle, 8), 'green', appearance.eyeColor);
         ctx.drawImage(eyes, 0, 0);
       }
       if (appearance.browStyle > 0) {
-        const brows = await getLayer(
-          'eyebrows',
-          featureIndex(appearance.sex, appearance.browStyle, 4),
-          'full',
-          appearance.browColor,
-        );
+        const brows = await getLayer('eyebrows', featureIndex(appearance.sex, appearance.browStyle, 4), 'full', appearance.browColor);
         ctx.drawImage(brows, 0, 0);
       }
       if (appearance.noseStyle > 0) {
@@ -270,13 +261,8 @@ export async function composeCharacterCanvas(
     }
 
     if (appearance.hairStyle > 0) {
-      const hair = await getLayer(
-        'hair',
-        hairIndex(appearance.sex, appearance.hairStyle, facing),
-        'full',
-        appearance.hairColor,
-      );
-      ctx.drawImage(hair, 0, 0);
+      const hair = await getLayer('hair', hairIndex(appearance.sex, appearance.hairStyle, facing), 'full', appearance.hairColor);
+      ctx.drawImage(hair, 0, -2);
     }
 
     return canvas;
@@ -284,6 +270,28 @@ export async function composeCharacterCanvas(
 
   compositeCache.set(key, promise);
   return promise;
+}
+
+/**
+ * Runtime characters use a tighter frame than the 128px authoring coordinate system.
+ * The master frame deliberately has generous transparent margins for hair/gear, but
+ * drawing that whole square at one-tile width made the actual body look tiny and
+ * visually a tile away from walls. Keep the creator/master composition untouched and
+ * crop only the runtime image around the standing character.
+ */
+function makeRuntimeCharacterCanvas(source: HTMLCanvasElement): HTMLCanvasElement {
+  const cropX = 18;
+  const cropY = 0;
+  const cropWidth = 92;
+  const cropHeight = 118;
+  const canvas = document.createElement('canvas');
+  canvas.width = cropWidth;
+  canvas.height = cropHeight;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Canvas 2D context unavailable');
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(source, cropX, cropY, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
+  return canvas;
 }
 
 async function canvasToImage(canvas: HTMLCanvasElement): Promise<HTMLImageElement> {
@@ -304,7 +312,7 @@ export async function setActiveCharacterAppearance(appearanceInput: CharacterApp
   const facings: CharacterFacing[] = ['up', 'down', 'left', 'right'];
   await Promise.all(facings.map(async (facing) => {
     const canvas = await composeCharacterCanvas(appearance, facing);
-    activeSprites.set(facing, await canvasToImage(canvas));
+    activeSprites.set(facing, await canvasToImage(makeRuntimeCharacterCanvas(canvas)));
   }));
 }
 
