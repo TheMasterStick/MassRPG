@@ -6,6 +6,7 @@ import type { WorldPlane } from '../world/types';
 
 export interface InventorySlot { itemId: string; qty: number }
 export type CombatStyle = 'melee' | 'ranged' | 'magic';
+export type MeleeTrainingStyle = 'accurate' | 'aggressive' | 'defensive';
 
 const WORLD_CENTER = Math.floor(WORLD_SIZE / 2);
 
@@ -22,6 +23,8 @@ export class Player {
   skillsXp: Record<SkillId, number> = {} as Record<SkillId, number>;
   currentHp = 10;
   combatStyle: CombatStyle = 'melee';
+  /** Which melee skill receives damage XP. Aggressive preserves the old Strength-training default. */
+  meleeTrainingStyle: MeleeTrainingStyle = 'aggressive';
   combatTargetId: string | null = null;
   lastAttackTick = 0;
 
