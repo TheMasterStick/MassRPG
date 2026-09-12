@@ -9,6 +9,8 @@ import type { ResourceType, StructureType } from '../world/types';
 import { getSprite, getPlayerSprite, preloadAllSprites } from './Sprites';
 
 interface FloatingText { x: number; y: number; text: string; color: string; born: number; }
+interface Drawable { sortY: number; draw: () => void }
+interface CachedProjectedShadow { canvas: HTMLCanvasElement; anchorX: number; anchorY: number }
 
 const TILE_TEXTURE_REPEAT_TILES = 6;
 const TREE_RENDER_SCALE = 2;
@@ -62,8 +64,6 @@ const STRUCTURE_GLYPH: Partial<Record<StructureType, { glyph: string; color: str
   general_store: { glyph: '⚑', color: '#3a6ac0' },
 };
 
-interface Drawable { sortY: number; draw: () => void }
-
 export class Renderer {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
@@ -71,6 +71,7 @@ export class Renderer {
   private patternCache = new Map<HTMLImageElement, CanvasPattern>();
   private outlineCache = new Map<string, HTMLCanvasElement>();
   private shadowMaskCache = new Map<string, HTMLCanvasElement>();
+  private projectedShadowCache = new Map<string, CachedProjectedShadow>();
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -110,13 +111,13 @@ export class Renderer {
     const camX = player.x * TILE_SIZE - w / 2;
     const camY = player.y * TILE_SIZE - h / 2;
 
-    // Directional tree shadows can stretch a couple of tiles away from their
-    // source, so render a slightly wider fringe than the immediately visible
-    // tile rectangle to avoid shadows popping in at the screen edge.
-    const minTX = Math.floor(camX / TILE_SIZE) - 3;
-    const maxTX = Math.floor((camX + w) / TILE_SIZE) + 3;
-    const minTY = Math.floor(camY / TILE_SIZE) - 3;
-    const maxTY = Math.floor((camY + h) / TILE_SIZE) + 3;
+    // Keep ordinary terrain/object work close to the actual viewport. Long cast
+    // shadows get a separate one-sided fringe below/left, where their sources can
+    // actually project into view toward the upper-right.
+    const minTX = Math.floor(camX / TILE_SIZE) - 1;
+    const maxTX = Math.floor((camX + w) / TILE_SIZE) + 1;
+    const minTY = Math.floor(camY / TILE_SIZE) - 1;
+    const maxTY = Math.floor((camY + h) / TILE_SIZE) + 1;
 
     const objects: Drawable[] = [];
     const shadows: (() => void)[] = [];
@@ -153,6 +154,27 @@ export class Renderer {
       }
     }
 
+    // Only scan off-screen cells that can cast a shadow into the visible area.
+    // This avoids doing full terrain generation/render work for a 3-tile border.
+    const shadowMinTX = minTX - 3;
+    const shadowMaxTX = maxTX;
+    const shadowMinTY = minTY;
+    const shadowMaxTY = maxTY + 3;
+    for (let ty = shadowMinTY; ty <= shadowMaxTY; ty++) {
+      for (let tx = shadowMinTX; tx <= shadowMaxTX; tx++) {
+        if (tx >= minTX && tx <= maxTX && ty >= minTY && ty <= maxTY) continue;
+        const sx = tx * TILE_SIZE - camX;
+        const sy = ty * TILE_SIZE - camY;
+        const structure = world.getStructure(tx, ty);
+        if (structure) {
+          shadows.push(() => this.drawStructureShadow(sx, sy, structure));
+          continue;
+        }
+        const res = world.getResourceNode(tx, ty);
+        if (res) shadows.push(() => this.drawResourceShadow(sx, sy, res));
+      }
+    }
+
     for (const [sprite, cells] of tilePatchGroups) this.paintTilePattern(sprite, cells, camX, camY);
 
     for (const m of monsters) {
@@ -171,9 +193,6 @@ export class Renderer {
     shadows.push(() => this.drawGroundShadow(playerSx, playerSy, 0.64, 0.18, 0.24));
     objects.push({ sortY: player.y, draw: () => this.drawPlayer(playerSx, playerSy, player) });
 
-    // Shadows belong to the ground plane. Drawing the complete shadow pass before
-    // the Y-sorted sprites lets long tree shadows pass underneath characters and
-    // other props instead of painting over their bodies.
     for (const drawShadow of shadows) drawShadow();
 
     objects.sort((a, b) => a.sortY - b.sortY);
@@ -199,8 +218,6 @@ export class Renderer {
     const rx = TILE_SIZE * widthMul * 0.5;
     const ry = TILE_SIZE * heightMul * 0.5;
 
-    // Moving actors use a small contact shadow; unlike static props, their
-    // continuously changing pose does not need an expensive cast silhouette.
     ctx.save();
     ctx.fillStyle = `rgba(0,0,0,${alpha * 0.42})`;
     ctx.beginPath();
@@ -213,7 +230,6 @@ export class Renderer {
     ctx.restore();
   }
 
-  /** Build a reusable black alpha-mask from the sprite itself. */
   private getShadowMask(img: HTMLImageElement): HTMLCanvasElement {
     const key = img.src;
     const cached = this.shadowMaskCache.get(key);
@@ -233,10 +249,59 @@ export class Renderer {
   }
 
   /**
-   * Project a sprite-shaped cast shadow from the object's base toward roughly
-   * 1–2 o'clock. The source silhouette is compressed vertically and sheared to
-   * the upper-right, keeping trunks, rocks and workshop props recognisable.
+   * Pre-render the expensive transform/blur once per sprite, zoom level and
+   * shadow profile. Every visible instance can then use a plain drawImage.
    */
+  private getProjectedShadow(
+    img: HTMLImageElement,
+    widthMul: number,
+    alpha: number,
+    verticalProjection: number,
+    rightLean: number,
+  ): CachedProjectedShadow | null {
+    if (!img.complete || img.naturalWidth <= 0 || img.naturalHeight <= 0) return null;
+
+    const key = `${img.src}|${TILE_SIZE}|${widthMul}|${alpha}|${verticalProjection}|${rightLean}`;
+    const cached = this.projectedShadowCache.get(key);
+    if (cached) return cached;
+
+    const mask = this.getShadowMask(img);
+    const dw = TILE_SIZE * widthMul;
+    const dh = dw * (img.naturalHeight / img.naturalWidth);
+    const a = 0.94;
+    const c = -rightLean;
+    const d = verticalProjection;
+    const blur = Math.max(0.45, TILE_SIZE * 0.018);
+    const pad = Math.ceil(blur * 3 + 2);
+
+    // Source bounds are x=[-dw/2,dw/2], y=[-dh,0]. Under the shear,
+    // the upper-right corner becomes the furthest projected point.
+    const xMin = -a * dw / 2;
+    const xMax = a * dw / 2 + rightLean * dh;
+    const yMin = -d * dh;
+    const yMax = 0;
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.ceil(xMax - xMin + pad * 2));
+    canvas.height = Math.max(1, Math.ceil(yMax - yMin + pad * 2));
+    const anchorX = -xMin + pad;
+    const anchorY = -yMin + pad;
+
+    const sctx = canvas.getContext('2d')!;
+    sctx.imageSmoothingEnabled = true;
+    sctx.imageSmoothingQuality = 'high';
+    sctx.translate(anchorX, anchorY);
+    sctx.transform(a, 0, c, d, 0, 0);
+    sctx.globalAlpha = alpha;
+    sctx.filter = `blur(${blur}px)`;
+    sctx.drawImage(mask, -dw / 2, -dh, dw, dh);
+    sctx.filter = 'none';
+    sctx.globalAlpha = 1;
+
+    const result = { canvas, anchorX, anchorY };
+    this.projectedShadowCache.set(key, result);
+    return result;
+  }
+
   private drawProjectedShadow(
     img: HTMLImageElement,
     sx: number,
@@ -246,23 +311,11 @@ export class Renderer {
     verticalProjection: number,
     rightLean: number,
   ) {
-    if (!img.complete || img.naturalWidth <= 0 || img.naturalHeight <= 0) return;
-    const mask = this.getShadowMask(img);
-    const dw = TILE_SIZE * widthMul;
-    const dh = dw * (img.naturalHeight / img.naturalWidth);
+    const shadow = this.getProjectedShadow(img, widthMul, alpha, verticalProjection, rightLean);
+    if (!shadow) return;
     const baseX = sx + TILE_SIZE / 2;
     const baseY = sy + TILE_SIZE;
-
-    const ctx = this.ctx;
-    ctx.save();
-    ctx.translate(baseX, baseY);
-    // Local y runs upward from the object's base. A negative x shear therefore
-    // pushes the top of the shadow right while the compressed y keeps it on the ground.
-    ctx.transform(0.94, 0, -rightLean, verticalProjection, 0, 0);
-    ctx.globalAlpha = alpha;
-    ctx.filter = `blur(${Math.max(0.45, TILE_SIZE * 0.018)}px)`;
-    ctx.drawImage(mask, -dw / 2, -dh, dw, dh);
-    ctx.restore();
+    this.ctx.drawImage(shadow.canvas, baseX - shadow.anchorX, baseY - shadow.anchorY);
   }
 
   private drawResourceShadow(sx: number, sy: number, res: ResourceType) {
@@ -289,8 +342,6 @@ export class Renderer {
     if (type === 'blocker' || type === 'campfire') return;
     const sprite = getSprite('structures', type);
     if (sprite) {
-      // Props and workshop furniture cast the same directional silhouette as
-      // resources, but shorter and lighter so structures do not overpower the scene.
       this.drawProjectedShadow(sprite, sx, sy, 1, 0.12, 0.22, 0.32);
       return;
     }
