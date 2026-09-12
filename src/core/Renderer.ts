@@ -6,7 +6,8 @@ import { TILE_VISUALS } from '../world/types';
 import { hash2D } from './Random';
 import { RESOURCE_NAMES } from '../data/biomes';
 import type { ResourceType, StructureType } from '../world/types';
-import { getSprite, getPlayerSprite, preloadAllSprites } from './Sprites';
+import type { EditorDecoration } from '../world/ElevationDecorations';
+import { getSprite, getPlayerSprite, getElevationSprite, preloadAllSprites } from './Sprites';
 
 interface FloatingText { x: number; y: number; text: string; color: string; born: number; }
 interface Drawable { sortY: number; draw: () => void }
@@ -121,6 +122,7 @@ export class Renderer {
 
     const objects: Drawable[] = [];
     const shadows: (() => void)[] = [];
+    const terrainDecorations: { sx: number; sy: number; decoration: EditorDecoration }[] = [];
     const tilePatchGroups = new Map<HTMLImageElement, { sx: number; sy: number }[]>();
 
     for (let ty = minTY; ty <= maxTY; ty++) {
@@ -139,6 +141,9 @@ export class Renderer {
           ctx.fillStyle = visual.variants[variantIdx] ?? visual.base;
           ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
         }
+
+        const decoration = world.getDecoration(tx, ty);
+        if (decoration) terrainDecorations.push({ sx, sy, decoration });
 
         const structure = world.getStructure(tx, ty);
         if (structure) {
@@ -173,6 +178,7 @@ export class Renderer {
     }
 
     for (const [sprite, cells] of tilePatchGroups) this.paintTilePattern(sprite, cells, camX, camY);
+    for (const entry of terrainDecorations) this.drawDecoration(entry.sx, entry.sy, entry.decoration);
 
     for (const m of monsters) {
       if (!m.isAlive()) continue;
@@ -353,6 +359,19 @@ export class Renderer {
     ctx.translate(dx + dw, dy);
     ctx.scale(-1, 1);
     ctx.drawImage(img, 0, 0, dw, dh);
+    ctx.restore();
+  }
+
+  private drawDecoration(sx: number, sy: number, decoration: EditorDecoration) {
+    const sprite = getElevationSprite(decoration.theme, decoration.spriteId);
+    if (!sprite) return;
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.imageSmoothingEnabled = false;
+    ctx.translate(sx + TILE_SIZE / 2, sy + TILE_SIZE / 2);
+    ctx.rotate(decoration.rotation * Math.PI / 180);
+    ctx.scale(decoration.flipX ? -1 : 1, decoration.flipY ? -1 : 1);
+    ctx.drawImage(sprite, -TILE_SIZE / 2, -TILE_SIZE / 2, TILE_SIZE, TILE_SIZE);
     ctx.restore();
   }
 
