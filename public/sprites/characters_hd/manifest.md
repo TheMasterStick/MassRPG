@@ -1,0 +1,1 @@
+256px creator-preview source pages are generated from the 2048px character masters. The browser composes these at creator resolution and downsamples separately for the world sprite. Files are grouped by sex/style to keep the asset pages small and independently replaceable.
