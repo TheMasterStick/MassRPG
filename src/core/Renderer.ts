@@ -316,28 +316,16 @@ export class Renderer {
   }
 
   private drawResourceShadow(sx: number, sy: number, res: ResourceType) {
-    if (res.startsWith('fishing_') || res === 'farm_patch' || res === 'herb_patch') return;
+    // The ore/resource sprites already contain enough painted perspective to sit
+    // naturally on terrain. Extra contact/cast shadows made low nodes look raised,
+    // so only tall trees receive a generated world shadow.
+    if (!res.startsWith('tree_')) return;
     const sprite = getSprite('resources', res);
     if (!sprite) {
-      const width = res.startsWith('tree_') ? 1.1 : res.startsWith('rock_') ? 0.74 : 0.42;
-      this.drawGroundShadow(sx, sy, width, width * 0.22, res.startsWith('tree_') ? 0.2 : 0.18);
+      this.drawGroundShadow(sx, sy, 1.1, 0.24, 0.20);
       return;
     }
-
-    if (res.startsWith('tree_')) {
-      this.drawProjectedShadow(sprite, sx, sy, TREE_RENDER_SCALE, 0.23, 0.30, 0.52);
-      return;
-    }
-    if (res.startsWith('rock_')) {
-      // Ore nodes are low, heavy objects. Most of their shadow should hug the
-      // base; a faint, very short cast keeps them consistent with the world's
-      // upper-right light direction without making the rock look suspended.
-      this.drawGroundShadow(sx, sy, 0.78, 0.22, 0.25);
-      this.drawProjectedShadow(sprite, sx, sy, 1, 0.055, 0.13, 0.16);
-      return;
-    }
-    this.drawGroundShadow(sx, sy, 0.48, 0.14, 0.17);
-    this.drawProjectedShadow(sprite, sx, sy, 1, 0.05, 0.12, 0.15);
+    this.drawProjectedShadow(sprite, sx, sy, TREE_RENDER_SCALE, 0.23, 0.30, 0.52);
   }
 
   private drawStructureShadow(sx: number, sy: number, type: StructureType) {
