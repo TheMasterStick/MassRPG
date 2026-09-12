@@ -16,13 +16,12 @@ function readInstalledRevision(): string | null {
   }
 }
 
-function rememberInstalledRevision(): void {
+function rememberInstalledRevision(revision = CANONICAL_WORLD_REVISION): void {
   try {
-    window.localStorage.setItem(CANONICAL_REVISION_STORAGE_KEY, CANONICAL_WORLD_REVISION);
+    window.localStorage.setItem(CANONICAL_REVISION_STORAGE_KEY, revision);
   } catch {
     // The world itself is stored in IndexedDB. Failure to remember this tiny
-    // migration marker only means the canonical baseline may be reinstalled
-    // on the next reload; it must not prevent the game from starting now.
+    // marker must never prevent the user's authored working copy from loading.
   }
 }
 
@@ -58,21 +57,27 @@ export async function loadCanonicalWorld(): Promise<EditorWorldData | null> {
 }
 
 /**
- * Git owns the canonical Twin Lands baseline. IndexedDB is only the mutable
- * browser working copy.
+ * Git owns the canonical baseline, while IndexedDB is the user's mutable map.
  *
- * Older builds created an empty-ocean (or nearly empty) IndexedDB world before
- * Git had a canonical baseline. Merely checking whether that world was blank
- * was not sufficient: even one old brush stroke prevented the real Twin Lands
- * from ever being installed. The revision marker below deliberately performs a
- * one-time migration for each canonical Git revision, then preserves local
- * editor changes on subsequent reloads.
+ * The first visit installs Git's authored world. After that, the browser working
+ * copy always wins. In particular, a later code/canonical revision must never
+ * silently overwrite hours of editor work. New canonical maps can still be
+ * adopted deliberately through Import JSON / Clear + reload when desired.
  */
 export async function ensureCanonicalWorldInstalled(worldSize: number): Promise<'installed' | 'kept-local' | 'missing'> {
   const current = loadEditorWorld(worldSize);
   const installedRevision = readInstalledRevision();
 
-  if (installedRevision === CANONICAL_WORLD_REVISION) {
+  // Once this browser has ever had a canonical world installed, preserve its
+  // IndexedDB working copy across all future application/canonical revisions.
+  if (installedRevision !== null) {
+    if (installedRevision !== CANONICAL_WORLD_REVISION) {
+      console.warn(
+        `[MassRPG] Canonical world revision changed (${installedRevision} -> ${CANONICAL_WORLD_REVISION}), `
+        + 'but the local authored working copy was preserved. Export/import explicitly to replace it.',
+      );
+      rememberInstalledRevision(CANONICAL_WORLD_REVISION);
+    }
     console.info(
       `[MassRPG] Keeping local Twin Lands working copy (${current.terrainStrokes.length} terrain strokes, ${current.markers.length} markers).`,
     );
