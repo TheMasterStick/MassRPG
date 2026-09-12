@@ -1,0 +1,86 @@
+name: One-off editor TypeScript autofix
+
+on:
+  push:
+    branches:
+      - claude/massrpg-procedural-game-sossii
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.event.head_commit.message == 'Run editor TypeScript autofix'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: claude/massrpg-procedural-game-sossii
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-fund --no-audit
+      - name: Apply TypeScript 6 compatibility fixes
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          targets = [
+              Path('src/editor/EditorCameraControls.ts'),
+              Path('src/editor/EditorPerformanceGuard.ts'),
+              Path('src/editor/EditorReferenceOverlay.ts'),
+              Path('src/editor/EditorWorkflowShortcuts.ts'),
+              Path('src/editor/ObjectAuthoringTools.ts'),
+              Path('src/editor/SpawnZoneTools.ts'),
+              Path('src/editor/StructureShapeTransforms.ts'),
+              Path('src/editor/WorldEditor.ts'),
+          ]
+
+          common = {
+              "root.querySelector<HTMLCanvasElement>('.editor-canvas');": "root.querySelector<HTMLCanvasElement>('.editor-canvas')!;",
+              "root.querySelector<HTMLElement>('.editor-toolbar');": "root.querySelector<HTMLElement>('.editor-toolbar')!;",
+              "root.querySelector<HTMLElement>('.editor-palette');": "root.querySelector<HTMLElement>('.editor-palette')!;",
+              "const wrap = canvas?.parentElement;": "const wrap = canvas.parentElement!;",
+              "const canvasWrap = canvas?.parentElement;": "const canvasWrap = canvas.parentElement!;",
+              "const overlayCtx = overlay.getContext('2d');": "const overlayCtx = overlay.getContext('2d')!;",
+              "const ctx = overlay.getContext('2d');": "const ctx = overlay.getContext('2d')!;",
+          }
+
+          for path in targets:
+              text = path.read_text()
+              for old, new in common.items():
+                  text = text.replace(old, new)
+              path.write_text(text)
+
+          # TypeScript 6 no longer preserves the .find() narrowing into nested callbacks.
+          p = Path('src/editor/EditorCameraControls.ts')
+          text = p.read_text()
+          text = text.replace(".find((button) => button.textContent?.trim() === 'Go');", ".find((button) => button.textContent?.trim() === 'Go')!;")
+          text = text.replace(".find((select) => select.selectedOptions[0]?.textContent?.includes('px / tile'));", ".find((select) => select.selectedOptions[0]?.textContent?.includes('px / tile'))!;")
+          p.write_text(text)
+
+          # TS6 inference regression around ChildNode.nextSibling in this loop.
+          p = Path('src/editor/EditorToolbarPolish.ts')
+          text = p.read_text().replace("const next = cursor.nextSibling;", "const next: ChildNode | null = cursor.nextSibling;")
+          p.write_text(text)
+
+          # resource_area became part of EditorMarkerType, so every exhaustive color registry must include it.
+          for name in ['src/editor/EditorNavigator.ts', 'src/editor/EditorNavigatorV5.ts', 'src/ui/WorldMap.ts']:
+              p = Path(name)
+              text = p.read_text()
+              if 'resource_area:' not in text:
+                  text = text.replace("mining_area: '#ff8a32',", "mining_area: '#ff8a32', resource_area: '#55c878',")
+              p.write_text(text)
+          PY
+      - name: Verify build
+        run: npm run build
+      - name: Commit verified fixes and remove one-off workflow
+        run: |
+          rm .github/workflows/editor-ts-autofix.yml
+          git config user.name "MassRPG build fixer"
+          git config user.email "actions@users.noreply.github.com"
+          git add src .github/workflows/editor-ts-autofix.yml
+          git commit -m "Fix editor TypeScript build regressions"
+          git push origin HEAD:claude/massrpg-procedural-game-sossii
