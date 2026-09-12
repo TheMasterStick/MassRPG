@@ -7,7 +7,7 @@ import {
   writeEditorWorldToIndexedDb,
 } from './EditorStorage';
 
-export type EditorMarkerType = 'settlement' | 'village' | 'town' | 'city' | 'castle' | 'mining_area';
+export type EditorMarkerType = 'settlement' | 'village' | 'town' | 'city' | 'castle' | 'mining_area' | 'resource_area';
 export type PlaneLinkKind = 'cave_entrance' | 'stairs' | 'ladder';
 
 export interface EditorMarker {
@@ -185,7 +185,7 @@ function migrateParsedWorld(parsed: unknown, worldSize: number): EditorWorldData
     ? candidate.planes as Record<string, unknown>
     : {};
 
-  const markerTypes = new Set<EditorMarkerType>(['settlement', 'village', 'town', 'city', 'castle', 'mining_area']);
+  const markerTypes = new Set<EditorMarkerType>(['settlement', 'village', 'town', 'city', 'castle', 'mining_area', 'resource_area']);
   const markers = Array.isArray(candidate.markers)
     ? candidate.markers.filter((m): m is Omit<EditorMarker, 'plane'> & { plane?: WorldPlane } => {
         if (!m || typeof m !== 'object') return false;
