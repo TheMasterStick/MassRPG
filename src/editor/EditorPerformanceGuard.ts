@@ -22,7 +22,9 @@ export function installEditorPerformanceGuard(root: HTMLElement): void {
   canvas.addEventListener('mousemove', (event) => {
     const now = performance.now();
     const px = tilePixels();
-    const interval = px >= 32 ? 30 : px >= 8 ? 24 : 16;
+    // Broad-map authoring values responsiveness over 60fps hover redraws.
+    // Interpolation in the brush code preserves continuous paint between samples.
+    const interval = px >= 32 ? 30 : px >= 16 ? 34 : px >= 4 ? 45 : 60;
     if (now - lastAccepted < interval) {
       // Allow already-running capture helpers to finish, but prevent the costly
       // base V6 bubble redraw for this redundant high-frequency mouse sample.

@@ -74,7 +74,8 @@ const LINK_TYPES: { id: PlaneLinkKind; label: string }[] = [
 
 const TILE_SIZES = [0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 4, 8, 12, 16, 24, 32, 48];
 const BRUSH_SIZES = [1, 3, 5, 9, 17, 33, 65, 129, 257, 513, 1025, 2049, 4097, 8193, 16385, 32769, 65535];
-const MACRO_BRUSH_THRESHOLD = 33;
+const MACRO_BRUSH_THRESHOLD = 9;
+const DETAILED_RENDER_MIN_TILE_PX = 16;
 const MAX_DETAILED_SHAPE_CELLS = 50000;
 const MAX_COPY_SIDE = 256;
 const PLANES: WorldPlane[] = [0, -1, -2];
@@ -1404,7 +1405,9 @@ export function launchWorldEditor(root: HTMLElement): void {
     const tilePx = TILE_SIZES[zoomIndex];
     ctx.clearRect(0, 0, width, height);
     ctx.imageSmoothingEnabled = false;
-    if (tilePx < 4) drawMacro(width, height, tilePx);
+    // Once zoomed out far enough, use the map-style renderer instead of
+    // drawing thousands of individual tile/object sprites every mouse sample.
+    if (tilePx < DETAILED_RENDER_MIN_TILE_PX) drawMacro(width, height, tilePx);
     else drawDetailed(width, height, tilePx);
     drawMarkersAndLinks(width, height, tilePx);
     drawPreview(width, height, tilePx);
