@@ -70,7 +70,11 @@ export class Chunk {
 
         let resource: ResourceType | null = null;
         if (hasOwnEditorField(edit, 'resource')) resource = edit?.resource ?? null;
-        else resource = (plane === 0 ? gen.miningResourceAt(wx, wy) : null) ?? gen.resourceAt(wx, wy, getTile);
+        else {
+          resource = gen.paintedResourceAt(plane, wx, wy, tile)
+            ?? (plane === 0 ? gen.miningResourceAt(wx, wy) : null)
+            ?? gen.resourceAt(wx, wy, getTile);
+        }
         if (resource) {
           this.resources.set(key, resource);
           continue;
@@ -78,7 +82,7 @@ export class Chunk {
 
         let monsterId: string | null = null;
         if (hasOwnEditorField(edit, 'spawner')) monsterId = edit?.spawner ?? null;
-        else monsterId = gen.monsterSpawnAt(wx, wy, tile);
+        else monsterId = gen.paintedMonsterAt(plane, wx, wy) ?? gen.monsterSpawnAt(wx, wy, tile);
         if (monsterId) this.spawnPoints.push({ lx, ly, monsterId });
       }
     }
