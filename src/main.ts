@@ -12,10 +12,12 @@ import { ensureCanonicalWorldInstalled } from './world/CanonicalWorld';
 import { launchWorldEditor } from './editor/WorldEditor';
 import { registerUtilityTools } from './data/tools';
 import { registerArrowCrafting } from './data/arrowCrafting';
+import { registerCraftingExtensions } from './data/craftingExtensions';
 import type { StructureType } from './world/types';
 
 registerUtilityTools();
 registerArrowCrafting();
+registerCraftingExtensions();
 
 const app = document.getElementById('app')!;
 const startScreen = document.getElementById('start-screen')!;
