@@ -25,6 +25,7 @@ import {
 } from '../world/EditorWorld';
 import type { ResourceType, StructureType, TileType, WorldPlane } from '../world/types';
 import type { ObjectTransform, TransformableEditorCell } from '../world/EditorObjects';
+import { drawStructureJunction, getStructureJunction, getStructureVisualBase } from '../world/StructureJunctions';
 import { createEditorNavigatorV5, type EditorNavigatorHandle } from './EditorNavigatorV5';
 
 const SURFACE_TILES: TileType[] = [
@@ -40,7 +41,11 @@ const UNDERGROUND_TILES: TileType[] = [
 
 const STRUCTURE_IDS: StructureType[] = [
   'bank_chest', 'furnace', 'anvil', 'cooking_range', 'campfire', 'workbench',
-  'fence', 'wall', 'wall_window', 'wall_brick', 'wall_stone', 'wall_cobble',
+  'fence', 'fence_l', 'fence_t', 'fence_r',
+  'wall', 'wall_l', 'wall_t', 'wall_r', 'wall_window',
+  'wall_brick', 'wall_brick_l', 'wall_brick_t', 'wall_brick_r',
+  'wall_stone', 'wall_stone_l', 'wall_stone_t', 'wall_stone_r',
+  'wall_cobble', 'wall_cobble_l', 'wall_cobble_t', 'wall_cobble_r',
   'bed', 'storage_chest', 'tannery', 'loom', 'general_store',
 ];
 
@@ -724,7 +729,10 @@ export function launchWorldEditor(root: HTMLElement): void {
       grid.append(paletteButton({ kind: 'elevation_delta', value: 1 }, '', 'Raise +1'));
       grid.append(paletteButton({ kind: 'elevation_delta', value: -1 }, '', 'Lower -1'));
     } else if (category === 'structures') {
-      for (const id of STRUCTURE_IDS) grid.append(paletteButton({ kind: 'structure', id }, `/sprites/structures/${id}.png`, displayName(id)));
+      for (const id of STRUCTURE_IDS) {
+        const previewId = getStructureVisualBase(id);
+        grid.append(paletteButton({ kind: 'structure', id }, `/sprites/structures/${previewId}.png`, displayName(id)));
+      }
     } else if (category === 'resources') {
       for (const id of RESOURCE_IDS) grid.append(paletteButton({ kind: 'resource', id }, `/sprites/resources/${id}.png`, displayName(id)));
     } else if (category === 'spawners') {
@@ -1550,11 +1558,42 @@ export function launchWorldEditor(root: HTMLElement): void {
         if (!cell) continue;
         const sx = originX + col * tilePx;
         const sy = originY + row * tilePx;
-        if (cell.structure) drawSprite(`/sprites/structures/${cell.structure}.png`, sx, sy, tilePx, '#d8c9a1', cell.structureTransform);
+        if (cell.structure) drawStructureSprite(cell.structure, sx, sy, tilePx, cell.structureTransform);
         else if (cell.resource) drawSprite(`/sprites/resources/${cell.resource}.png`, sx, sy, tilePx, cell.resource.startsWith('rock_') ? '#222' : '#356c36');
         else if (cell.spawner) drawSprite(`/sprites/monsters/${cell.spawner}.png`, sx, sy, tilePx, '#aa3030');
       }
     }
+  }
+
+  function drawStructureSprite(
+    type: StructureType,
+    sx: number,
+    sy: number,
+    tilePx: number,
+    transform?: ObjectTransform,
+  ): void {
+    const junction = getStructureJunction(type);
+    const baseType = getStructureVisualBase(type);
+    const img = imageFor(`/sprites/structures/${baseType}.png`, draw);
+    if (img.complete && img.naturalWidth > 0) {
+      const h = Math.max(tilePx, tilePx * img.naturalHeight / img.naturalWidth);
+      const localX = transform ? -tilePx / 2 : sx;
+      const localY = transform ? -h / 2 : sy + tilePx - h;
+      if (transform) {
+        ctx.save();
+        ctx.translate(sx + tilePx / 2, sy + tilePx - h / 2);
+        ctx.rotate(transform.rotation * Math.PI / 180);
+        ctx.scale(transform.flipX ? -1 : 1, transform.flipY ? -1 : 1);
+      }
+      if (junction) drawStructureJunction(ctx, img, localX, localY, tilePx, h, junction.shape, junction.base === 'fence');
+      else ctx.drawImage(img, localX, localY, tilePx, h);
+      if (transform) ctx.restore();
+      return;
+    }
+    ctx.fillStyle = '#d8c9a1';
+    ctx.beginPath();
+    ctx.arc(sx + tilePx / 2, sy + tilePx / 2, Math.max(2, tilePx * 0.3), 0, Math.PI * 2);
+    ctx.fill();
   }
 
   function drawSprite(
