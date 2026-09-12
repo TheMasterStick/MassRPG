@@ -7,6 +7,7 @@ import { hash2D } from './Random';
 import { RESOURCE_NAMES } from '../data/biomes';
 import type { ResourceType, StructureType } from '../world/types';
 import type { EditorDecoration } from '../world/ElevationDecorations';
+import { getEditorRoofAt, getEditorStructureTransformAt, type ObjectTransform } from '../world/EditorObjects';
 import { getSprite, getPlayerSprite, getElevationSprite, preloadAllSprites } from './Sprites';
 
 interface FloatingText { x: number; y: number; text: string; color: string; born: number; }
@@ -112,9 +113,6 @@ export class Renderer {
     const camX = player.x * TILE_SIZE - w / 2;
     const camY = player.y * TILE_SIZE - h / 2;
 
-    // Keep ordinary terrain/object work close to the actual viewport. Long tree
-    // shadows get a separate one-sided fringe below/left, where their sources can
-    // actually project into view toward the upper-right.
     const minTX = Math.floor(camX / TILE_SIZE) - 1;
     const maxTX = Math.floor((camX + w) / TILE_SIZE) + 1;
     const minTY = Math.floor(camY / TILE_SIZE) - 1;
@@ -147,8 +145,9 @@ export class Renderer {
 
         const structure = world.getStructure(tx, ty);
         if (structure) {
+          const transform = getEditorStructureTransformAt(tx, ty, world.activePlane);
           shadows.push(() => this.drawStructureShadow(sx, sy, structure));
-          objects.push({ sortY: ty, draw: () => this.drawStructure(sx, sy, structure) });
+          objects.push({ sortY: ty, draw: () => this.drawStructure(sx, sy, structure, transform) });
         } else {
           const res = world.getResourceNode(tx, ty);
           if (res) {
@@ -159,9 +158,6 @@ export class Renderer {
       }
     }
 
-    // Only tall trees need the wider off-screen shadow fringe. Rocks and ordinary
-    // props now use compact grounding shadows and are already covered by the normal
-    // one-tile viewport margin.
     const shadowMinTX = minTX - 3;
     const shadowMaxTX = maxTX;
     const shadowMinTY = minTY;
@@ -251,10 +247,6 @@ export class Renderer {
     return canvas;
   }
 
-  /**
-   * Pre-render the expensive transform/blur once per sprite, zoom level and
-   * shadow profile. Every visible instance can then use a plain drawImage.
-   */
   private getProjectedShadow(
     img: HTMLImageElement,
     widthMul: number,
@@ -277,8 +269,6 @@ export class Renderer {
     const blur = Math.max(0.45, TILE_SIZE * 0.018);
     const pad = Math.ceil(blur * 3 + 2);
 
-    // Source bounds are x=[-dw/2,dw/2], y=[-dh,0]. Under the shear,
-    // the upper-right corner becomes the furthest projected point.
     const xMin = -a * dw / 2;
     const xMax = a * dw / 2 + rightLean * dh;
     const yMin = -d * dh;
@@ -322,9 +312,6 @@ export class Renderer {
   }
 
   private drawResourceShadow(sx: number, sy: number, res: ResourceType) {
-    // The ore/resource sprites already contain enough painted perspective to sit
-    // naturally on terrain. Extra contact/cast shadows made low nodes look raised,
-    // so only tall trees receive a generated world shadow.
     if (!res.startsWith('tree_')) return;
     const sprite = getSprite('resources', res);
     if (!sprite) {
@@ -338,9 +325,6 @@ export class Renderer {
     if (type === 'blocker' || type === 'campfire') return;
     const sprite = getSprite('structures', type);
     if (sprite) {
-      // Workshop props and containers get a subdued base shadow first, with only
-      // a hint of directional cast. This keeps them grounded without competing
-      // visually with the much taller tree shadows.
       this.drawGroundShadow(sx, sy, 0.64, 0.17, 0.13);
       this.drawProjectedShadow(sprite, sx, sy, 1, 0.04, 0.11, 0.14);
       return;
@@ -359,6 +343,26 @@ export class Renderer {
     ctx.translate(dx + dw, dy);
     ctx.scale(-1, 1);
     ctx.drawImage(img, 0, 0, dw, dh);
+    ctx.restore();
+  }
+
+  private drawTransformedSpriteOnTile(
+    img: HTMLImageElement,
+    sx: number,
+    sy: number,
+    transform: ObjectTransform,
+    widthMul = 1,
+  ) {
+    const dw = TILE_SIZE * widthMul;
+    const dh = dw * (img.naturalHeight / img.naturalWidth);
+    const cx = sx + TILE_SIZE / 2;
+    const cy = sy + TILE_SIZE - dh / 2;
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(transform.rotation * Math.PI / 180);
+    ctx.scale(transform.flipX ? -1 : 1, transform.flipY ? -1 : 1);
+    ctx.drawImage(img, -dw / 2, -dh / 2, dw, dh);
     ctx.restore();
   }
 
@@ -388,11 +392,19 @@ export class Renderer {
 
     for (let ty = minTY; ty <= maxTY; ty++) {
       for (let tx = minTX; tx <= maxTX; tx++) {
+        const sx = tx * TILE_SIZE - camX;
+        const sy = ty * TILE_SIZE - camY;
+
+        const authoredRoof = getEditorRoofAt(tx, ty, world.activePlane);
+        if (authoredRoof) {
+          const sprite = getSprite('roof', authoredRoof.id);
+          if (sprite) this.drawTransformedSpriteOnTile(sprite, sx, sy, authoredRoof.transform);
+          continue;
+        }
+
         const roof = world.gen.roofCellAt(tx, ty);
         if (!roof) continue;
         if (playerBuilding && playerBuilding.originX === roof.originX && playerBuilding.originY === roof.originY) continue;
-        const sx = tx * TILE_SIZE - camX;
-        const sy = ty * TILE_SIZE - camY;
         if (roof.edge === 'none') {
           const sprite = getSprite('roof', `${roof.roof}_middle`);
           if (sprite) ctx.drawImage(sprite, sx, sy, TILE_SIZE, TILE_SIZE);
@@ -475,14 +487,26 @@ export class Renderer {
     if (!available) ctx.restore();
   }
 
-  private drawStructure(sx: number, sy: number, type: StructureType) {
+  private drawStructure(sx: number, sy: number, type: StructureType, transform?: ObjectTransform) {
     if (type === 'blocker') return;
     const ctx = this.ctx;
     const sprite = getSprite('structures', type);
-    if (sprite) { this.drawSpriteOnTile(sprite, sx, sy); return; }
+    if (sprite) {
+      if (transform) this.drawTransformedSpriteOnTile(sprite, sx, sy, transform);
+      else this.drawSpriteOnTile(sprite, sx, sy);
+      return;
+    }
 
     const info = STRUCTURE_GLYPH[type];
     if (!info) return;
+    ctx.save();
+    if (transform) {
+      ctx.translate(sx + TILE_SIZE / 2, sy + TILE_SIZE / 2);
+      ctx.rotate(transform.rotation * Math.PI / 180);
+      ctx.scale(transform.flipX ? -1 : 1, transform.flipY ? -1 : 1);
+      sx = -TILE_SIZE / 2;
+      sy = -TILE_SIZE / 2;
+    }
     ctx.fillStyle = 'rgba(0,0,0,0.15)';
     ctx.fillRect(sx + 2, sy + 2, TILE_SIZE - 4, TILE_SIZE - 4);
     ctx.fillStyle = info.color;
@@ -490,6 +514,7 @@ export class Renderer {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(info.glyph, sx + TILE_SIZE / 2, sy + TILE_SIZE / 2 + 1);
+    ctx.restore();
   }
 
   private getOutlinedMonsterSprite(img: HTMLImageElement, flip: boolean, dw: number, dh: number): HTMLCanvasElement {
