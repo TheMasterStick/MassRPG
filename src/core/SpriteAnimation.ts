@@ -46,6 +46,17 @@ export interface SpriteAnimationFrame {
   frameIndex: number;
   frameCount: number;
   finished: boolean;
+  cell: SpriteAnimationCell;
+}
+
+export interface SpriteAnimationImageFrame {
+  image: HTMLImageElement;
+  renderWidthTiles?: number;
+  anchorX: number;
+  anchorY: number;
+  frameIndex: number;
+  frameCount: number;
+  finished: boolean;
 }
 
 type LoadState = 'loading' | 'loaded' | 'missing' | 'invalid';
@@ -55,6 +66,7 @@ interface AnimationSetEntry {
   manifestUrl: string;
   manifest?: SpriteAnimationManifest;
   image?: HTMLImageElement;
+  frameImages: Map<string, HTMLImageElement>;
 }
 
 const animationSets = new Map<string, AnimationSetEntry>();
@@ -80,6 +92,64 @@ function resolveImageUrl(manifestUrl: string, image: string): string {
   return `${base}${image}`;
 }
 
+function cellKey(cell: SpriteAnimationCell): string {
+  return `${cell.col},${cell.row}`;
+}
+
+function cellsForSequence(sequence: SpriteAnimationSequence): SpriteAnimationCell[] {
+  if (sequence.cells?.length) return sequence.cells;
+  if (!sequence.frames?.length) return [];
+  const row = Math.max(0, Math.floor(sequence.row ?? 0));
+  return sequence.frames.map((col) => ({ col: Math.max(0, Math.floor(col)), row }));
+}
+
+function allManifestCells(manifest: SpriteAnimationManifest): SpriteAnimationCell[] {
+  const cells = new Map<string, SpriteAnimationCell>();
+  for (const clip of Object.values(manifest.animations)) {
+    for (const sequence of Object.values(clip.directions)) {
+      if (!sequence) continue;
+      for (const cell of cellsForSequence(sequence)) cells.set(cellKey(cell), cell);
+    }
+  }
+  return [...cells.values()];
+}
+
+async function sliceFrameImages(entry: AnimationSetEntry): Promise<void> {
+  const manifest = entry.manifest;
+  const source = entry.image;
+  if (!manifest || !source) return;
+
+  await Promise.all(allManifestCells(manifest).map(async (cell) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = manifest.frameWidth;
+    canvas.height = manifest.frameHeight;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(
+      source,
+      cell.col * manifest.frameWidth,
+      cell.row * manifest.frameHeight,
+      manifest.frameWidth,
+      manifest.frameHeight,
+      0,
+      0,
+      manifest.frameWidth,
+      manifest.frameHeight,
+    );
+
+    const frameImage = new Image();
+    await new Promise<void>((resolve) => {
+      frameImage.onload = () => resolve();
+      frameImage.onerror = () => resolve();
+      frameImage.src = canvas.toDataURL('image/png');
+    });
+    if (frameImage.complete && frameImage.naturalWidth > 0) {
+      entry.frameImages.set(cellKey(cell), frameImage);
+    }
+  }));
+}
+
 /**
  * Begins loading an optional spritesheet manifest. Missing manifests are deliberately
  * silent: static sprites remain the fallback while art is migrated incrementally.
@@ -90,7 +160,7 @@ export function preloadSpriteAnimationSet(
 ): void {
   if (animationSets.has(id)) return;
 
-  const entry: AnimationSetEntry = { state: 'loading', manifestUrl };
+  const entry: AnimationSetEntry = { state: 'loading', manifestUrl, frameImages: new Map() };
   animationSets.set(id, entry);
 
   void fetch(manifestUrl, { cache: 'no-cache' })
@@ -109,23 +179,22 @@ export function preloadSpriteAnimationSet(
       const image = new Image();
       entry.manifest = json;
       entry.image = image;
-      image.onload = () => { entry.state = 'loaded'; };
-      image.onerror = () => {
+      await new Promise<void>((resolve) => {
+        image.onload = () => resolve();
+        image.onerror = () => resolve();
+        image.src = resolveImageUrl(manifestUrl, json.image);
+      });
+      if (!image.complete || image.naturalWidth <= 0) {
         entry.state = 'missing';
         console.warn(`Could not load sprite animation image: ${json.image}`);
-      };
-      image.src = resolveImageUrl(manifestUrl, json.image);
+        return;
+      }
+      await sliceFrameImages(entry);
+      entry.state = 'loaded';
     })
     .catch(() => {
       entry.state = 'missing';
     });
-}
-
-function cellsForSequence(sequence: SpriteAnimationSequence): SpriteAnimationCell[] {
-  if (sequence.cells?.length) return sequence.cells;
-  if (!sequence.frames?.length) return [];
-  const row = Math.max(0, Math.floor(sequence.row ?? 0));
-  return sequence.frames.map((col) => ({ col: Math.max(0, Math.floor(col)), row }));
 }
 
 /**
@@ -182,6 +251,35 @@ export function getSpriteAnimationFrame(
     frameIndex,
     frameCount: cells.length,
     finished,
+    cell,
+  };
+}
+
+/**
+ * Returns a pre-sliced HTMLImageElement for compatibility with the existing renderer.
+ * This lets the old static draw path render any number of animation frames while the
+ * rest of the engine is gradually migrated to source-rectangle rendering.
+ */
+export function getSpriteAnimationImageFrame(
+  id: string,
+  animationName: string,
+  facing: SpriteAnimationFacing,
+  nowMs: number,
+  startedAtMs = 0,
+): SpriteAnimationImageFrame | null {
+  const frame = getSpriteAnimationFrame(id, animationName, facing, nowMs, startedAtMs);
+  if (!frame) return null;
+  const entry = animationSets.get(id);
+  const image = entry?.frameImages.get(cellKey(frame.cell));
+  if (!image) return null;
+  return {
+    image,
+    renderWidthTiles: frame.renderWidthTiles,
+    anchorX: frame.anchorX,
+    anchorY: frame.anchorY,
+    frameIndex: frame.frameIndex,
+    frameCount: frame.frameCount,
+    finished: frame.finished,
   };
 }
 
