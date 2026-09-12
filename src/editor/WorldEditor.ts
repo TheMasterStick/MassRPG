@@ -1,16 +1,36 @@
 import { launchWorldEditor as launchWorldEditorV6 } from './WorldEditorV6';
 import { WORLD_SIZE } from '../world/AeldorData';
 import { cellKey, getPlaneData, loadEditorWorld, saveEditorWorld } from '../world/EditorWorld';
-import type { WorldPlane } from '../world/types';
+import type { ResourceType, WorldPlane } from '../world/types';
 
 type BlockerMode = 'off' | 'paint' | 'erase';
+type ResourceAreaMode = 'off' | Extract<ResourceType,
+  'flax_plant'
+  | 'tree_normal' | 'tree_oak' | 'tree_willow' | 'tree_maple' | 'tree_yew' | 'tree_magic'
+  | 'fishing_shrimp' | 'fishing_lobster' | 'fishing_swordfish'
+>;
+
+const RESOURCE_AREA_OPTIONS: { id: ResourceAreaMode; label: string; name: string }[] = [
+  { id: 'off', label: 'Resource areas: Off', name: '' },
+  { id: 'flax_plant', label: 'Area: Flax', name: 'Flax Field' },
+  { id: 'tree_normal', label: 'Area: Trees', name: 'Tree Grove' },
+  { id: 'tree_oak', label: 'Area: Oak', name: 'Oak Grove' },
+  { id: 'tree_willow', label: 'Area: Willow', name: 'Willow Grove' },
+  { id: 'tree_maple', label: 'Area: Maple', name: 'Maple Grove' },
+  { id: 'tree_yew', label: 'Area: Yew', name: 'Yew Grove' },
+  { id: 'tree_magic', label: 'Area: Magic Tree', name: 'Magic Tree Grove' },
+  { id: 'fishing_shrimp', label: 'Area: Small Fishing', name: 'Small Fishing Grounds' },
+  { id: 'fishing_lobster', label: 'Area: Lobster', name: 'Lobster Grounds' },
+  { id: 'fishing_swordfish', label: 'Area: Deep Fishing', name: 'Deep Fishing Grounds' },
+];
 
 /**
  * The editor does a substantial amount of canvas work per mousemove. Gaming mice
  * and forwarded Codespaces browsers can deliver hundreds of mousemove events per
  * second, which made macro-map painting feel much heavier than the actual world
- * data warranted. This wrapper also adds an explicit invisible-in-game blocker
- * authoring mode without disturbing the V6 editor's normal terrain/elevation tools.
+ * data warranted. This wrapper also adds explicit invisible blockers and compact
+ * authored renewable-resource areas without disturbing the V6 editor's normal
+ * terrain/elevation tools.
  */
 export function launchWorldEditor(root: HTMLElement): void {
   launchWorldEditorV6(root);
@@ -22,6 +42,7 @@ export function launchWorldEditor(root: HTMLElement): void {
   let blockerPainting = false;
   let lastBlockerPoint: { x: number; y: number } | null = null;
   let blockerSaveTimer: ReturnType<typeof setTimeout> | null = null;
+  let resourceAreaMode: ResourceAreaMode = 'off';
 
   const blockerSelect = document.createElement('select');
   blockerSelect.title = 'Invisible collision blockers: visible in the editor, hidden during gameplay.';
@@ -35,13 +56,62 @@ export function launchWorldEditor(root: HTMLElement): void {
     option.textContent = label;
     blockerSelect.append(option);
   }
+
+  const resourceAreaSelect = document.createElement('select');
+  resourceAreaSelect.title = 'Place an authored renewable-resource site. Surface only for now; runtime nodes are derived from this marker.';
+  for (const optionDef of RESOURCE_AREA_OPTIONS) {
+    const option = document.createElement('option');
+    option.value = optionDef.id;
+    option.textContent = optionDef.label;
+    resourceAreaSelect.append(option);
+  }
+
+  const resourceRadiusInput = document.createElement('input');
+  resourceRadiusInput.type = 'number';
+  resourceRadiusInput.min = '3';
+  resourceRadiusInput.max = '40';
+  resourceRadiusInput.value = '10';
+  resourceRadiusInput.title = 'Resource-area radius in tiles.';
+  resourceRadiusInput.style.width = '54px';
+
+  const resourceCountInput = document.createElement('input');
+  resourceCountInput.type = 'number';
+  resourceCountInput.min = '1';
+  resourceCountInput.max = '24';
+  resourceCountInput.value = '5';
+  resourceCountInput.title = 'Number of live resource nodes derived from the site.';
+  resourceCountInput.style.width = '48px';
+
   blockerSelect.addEventListener('change', () => {
     blockerMode = blockerSelect.value as BlockerMode;
     blockerPainting = false;
     lastBlockerPoint = null;
-    canvas.style.cursor = blockerMode === 'off' ? '' : 'crosshair';
+    if (blockerMode !== 'off') {
+      resourceAreaMode = 'off';
+      resourceAreaSelect.value = 'off';
+    }
+    canvas.style.cursor = blockerMode === 'off' && resourceAreaMode === 'off' ? '' : 'crosshair';
   });
-  toolbar.append(blockerSelect);
+
+  resourceAreaSelect.addEventListener('change', () => {
+    resourceAreaMode = resourceAreaSelect.value as ResourceAreaMode;
+    if (resourceAreaMode !== 'off') {
+      blockerMode = 'off';
+      blockerSelect.value = 'off';
+      blockerPainting = false;
+      lastBlockerPoint = null;
+    }
+    canvas.style.cursor = blockerMode === 'off' && resourceAreaMode === 'off' ? '' : 'crosshair';
+  });
+
+  toolbar.append(
+    blockerSelect,
+    resourceAreaSelect,
+    document.createTextNode('R'),
+    resourceRadiusInput,
+    document.createTextNode('N'),
+    resourceCountInput,
+  );
 
   function currentPlane(): WorldPlane {
     const planeSelect = [...toolbar.querySelectorAll<HTMLSelectElement>('select')]
@@ -120,6 +190,26 @@ export function launchWorldEditor(root: HTMLElement): void {
     lastBlockerPoint = point;
   }
 
+  function placeResourceArea(point: { x: number; y: number }): void {
+    if (resourceAreaMode === 'off' || currentPlane() !== 0) return;
+    const data = loadEditorWorld(WORLD_SIZE);
+    const definition = RESOURCE_AREA_OPTIONS.find((option) => option.id === resourceAreaMode);
+    if (!definition) return;
+    const radius = Math.max(3, Math.min(40, Math.round(Number(resourceRadiusInput.value) || 10)));
+    const count = Math.max(1, Math.min(24, Math.round(Number(resourceCountInput.value) || 5)));
+    const sameTypeCount = data.markers.filter((marker) => marker.type === 'resource_area' && marker.notes?.includes(`resource=${resourceAreaMode}`)).length + 1;
+    data.markers.push({
+      id: `resource-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+      type: 'resource_area',
+      name: `${definition.name} ${sameTypeCount}`,
+      x: point.x,
+      y: point.y,
+      plane: 0,
+      notes: `resource=${resourceAreaMode}; radius=${radius}; count=${count}`,
+    });
+    void saveEditorWorld(data);
+  }
+
   // Capture left-clicks while blocker mode is active so the normal editor does
   // not simultaneously paint terrain/objects underneath the collision line.
   canvas.addEventListener('mousedown', (event) => {
@@ -129,6 +219,15 @@ export function launchWorldEditor(root: HTMLElement): void {
     blockerPainting = true;
     lastBlockerPoint = null;
     paintBlockerSegment(eventWorldPoint(event));
+  }, { capture: true });
+
+  // Resource areas are single authored site markers. The runtime derives the
+  // configured renewable nodes, so one click is enough regardless of brush size.
+  canvas.addEventListener('mousedown', (event) => {
+    if (resourceAreaMode === 'off' || event.button !== 0) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    placeResourceArea(eventWorldPoint(event));
   }, { capture: true });
 
   canvas.addEventListener('mousemove', (event) => {
