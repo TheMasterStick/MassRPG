@@ -15,7 +15,10 @@ export const VIEW_RADIUS_CHUNKS = 3;
 export const SIM_RADIUS_CHUNKS = 4; // chunks that get resource/monster simulation
 export const INVENTORY_SLOTS = 28;
 export const BANK_SLOTS = 200;
-export const RESOURCE_RESPAWN_TICKS = 8; // trees/rocks
+export const RESOURCE_RESPAWN_TICKS = 8; // baseline trees/rocks
+// Wild fibre should be a renewable location, not an infinite click-spam source.
+// 300 ticks at 600ms/tick = 180 seconds.
+export const FLAX_RESPAWN_TICKS = 300;
 export const FISHING_RESPAWN_TICKS = 3;
 export const MONSTER_RESPAWN_TICKS = 50;
 // Player-lit fires are temporary world objects. 150 ticks at 600ms/tick = 90 seconds.
