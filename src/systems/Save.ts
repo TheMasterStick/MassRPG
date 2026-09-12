@@ -23,6 +23,7 @@ interface SaveData {
     skillsXp: Record<string, number>;
     currentHp: number;
     combatStyle: string;
+    meleeTrainingStyle?: string;
     inventory: ({ itemId: string; qty: number } | null)[];
     equipment: Record<string, string>;
     equippedAmmoQty?: number;
@@ -53,6 +54,7 @@ export function saveGame(world: World, player: Player) {
       skillsXp: player.skillsXp,
       currentHp: player.currentHp,
       combatStyle: player.combatStyle,
+      meleeTrainingStyle: player.meleeTrainingStyle,
       inventory: player.inventory,
       equipment: player.equipment as Record<string, string>,
       equippedAmmoQty: player.equippedAmmoQty,
@@ -99,6 +101,11 @@ export function loadGame(): { world: World; player: Player } | null {
     }
     player.currentHp = data.player.currentHp;
     player.combatStyle = data.player.combatStyle as Player['combatStyle'];
+    if (
+      data.player.meleeTrainingStyle === 'accurate'
+      || data.player.meleeTrainingStyle === 'aggressive'
+      || data.player.meleeTrainingStyle === 'defensive'
+    ) player.meleeTrainingStyle = data.player.meleeTrainingStyle;
     player.inventory = data.player.inventory;
     player.equipment = data.player.equipment as Player['equipment'];
     player.equippedAmmoQty = data.player.equippedAmmoQty ?? 0;
