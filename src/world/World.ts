@@ -6,6 +6,7 @@ import { TILE_VISUALS } from './types';
 import { Monster } from '../entities/Monster';
 import { CROP_TIERS, HERB_TIERS } from '../data/items';
 import { getPlaneLinkAt } from './EditorWorld';
+import { decorationBlocksEdge, getEditorDecorationAt, type EditorDecoration } from './ElevationDecorations';
 import { getIndexedElevationOverrideAt } from './EditorSpatialIndex';
 import { WORLD_SIZE } from './AeldorData';
 
@@ -99,6 +100,10 @@ export class World {
     return this.gen.ambientElevationAt(x, y, this.getTile(x, y, plane));
   }
 
+  getDecoration(x: number, y: number, plane: WorldPlane = this.activePlane): EditorDecoration | undefined {
+    return getEditorDecorationAt(x, y, plane);
+  }
+
   getStructure(x: number, y: number, plane: WorldPlane = this.activePlane): StructureType | undefined {
     const { lx, ly } = worldToChunk(x, y);
     const chunk = this.getChunkAt(x, y, plane);
@@ -188,15 +193,32 @@ export class World {
     return true;
   }
 
+  private crossesDecorationBarrier(fromX: number, fromY: number, toX: number, toY: number): boolean {
+    const dx = Math.sign(toX - fromX);
+    const dy = Math.sign(toY - fromY);
+    const from = this.getDecoration(fromX, fromY);
+    const to = this.getDecoration(toX, toY);
+
+    // Diagonal movement crosses both relevant cardinal edge bands. If either
+    // band is rocky/blocked, the diagonal is blocked too, preventing corner cuts.
+    if (dx > 0 && (decorationBlocksEdge(from, 'east') || decorationBlocksEdge(to, 'west'))) return true;
+    if (dx < 0 && (decorationBlocksEdge(from, 'west') || decorationBlocksEdge(to, 'east'))) return true;
+    if (dy > 0 && (decorationBlocksEdge(from, 'south') || decorationBlocksEdge(to, 'north'))) return true;
+    if (dy < 0 && (decorationBlocksEdge(from, 'north') || decorationBlocksEdge(to, 'south'))) return true;
+    return false;
+  }
+
   /**
    * Elevation +1 is ordinary traversable hillside. Surface +2 and above is an
    * impassable mountain barrier unless the player is following an explicitly
-   * authored path/cobblestone/floor pass. Pass terrain is also allowed to bridge
-   * an otherwise too-steep edge, so future mountain roads work without hidden
-   * one-tile elevation ramps.
+   * authored path/cobblestone/floor pass. Authored cliff/crevice decorations use
+   * edge-band collision: their flat part stays walkable while crossing the rocky
+   * decorated edge is blocked. Full-tile invisible blockers remain available for
+   * arbitrary pathing control.
    */
   canStep(fromX: number, fromY: number, toX: number, toY: number): boolean {
     if (!this.isWalkable(toX, toY)) return false;
+    if (this.crossesDecorationBarrier(fromX, fromY, toX, toY)) return false;
 
     const fromTile = this.getTile(fromX, fromY);
     const toTile = this.getTile(toX, toY);
