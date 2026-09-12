@@ -117,6 +117,11 @@ export function registerCombatEquipment() {
       setRequirement(`${metal.id}_${suffix}`, { skill: 'defence', level: combatLevel });
     }
 
+    // Ammunition is also progression-gated. This prevents a fresh character
+    // from bypassing the ranged ladder by equipping end-tier arrows obtained
+    // from another source (or, later, another player).
+    setRequirement(`${metal.id}_arrow`, { skill: 'ranged', level: combatLevel });
+
     for (const family of EXTRA_WEAPON_FAMILIES) {
       const itemId = `${metal.id}_${family.suffix}`;
       addItem({
