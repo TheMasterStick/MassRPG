@@ -1,0 +1,62 @@
+name: One-off broad editor performance fix
+
+on:
+  push:
+    branches:
+      - claude/massrpg-procedural-game-sossii
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: claude/massrpg-procedural-game-sossii
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Optimize zoomed-out editor painting
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          p = Path('src/editor/WorldEditorV6.ts')
+          s = p.read_text()
+          s = s.replace(
+              'const MACRO_BRUSH_THRESHOLD = 33;\n',
+              'const MACRO_BRUSH_THRESHOLD = 9;\nconst DETAILED_RENDER_MIN_TILE_PX = 16;\n',
+              1,
+          )
+          s = s.replace(
+              '    if (tilePx < 4) drawMacro(width, height, tilePx);\n    else drawDetailed(width, height, tilePx);',
+              '    // Once zoomed out far enough, use the map-style renderer instead of\n    // drawing thousands of individual tile/object sprites every mouse sample.\n    if (tilePx < DETAILED_RENDER_MIN_TILE_PX) drawMacro(width, height, tilePx);\n    else drawDetailed(width, height, tilePx);',
+              1,
+          )
+          p.write_text(s)
+
+          p = Path('src/editor/EditorPerformanceGuard.ts')
+          s = p.read_text()
+          s = s.replace(
+              "    const interval = px >= 32 ? 30 : px >= 8 ? 24 : 16;",
+              "    // Broad-map authoring values responsiveness over 60fps hover redraws.\n    // Interpolation in the brush code preserves continuous paint between samples.\n    const interval = px >= 32 ? 30 : px >= 16 ? 34 : px >= 4 ? 45 : 60;",
+              1,
+          )
+          p.write_text(s)
+          PY
+          rm .github/workflows/editor-broad-paint-performance.yml
+      - name: Install
+        run: npm ci --no-fund --no-audit
+      - name: Build
+        run: npm run build
+      - name: Commit verified fix
+        run: |
+          git config user.name "MassRPG editor fixer"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git commit -m "Optimize zoomed-out world editing"
+          git push origin HEAD:claude/massrpg-procedural-game-sossii
