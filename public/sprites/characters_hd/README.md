@@ -1,0 +1,1 @@
+Character creator preview assets. These are higher-resolution than the in-world runtime sprite. The creator composes these assets for readable body/face inspection, then downsamples the final character separately for runtime use.
