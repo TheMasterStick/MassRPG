@@ -8,6 +8,7 @@ import { RESOURCE_NAMES } from '../data/biomes';
 import type { ResourceType, StructureType } from '../world/types';
 import type { EditorDecoration } from '../world/ElevationDecorations';
 import { getEditorRoofAt, getEditorStructureTransformAt, type ObjectTransform } from '../world/EditorObjects';
+import { drawStructureJunction, getStructureJunction, getStructureVisualBase, type StructureJunctionShape } from '../world/StructureJunctions';
 import { getSprite, getPlayerSprite, getElevationSprite, preloadAllSprites } from './Sprites';
 
 interface FloatingText { x: number; y: number; text: string; color: string; born: number; }
@@ -323,13 +324,14 @@ export class Renderer {
 
   private drawStructureShadow(sx: number, sy: number, type: StructureType) {
     if (type === 'blocker' || type === 'campfire') return;
-    const sprite = getSprite('structures', type);
+    const baseType = getStructureVisualBase(type);
+    const sprite = getSprite('structures', baseType);
     if (sprite) {
       this.drawGroundShadow(sx, sy, 0.64, 0.17, 0.13);
       this.drawProjectedShadow(sprite, sx, sy, 1, 0.04, 0.11, 0.14);
       return;
     }
-    if (STRUCTURE_GLYPH[type]) this.drawGroundShadow(sx, sy, 0.58, 0.14, 0.10);
+    if (STRUCTURE_GLYPH[baseType]) this.drawGroundShadow(sx, sy, 0.58, 0.14, 0.10);
   }
 
   private drawSpriteOnTile(img: HTMLImageElement, sx: number, sy: number, widthMul = 1, flip = false) {
@@ -363,6 +365,29 @@ export class Renderer {
     ctx.rotate(transform.rotation * Math.PI / 180);
     ctx.scale(transform.flipX ? -1 : 1, transform.flipY ? -1 : 1);
     ctx.drawImage(img, -dw / 2, -dh / 2, dw, dh);
+    ctx.restore();
+  }
+
+  private drawJunctionStructureOnTile(
+    img: HTMLImageElement,
+    sx: number,
+    sy: number,
+    shape: StructureJunctionShape,
+    fenceLike: boolean,
+    transform?: ObjectTransform,
+  ) {
+    const dw = TILE_SIZE;
+    const dh = dw * (img.naturalHeight / img.naturalWidth);
+    const cx = sx + TILE_SIZE / 2;
+    const cy = sy + TILE_SIZE - dh / 2;
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.translate(cx, cy);
+    if (transform) {
+      ctx.rotate(transform.rotation * Math.PI / 180);
+      ctx.scale(transform.flipX ? -1 : 1, transform.flipY ? -1 : 1);
+    }
+    drawStructureJunction(ctx, img, -dw / 2, -dh / 2, dw, dh, shape, fenceLike);
     ctx.restore();
   }
 
@@ -490,14 +515,17 @@ export class Renderer {
   private drawStructure(sx: number, sy: number, type: StructureType, transform?: ObjectTransform) {
     if (type === 'blocker') return;
     const ctx = this.ctx;
-    const sprite = getSprite('structures', type);
+    const junction = getStructureJunction(type);
+    const baseType = getStructureVisualBase(type);
+    const sprite = getSprite('structures', baseType);
     if (sprite) {
-      if (transform) this.drawTransformedSpriteOnTile(sprite, sx, sy, transform);
+      if (junction) this.drawJunctionStructureOnTile(sprite, sx, sy, junction.shape, junction.base === 'fence', transform);
+      else if (transform) this.drawTransformedSpriteOnTile(sprite, sx, sy, transform);
       else this.drawSpriteOnTile(sprite, sx, sy);
       return;
     }
 
-    const info = STRUCTURE_GLYPH[type];
+    const info = STRUCTURE_GLYPH[baseType];
     if (!info) return;
     ctx.save();
     if (transform) {

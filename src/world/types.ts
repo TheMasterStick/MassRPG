@@ -46,7 +46,11 @@ export type ResourceType =
 
 export type StructureType =
   | 'bank_chest' | 'furnace' | 'anvil' | 'cooking_range' | 'campfire' | 'workbench'
-  | 'fence' | 'wall' | 'wall_window' | 'wall_brick' | 'wall_stone' | 'wall_cobble'
+  | 'fence' | 'fence_l' | 'fence_t' | 'fence_r'
+  | 'wall' | 'wall_l' | 'wall_t' | 'wall_r' | 'wall_window'
+  | 'wall_brick' | 'wall_brick_l' | 'wall_brick_t' | 'wall_brick_r'
+  | 'wall_stone' | 'wall_stone_l' | 'wall_stone_t' | 'wall_stone_r'
+  | 'wall_cobble' | 'wall_cobble_l' | 'wall_cobble_t' | 'wall_cobble_r'
   | 'bed' | 'storage_chest' | 'tannery' | 'loom' | 'general_store'
   | 'blocker';
 
