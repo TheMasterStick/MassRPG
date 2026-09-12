@@ -1,4 +1,5 @@
 import './style.css';
+import './characterCreator.css';
 import { World } from './world/World';
 import { Player } from './entities/Player';
 import { Game } from './core/Game';
@@ -22,6 +23,12 @@ import { registerUtilityTools } from './data/tools';
 import { registerCombatEquipment } from './data/equipmentProgression';
 import { registerArrowCrafting } from './data/arrowCrafting';
 import { registerCraftingExtensions } from './data/craftingExtensions';
+import { mountCharacterCreator } from './ui/CharacterCreator';
+import {
+  clearActiveCharacterAppearance,
+  setActiveCharacterAppearance,
+  type CharacterAppearance,
+} from './character/CharacterAppearance';
 import type { StructureType } from './world/types';
 
 registerUtilityTools();
@@ -105,7 +112,8 @@ function ensureStarterSettlementServices(world: World, player: Player) {
   }
 }
 
-function newGame() {
+function newGame(keepTestAppearance = false) {
+  if (!keepTestAppearance) clearActiveCharacterAppearance();
   const world = new World(TWIN_LANDS_SEED);
   const player = new Player();
   placeNewPlayerAtAuthoredStart(player);
@@ -115,6 +123,7 @@ function newGame() {
 }
 
 function continueGame() {
+  clearActiveCharacterAppearance();
   const result = loadGame();
   if (!result) { newGame(); return; }
   launchGame(result.world, result.player);
@@ -126,9 +135,29 @@ function openEditor() {
   window.location.href = url.toString();
 }
 
+async function startCreatorCharacter(appearance: CharacterAppearance) {
+  await setActiveCharacterAppearance(appearance);
+  newGame(true);
+}
+
+function openCharacterCreator() {
+  startScreen.classList.remove('hidden');
+  mountCharacterCreator(startScreen, {
+    onStart: startCreatorCharacter,
+    onBack: () => buildStartScreen(),
+  });
+}
+
 function buildStartScreen() {
+  startScreen.innerHTML = '';
+  startScreen.classList.remove('hidden');
+
   const newBtn = el('button', { text: 'Begin Adventure' });
   newBtn.addEventListener('click', () => newGame());
+
+  const creatorBtn = el('button', { className: 'secondary', text: 'Start with Character Creator (Test)' });
+  creatorBtn.addEventListener('click', () => openCharacterCreator());
+
   const editorBtn = el('button', { className: 'secondary', text: 'World Editor' });
   editorBtn.addEventListener('click', () => openEditor());
 
@@ -136,6 +165,7 @@ function buildStartScreen() {
     el('h1', { text: 'MassRPG' }),
     el('p', { className: 'tagline', text: 'The Twin Lands: a 180,000x180,000 hand-authored RPG world.' }),
     newBtn,
+    creatorBtn,
     editorBtn,
   ]);
 
