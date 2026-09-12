@@ -22,16 +22,21 @@ export class WorldGen {
     this.buildMiningNodes();
   }
 
-  /** Settlement markers are broad monster-safe zones. Mining areas are not. */
+  /**
+   * Settlement markers suppress ambient monsters inside the settlement footprint
+   * plus a modest breathing-space buffer. The previous radii were several times
+   * larger than the actual town footprints, creating very large sterile zones.
+   * Mining areas remain wild.
+   */
   isVillage(x: number, y: number): boolean {
     for (const marker of this.markers) {
       if (marker.type === 'mining_area') continue;
-      const radius = marker.name.trim().toLowerCase() === 'capital city' ? 280
-        : marker.type === 'city' ? 190
-        : marker.type === 'castle' ? 150
-        : marker.type === 'town' ? 110
-        : marker.type === 'village' ? 70
-        : 45;
+      const radius = marker.name.trim().toLowerCase() === 'capital city' ? 64
+        : marker.type === 'city' ? 48
+        : marker.type === 'castle' ? 40
+        : marker.type === 'town' ? 36
+        : marker.type === 'village' ? 28
+        : 22;
       if (Math.max(Math.abs(x - marker.x), Math.abs(y - marker.y)) <= radius) return true;
     }
     return false;
@@ -172,20 +177,20 @@ export class WorldGen {
   }
 
   /**
-   * Moderate deterministic wildlife/enemy population. Across the normal 9x9
-   * simulation area this yields a handful of ambient actors rather than either
-   * an empty world or the previous wall-to-wall combat field. Authored spawns
-   * still provide deliberate hotspots and high-end encounters.
+   * Sparse deterministic wildlife/enemy population. The active 9x9 chunk area
+   * should normally contain several actors, while ordinary travel still has lots
+   * of open space. Authored spawns remain the tool for deliberate hotspots and
+   * exceptional encounters.
    */
   monsterSpawnAt(x: number, y: number, tile: TileType): string | null {
     let chance = 0;
-    if (tile === 'grass' || tile === 'plains') chance = 1 / 6000;
-    else if (tile === 'forest') chance = 1 / 5200;
-    else if (tile === 'taiga') chance = 1 / 6200;
-    else if (tile === 'swamp') chance = 1 / 5000;
-    else if (tile === 'mountain') chance = 1 / 6500;
-    else if (tile === 'snow') chance = 1 / 7000;
-    else if (tile === 'desert') chance = 1 / 6000;
+    if (tile === 'grass' || tile === 'plains') chance = 1 / 3000;
+    else if (tile === 'forest') chance = 1 / 2600;
+    else if (tile === 'taiga') chance = 1 / 3200;
+    else if (tile === 'swamp') chance = 1 / 2800;
+    else if (tile === 'mountain') chance = 1 / 3400;
+    else if (tile === 'snow') chance = 1 / 3800;
+    else if (tile === 'desert') chance = 1 / 3300;
     else return null; // paths, settlements, beaches, water, rubble/floors stay quiet
 
     // Cheap hash rejection first; marker scanning only happens for candidates.
