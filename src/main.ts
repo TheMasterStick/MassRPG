@@ -11,11 +11,13 @@ import { getEditorMarkers, initializeEditorWorldStorage } from './world/EditorWo
 import { ensureCanonicalWorldInstalled } from './world/CanonicalWorld';
 import { launchWorldEditor } from './editor/WorldEditor';
 import { registerUtilityTools } from './data/tools';
+import { registerCombatEquipment } from './data/equipmentProgression';
 import { registerArrowCrafting } from './data/arrowCrafting';
 import { registerCraftingExtensions } from './data/craftingExtensions';
 import type { StructureType } from './world/types';
 
 registerUtilityTools();
+registerCombatEquipment();
 registerArrowCrafting();
 registerCraftingExtensions();
 
