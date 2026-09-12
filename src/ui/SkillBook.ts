@@ -4,6 +4,7 @@ import type { Game } from '../core/Game';
 import { SKILLS, xpProgress, type SkillId } from '../data/skills';
 import { RECIPES, STRUCTURES, type Recipe } from '../data/recipes';
 import { CROP_TIERS, FISH_TIERS, HERB_TIERS, METAL_TIERS, TREE_TIERS, getItem } from '../data/items';
+import { EQUIPMENT_REQUIREMENTS } from '../data/equipmentProgression';
 import { bus } from '../core/EventBus';
 
 interface UnlockEntry {
@@ -13,7 +14,7 @@ interface UnlockEntry {
   detail: string;
 }
 
-const WEAPON_SUFFIXES = ['_sword', '_dagger'];
+const WEAPON_SUFFIXES = ['_sword', '_dagger', '_longsword', '_mace', '_warhammer', '_battleaxe', '_2h_sword'];
 
 function titleCase(value: string): string {
   return value.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
@@ -134,6 +135,22 @@ function gatheringUnlocks(skillId: SkillId): UnlockEntry[] {
   return [];
 }
 
+function equipmentUnlocks(skillId: SkillId): UnlockEntry[] {
+  if (skillId !== 'attack' && skillId !== 'defence' && skillId !== 'ranged') return [];
+  return Object.entries(EQUIPMENT_REQUIREMENTS)
+    .filter(([, requirement]) => requirement.skill === skillId)
+    .map(([itemId, requirement]) => {
+      const item = getItem(itemId);
+      const category = skillId === 'attack' ? 'Weapons' : skillId === 'defence' ? 'Armour' : 'Bows';
+      return {
+        level: requirement.level,
+        name: `Equip ${item.name}`,
+        category,
+        detail: item.description,
+      };
+    });
+}
+
 function structureUnlocks(skillId: SkillId): UnlockEntry[] {
   if (skillId !== 'construction') return [];
   return STRUCTURES.map((structure) => ({
@@ -145,7 +162,7 @@ function structureUnlocks(skillId: SkillId): UnlockEntry[] {
 }
 
 function unlocksForSkill(skillId: SkillId): UnlockEntry[] {
-  return [...gatheringUnlocks(skillId), ...recipeUnlocks(skillId), ...structureUnlocks(skillId)]
+  return [...gatheringUnlocks(skillId), ...recipeUnlocks(skillId), ...equipmentUnlocks(skillId), ...structureUnlocks(skillId)]
     .sort((a, b) => a.level - b.level || a.name.localeCompare(b.name));
 }
 
