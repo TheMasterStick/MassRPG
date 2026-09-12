@@ -20,8 +20,12 @@ export const SHOP_STOCK = [
   // Common crafting moulds.
   'ring_mold', 'amulet_mold', 'necklace_mold', 'bracelet_mold', 'tiara_mold', 'ammo_mold',
 
-  // Basic adventuring stock.
-  'bronze_sword', 'bronze_shield', 'bread', 'vial_of_water',
+  // Basic adventuring stock. The level-1 ranged kit is sold here so a fresh
+  // character can actually enter the Ranged combat branch without first
+  // completing several gathering/production professions. Better bows and ammo
+  // remain predominantly player-produced progression.
+  'bronze_sword', 'bronze_shield', 'normal_shortbow', 'bronze_arrow',
+  'bread', 'vial_of_water',
 ];
 
 export function buyItem(player: Player, itemId: string, qty: number) {
