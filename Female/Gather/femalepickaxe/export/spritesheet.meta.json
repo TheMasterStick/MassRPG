@@ -1,0 +1,102 @@
+{
+  "version": 2,
+  "columns": 4,
+  "negativeSpacingEnabled": false,
+  "backgroundColor": "transparent",
+  "manualCellSizeEnabled": false,
+  "manualCellWidth": 64,
+  "manualCellHeight": 64,
+  "hueShift": 0,
+  "saturationShift": 0,
+  "brightnessShift": 0,
+  "contrastShift": 0,
+  "sepiaAmount": 0,
+  "invertEnabled": false,
+  "layers": [
+    {
+      "id": "349214cb-bcb5-4595-ab5c-a4d1f27ced6e",
+      "name": "Base",
+      "visible": true,
+      "locked": false,
+      "sprites": [
+        {
+          "id": "1e460dd1-08cd-4f0b-9b05-0138805c5723",
+          "width": 151,
+          "height": 378,
+          "x": 123,
+          "y": 142,
+          "rotation": 0,
+          "flipX": false,
+          "flipY": false,
+          "name": "sprite_3.png"
+        },
+        {
+          "id": "9b2b324e-0527-4f2f-8ac7-6a1bfd411955",
+          "width": 208,
+          "height": 415,
+          "x": 95,
+          "y": 105,
+          "rotation": 0,
+          "flipX": false,
+          "flipY": false,
+          "name": "sprite_2.png"
+        },
+        {
+          "id": "13040e08-94f2-412f-bea1-cf74b528df2c",
+          "width": 216,
+          "height": 520,
+          "x": 91,
+          "y": 0,
+          "rotation": 0,
+          "flipX": false,
+          "flipY": false,
+          "name": "sprite_1.png"
+        },
+        {
+          "id": "e0987b59-0105-460f-96fa-c9acfdbb5416",
+          "width": 398,
+          "height": 305,
+          "x": 0,
+          "y": 215,
+          "rotation": 0,
+          "flipX": false,
+          "flipY": false,
+          "name": "sprite_7.png"
+        },
+        {
+          "id": "3d58c858-ad39-4501-9324-bd004906d47e",
+          "width": 346,
+          "height": 323,
+          "x": 26,
+          "y": 197,
+          "rotation": 0,
+          "flipX": false,
+          "flipY": false,
+          "name": "sprite_6.png"
+        },
+        {
+          "id": "da0ee7f9-22f2-40f3-a227-cd82a4cff9f4",
+          "width": 202,
+          "height": 362,
+          "x": 98,
+          "y": 158,
+          "rotation": 0,
+          "flipX": false,
+          "flipY": false,
+          "name": "sprite_5.png"
+        },
+        {
+          "id": "de214509-4587-4798-bce5-c3ac8e9eef88",
+          "width": 3,
+          "height": 14,
+          "x": 197,
+          "y": 506,
+          "rotation": 0,
+          "flipX": false,
+          "flipY": false,
+          "name": "sprite_8.png"
+        }
+      ]
+    }
+  ]
+}

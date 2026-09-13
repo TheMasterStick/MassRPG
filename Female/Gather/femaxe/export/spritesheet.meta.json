@@ -1,0 +1,80 @@
+{
+  "version": 2,
+  "columns": 4,
+  "negativeSpacingEnabled": false,
+  "backgroundColor": "transparent",
+  "manualCellSizeEnabled": false,
+  "manualCellWidth": 64,
+  "manualCellHeight": 64,
+  "hueShift": 0,
+  "saturationShift": 0,
+  "brightnessShift": 0,
+  "contrastShift": 0,
+  "sepiaAmount": 0,
+  "invertEnabled": false,
+  "layers": [
+    {
+      "id": "10363d1a-c1eb-4f46-a0cc-0d81cb18c23c",
+      "name": "Base",
+      "visible": true,
+      "locked": false,
+      "sprites": [
+        {
+          "id": "922437af-ae69-410b-a23f-43b497bd6d8b",
+          "width": 151,
+          "height": 415,
+          "x": 143,
+          "y": 134,
+          "rotation": 0,
+          "flipX": false,
+          "flipY": false,
+          "name": "sprite_3.png"
+        },
+        {
+          "id": "55231cc9-0a9a-45f0-b723-3f1dd41a661c",
+          "width": 214,
+          "height": 391,
+          "x": 111,
+          "y": 158,
+          "rotation": 0,
+          "flipX": false,
+          "flipY": false,
+          "name": "sprite_5.png"
+        },
+        {
+          "id": "97849601-d3d2-4b2e-a60c-c1945409cb6f",
+          "width": 222,
+          "height": 466,
+          "x": 107,
+          "y": 83,
+          "rotation": 0,
+          "flipX": false,
+          "flipY": false,
+          "name": "sprite_2.png"
+        },
+        {
+          "id": "4552905a-0a35-47b0-a957-7a890180116d",
+          "width": 237,
+          "height": 549,
+          "x": 100,
+          "y": 0,
+          "rotation": 0,
+          "flipX": false,
+          "flipY": false,
+          "name": "sprite_1.png"
+        },
+        {
+          "id": "2f91a00b-d655-4352-afd1-99cf8234751a",
+          "width": 437,
+          "height": 354,
+          "x": 0,
+          "y": 195,
+          "rotation": 0,
+          "flipX": false,
+          "flipY": false,
+          "name": "sprite_6.png"
+        }
+      ]
+    }
+  ]
+}
