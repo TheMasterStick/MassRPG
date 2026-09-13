@@ -96,9 +96,17 @@ function customAnimatedFacing(id: string, facing: Facing, custom: HTMLImageEleme
   const animation = playerAnimationFromId(id);
   if (!animation) return custom;
   const sex = loadCreatorDraft().sex;
-  const motion = animation === 'idle' ? 'idle' : 'walk';
-  const playbackRate = animation === 'walk' ? 1 : 1;
-  const frame = getCharacterAnimationFrame(sex, motion, facing, performance.now(), playbackRate);
+
+  // The first authored movement batch consists of north/south running cycles and
+  // a right-facing side walk cycle. Route movement directly to the art that exists
+  // instead of depending on the old two-frame walk ids to imply a specific motion.
+  const motion = animation === 'idle'
+    ? 'idle'
+    : facing === 'up' || facing === 'down'
+      ? 'run'
+      : 'walk';
+
+  const frame = getCharacterAnimationFrame(sex, motion, facing, performance.now());
   if (!frame) return custom;
   if (!frame.flipX) return frame.image;
   return mirroredCharacterFrame(frame.image) ?? custom;
