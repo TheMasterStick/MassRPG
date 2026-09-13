@@ -53,29 +53,6 @@ function validManifest(value: unknown): value is CharacterAnimationManifest {
   return !!candidate.characters && typeof candidate.characters === 'object';
 }
 
-export function preloadCharacterAnimations(): void {
-  if (manifestState !== 'unrequested') return;
-  manifestState = 'loading';
-  void fetch(MANIFEST_URL, { cache: 'no-cache' })
-    .then(async (response) => {
-      if (!response.ok) {
-        manifestState = 'missing';
-        return;
-      }
-      const json = await response.json() as unknown;
-      if (!validManifest(json)) {
-        manifestState = 'invalid';
-        console.warn(`Invalid character animation manifest: ${MANIFEST_URL}`);
-        return;
-      }
-      manifest = json;
-      manifestState = 'loaded';
-    })
-    .catch(() => {
-      manifestState = 'missing';
-    });
-}
-
 function loadImage(url: string): ImageEntry {
   const existing = images.get(url);
   if (existing) return existing;
@@ -93,6 +70,42 @@ function preloadSequence(sequence: CharacterAnimationSequence) {
   if (sequenceLoads.has(key)) return;
   sequenceLoads.add(key);
   for (const url of sequence.frames) loadImage(url);
+}
+
+function preloadManifestSequences(nextManifest: CharacterAnimationManifest) {
+  for (const character of Object.values(nextManifest.characters)) {
+    if (!character) continue;
+    for (const motion of Object.values(character)) {
+      if (!motion) continue;
+      for (const sequence of Object.values(motion)) {
+        if (sequence?.frames?.length) preloadSequence(sequence);
+      }
+    }
+  }
+}
+
+export function preloadCharacterAnimations(): void {
+  if (manifestState !== 'unrequested') return;
+  manifestState = 'loading';
+  void fetch(MANIFEST_URL, { cache: 'no-cache' })
+    .then(async (response) => {
+      if (!response.ok) {
+        manifestState = 'missing';
+        return;
+      }
+      const json = await response.json() as unknown;
+      if (!validManifest(json)) {
+        manifestState = 'invalid';
+        console.warn(`Invalid character animation manifest: ${MANIFEST_URL}`);
+        return;
+      }
+      manifest = json;
+      preloadManifestSequences(json);
+      manifestState = 'loaded';
+    })
+    .catch(() => {
+      manifestState = 'missing';
+    });
 }
 
 function directSequence(
