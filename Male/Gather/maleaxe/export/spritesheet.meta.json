@@ -1,0 +1,113 @@
+{
+  "version": 2,
+  "columns": 4,
+  "negativeSpacingEnabled": false,
+  "backgroundColor": "transparent",
+  "manualCellSizeEnabled": false,
+  "manualCellWidth": 64,
+  "manualCellHeight": 64,
+  "hueShift": 0,
+  "saturationShift": 0,
+  "brightnessShift": 0,
+  "contrastShift": 0,
+  "sepiaAmount": 0,
+  "invertEnabled": false,
+  "layers": [
+    {
+      "id": "3bbff49b-c1c7-4de0-a27f-f54869c061c2",
+      "name": "Base",
+      "visible": true,
+      "locked": false,
+      "sprites": [
+        {
+          "id": "7429b1c5-6aa3-453e-9ed1-0e06f3520204",
+          "width": 143,
+          "height": 328,
+          "x": 98,
+          "y": 139,
+          "rotation": 0,
+          "flipX": false,
+          "flipY": false,
+          "name": "sprite_3.png"
+        },
+        {
+          "id": "a012bdc6-3452-43bd-870b-0e81ad3dee1e",
+          "width": 220,
+          "height": 328,
+          "x": 59,
+          "y": 139,
+          "rotation": 0,
+          "flipX": false,
+          "flipY": false,
+          "name": "sprite_4.png"
+        },
+        {
+          "id": "2165aaa9-ba7e-4be1-bea8-cf4696c661ff",
+          "width": 173,
+          "height": 380,
+          "x": 89,
+          "y": 87,
+          "rotation": 0,
+          "flipX": false,
+          "flipY": false,
+          "name": "sprite_2.png"
+        },
+        {
+          "id": "7e938738-ae4b-4efe-9c02-a56cff06194e",
+          "width": 189,
+          "height": 467,
+          "x": 79,
+          "y": 0,
+          "rotation": 0,
+          "flipX": false,
+          "flipY": false,
+          "name": "resized.png"
+        },
+        {
+          "id": "40873bcc-abe7-4cc1-99e8-0fc6908f3e31",
+          "width": 339,
+          "height": 285,
+          "x": 0,
+          "y": 182,
+          "rotation": 0,
+          "flipX": false,
+          "flipY": false,
+          "name": "sprite_10.png"
+        },
+        {
+          "id": "4db4e2d6-f6dc-4356-83b8-2279071b771d",
+          "width": 179,
+          "height": 309,
+          "x": 80,
+          "y": 158,
+          "rotation": 0,
+          "flipX": false,
+          "flipY": false,
+          "name": "sprite_8.png"
+        },
+        {
+          "id": "8b37e24f-1f19-41e3-b21d-ff657e96ec39",
+          "width": 4,
+          "height": 9,
+          "x": 167,
+          "y": 458,
+          "rotation": 0,
+          "flipX": false,
+          "flipY": false,
+          "name": "sprite_11.png"
+        },
+        {
+          "id": "270a5207-08d7-430c-afbb-43a420e5d299",
+          "width": 4,
+          "height": 10,
+          "x": 167,
+          "y": 457,
+          "rotation": 0,
+          "flipX": false,
+          "flipY": false,
+          "name": "sprite_12.png"
+        }
+      ]
+    }
+  ]
+}

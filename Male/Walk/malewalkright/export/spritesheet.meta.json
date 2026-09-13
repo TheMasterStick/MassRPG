@@ -1,0 +1,91 @@
+{
+  "version": 2,
+  "columns": 4,
+  "negativeSpacingEnabled": false,
+  "backgroundColor": "transparent",
+  "manualCellSizeEnabled": false,
+  "manualCellWidth": 64,
+  "manualCellHeight": 64,
+  "hueShift": 0,
+  "saturationShift": 0,
+  "brightnessShift": 0,
+  "contrastShift": 0,
+  "sepiaAmount": 0,
+  "invertEnabled": false,
+  "layers": [
+    {
+      "id": "b41c8c57-ea55-4518-ab3f-a9af540c2d97",
+      "name": "Base",
+      "visible": true,
+      "locked": false,
+      "sprites": [
+        {
+          "id": "69d0cf03-78bf-4715-a539-ec9657112670",
+          "width": 226,
+          "height": 437,
+          "x": 25,
+          "y": 0,
+          "rotation": 0,
+          "flipX": false,
+          "flipY": false,
+          "name": "sprite_1.png"
+        },
+        {
+          "id": "d5969285-be9e-47f3-9b2a-179ea755392d",
+          "width": 247,
+          "height": 437,
+          "x": 15,
+          "y": 0,
+          "rotation": 0,
+          "flipX": false,
+          "flipY": false,
+          "name": "sprite_3.png"
+        },
+        {
+          "id": "c3a65c53-4396-4124-9577-ace241c66132",
+          "width": 212,
+          "height": 437,
+          "x": 32,
+          "y": 0,
+          "rotation": 0,
+          "flipX": false,
+          "flipY": false,
+          "name": "sprite_4.png"
+        },
+        {
+          "id": "6e5d40e3-3eee-44d7-adce-55c5ff3968eb",
+          "width": 217,
+          "height": 437,
+          "x": 30,
+          "y": 0,
+          "rotation": 0,
+          "flipX": false,
+          "flipY": false,
+          "name": "sprite_5.png"
+        },
+        {
+          "id": "e751763b-b5c7-4ab7-a70f-6dc435f8b6ff",
+          "width": 249,
+          "height": 437,
+          "x": 14,
+          "y": 0,
+          "rotation": 0,
+          "flipX": false,
+          "flipY": false,
+          "name": "sprite_7.png"
+        },
+        {
+          "id": "dbaa20e1-bda3-4443-b6fb-fcb345f96f70",
+          "width": 277,
+          "height": 437,
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "flipX": false,
+          "flipY": false,
+          "name": "sprite_6.png"
+        }
+      ]
+    }
+  ]
+}
