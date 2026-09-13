@@ -6,7 +6,8 @@
 
 import type { ResourceType, StructureType, TileType } from '../world/types';
 import { MONSTERS } from '../data/monsters';
-import { getCustomPlayerSprite } from '../character/CharacterAppearance';
+import { getCustomPlayerSprite, loadCreatorDraft } from '../character/CharacterAppearance';
+import { getCharacterAnimationFrame, preloadCharacterAnimations } from '../character/CharacterAnimation';
 import { getSpriteAnimationImageFrame, preloadSpriteAnimationSet } from './SpriteAnimation';
 
 export type SpriteCategory = 'tiles' | 'resources' | 'structures' | 'monsters' | 'player' | 'roof';
@@ -22,6 +23,7 @@ interface Entry {
 
 const cache = new Map<string, Entry>();
 const elevationCache = new Map<string, Entry>();
+const mirroredCharacterFrames = new Map<string, Entry>();
 
 function key(category: SpriteCategory, id: string): string {
   return `${category}/${id}`;
@@ -65,21 +67,71 @@ function playerAnimationFromId(id: string): 'idle' | 'walk' | null {
   return null;
 }
 
+function mirroredCharacterFrame(image: HTMLImageElement): HTMLImageElement | null {
+  const k = image.src;
+  const cached = mirroredCharacterFrames.get(k);
+  if (cached) return cached.state === 'loaded' ? cached.img : null;
+  if (!image.complete || image.naturalWidth <= 0 || image.naturalHeight <= 0) return null;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = image.naturalWidth;
+  canvas.height = image.naturalHeight;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+  ctx.imageSmoothingEnabled = false;
+  ctx.translate(canvas.width, 0);
+  ctx.scale(-1, 1);
+  ctx.drawImage(image, 0, 0);
+
+  const mirrored = new Image();
+  const entry: Entry = { img: mirrored, state: 'loading' };
+  mirroredCharacterFrames.set(k, entry);
+  mirrored.onload = () => { entry.state = 'loaded'; };
+  mirrored.onerror = () => { entry.state = 'missing'; };
+  mirrored.src = canvas.toDataURL('image/png');
+  return null;
+}
+
+function customAnimatedFacing(id: string, facing: Facing, custom: HTMLImageElement): HTMLImageElement {
+  const animation = playerAnimationFromId(id);
+  if (!animation) return custom;
+  const sex = loadCreatorDraft().sex;
+  const motion = animation === 'idle' ? 'idle' : 'walk';
+  const playbackRate = animation === 'walk' ? 1 : 1;
+  const frame = getCharacterAnimationFrame(sex, motion, facing, performance.now(), playbackRate);
+  if (!frame) return custom;
+  if (!frame.flipX) return frame.image;
+  return mirroredCharacterFrame(frame.image) ?? custom;
+}
+
+function customGatherFrame(id: string): HTMLImageElement | null {
+  const match = /^(axe|pickaxe)_(?:prepare|swing)$/.exec(id);
+  if (!match || !getCustomPlayerSprite('down')) return null;
+  const frame = getCharacterAnimationFrame(
+    loadCreatorDraft().sex,
+    match[1] as 'axe' | 'pickaxe',
+    'right',
+    performance.now(),
+  );
+  return frame?.image ?? null;
+}
+
 /** Returns a loaded image ready to draw, or null if missing/not loaded yet (fall back to procedural rendering). */
 export function getSprite(category: SpriteCategory, id: string): HTMLImageElement | null {
   if (category === 'player') {
     const facing = customFacingFromPlayerId(id);
     if (facing) {
-      // A character-creator appearance currently supplies static directional composites.
-      // Keep those authoritative until layered animation sheets are added for custom characters.
       const custom = getCustomPlayerSprite(facing);
-      if (custom) return custom;
+      if (custom) return customAnimatedFacing(id, facing, custom);
 
       const animation = playerAnimationFromId(id);
       if (animation) {
         const animated = getSpriteAnimationImageFrame('player', animation, facing, performance.now());
         if (animated) return animated.image;
       }
+    } else {
+      const gather = customGatherFrame(id);
+      if (gather) return gather;
     }
   }
 
@@ -94,7 +146,7 @@ export function getElevationSprite(theme: ElevationTheme, id: string): HTMLImage
 }
 
 export function getPlayerSprite(facing: Facing): HTMLImageElement | null {
-  return getCustomPlayerSprite(facing) ?? getSprite('player', facing) ?? getSprite('player', 'down');
+  return getSprite('player', facing) ?? getSprite('player', 'down');
 }
 
 const TILE_TYPES: TileType[] = [
@@ -124,13 +176,14 @@ const ELEVATION_IDS = [
   'crevice_east', 'cliff_west',
 ];
 
-// Gather-action tool animation: a "prepare" (windup) frame and a "swing"
-// frame, shown while chopping/mining instead of the idle/walk sprite.
+// Gather-action tool animation: legacy prepare/swing PNGs remain a fallback for
+// characters that do not use the source-frame animation test set.
 export type GatherTool = 'axe' | 'pickaxe';
 const GATHER_TOOLS: GatherTool[] = ['axe', 'pickaxe'];
 
 /** Kicks off loading every known sprite once at startup. Missing files fail silently per-file. */
 export function preloadAllSprites() {
+  preloadCharacterAnimations();
   // Optional metadata-driven player sheet. If animation.json is absent the existing
   // directional PNGs and two-frame walking system continue to work unchanged.
   preloadSpriteAnimationSet('player');
@@ -149,8 +202,6 @@ export function preloadAllSprites() {
   for (const m of MONSTERS) load('monsters', m.id);
   for (const f of PLAYER_FACINGS) {
     load('player', f);
-    // Optional legacy two-frame walk cycle per facing. A spritesheet manifest takes
-    // precedence and can provide any number of frames.
     load('player', `${f}_walk1`);
     load('player', `${f}_walk2`);
   }
