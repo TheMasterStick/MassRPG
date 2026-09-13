@@ -4,7 +4,10 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "sync-character-animations": "node scripts/sync-character-animations.mjs",
+    "predev": "npm run sync-character-animations",
     "dev": "vite --open",
+    "prebuild": "npm run sync-character-animations",
     "build": "tsc && vite build",
     "preview": "vite preview"
   },
