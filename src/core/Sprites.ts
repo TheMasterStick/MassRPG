@@ -24,6 +24,7 @@ interface Entry {
 const cache = new Map<string, Entry>();
 const elevationCache = new Map<string, Entry>();
 const mirroredCharacterFrames = new Map<string, Entry>();
+const normalizedCharacterFrames = new Map<string, Entry>();
 
 function key(category: SpriteCategory, id: string): string {
   return `${category}/${id}`;
@@ -64,6 +65,42 @@ function customFacingFromPlayerId(id: string): Facing | null {
 function playerAnimationFromId(id: string): 'idle' | 'walk' | null {
   if (/^(up|down|left|right)$/.test(id)) return 'idle';
   if (/^(up|down|left|right)_walk[12]$/.test(id)) return 'walk';
+  return null;
+}
+
+/**
+ * The animator exports some frames tightly cropped around the figure while others
+ * retain a square canvas. Renderer.ts historically sizes player art from image width,
+ * so a tall/narrow crop (for example north-running) becomes several times too tall.
+ * Pad authored movement frames onto a square canvas without resampling the artwork.
+ * Square exports remain visually unchanged; tall/narrow exports keep their original
+ * pixels but gain transparent side margins so every direction renders at one scale.
+ */
+function normalizedCharacterFrame(image: HTMLImageElement): HTMLImageElement | null {
+  const k = image.src;
+  const cached = normalizedCharacterFrames.get(k);
+  if (cached) return cached.state === 'loaded' ? cached.img : null;
+  if (!image.complete || image.naturalWidth <= 0 || image.naturalHeight <= 0) return null;
+
+  const size = Math.max(image.naturalWidth, image.naturalHeight);
+  if (image.naturalWidth === size && image.naturalHeight === size) return image;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+  ctx.imageSmoothingEnabled = false;
+  const dx = Math.round((size - image.naturalWidth) / 2);
+  const dy = size - image.naturalHeight;
+  ctx.drawImage(image, dx, dy);
+
+  const normalized = new Image();
+  const entry: Entry = { img: normalized, state: 'loading' };
+  normalizedCharacterFrames.set(k, entry);
+  normalized.onload = () => { entry.state = 'loaded'; };
+  normalized.onerror = () => { entry.state = 'missing'; };
+  normalized.src = canvas.toDataURL('image/png');
   return null;
 }
 
@@ -108,8 +145,11 @@ function customAnimatedFacing(id: string, facing: Facing, custom: HTMLImageEleme
 
   const frame = getCharacterAnimationFrame(sex, motion, facing, performance.now());
   if (!frame) return custom;
-  if (!frame.flipX) return frame.image;
-  return mirroredCharacterFrame(frame.image) ?? custom;
+
+  const normalized = normalizedCharacterFrame(frame.image);
+  if (!normalized) return custom;
+  if (!frame.flipX) return normalized;
+  return mirroredCharacterFrame(normalized) ?? custom;
 }
 
 function customGatherFrame(id: string): HTMLImageElement | null {
