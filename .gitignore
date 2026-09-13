@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# Generated runtime copies; canonical character animation frames stay in Female/, Male/, etc.
+/public/sprites/character_animations/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
