@@ -7,8 +7,8 @@ const outputRoot = path.join(repoRoot, 'public', 'sprites', 'character_animation
 const MIN_FRAME_BYTES = 12_000;
 
 const sources = [
-  { sex: 'female', motion: 'idle', facing: 'down', source: 'Female/Idle/femidle/frames', fps: 7, loop: true },
-  { sex: 'male', motion: 'idle', facing: 'down', source: 'Male/Idle/maleidle/frames', fps: 5, loop: true },
+  { sex: 'female', motion: 'idle', facing: 'down', source: 'Female/Idle/femidle/frames', fps: 2.5, loop: true },
+  { sex: 'male', motion: 'idle', facing: 'down', source: 'Male/Idle/maleidle/frames', fps: 2.5, loop: true },
   { sex: 'female', motion: 'walk', facing: 'right', source: 'Female/Walk/femwalkright/frames', fps: 8, loop: true },
   { sex: 'male', motion: 'walk', facing: 'right', source: 'Male/Walk/malewalkright/frames', fps: 9, loop: true },
   { sex: 'female', motion: 'run', facing: 'down', source: 'Female/Run/femrunsouth/frames', fps: 10, loop: true },
