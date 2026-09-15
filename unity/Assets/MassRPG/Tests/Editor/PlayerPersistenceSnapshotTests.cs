@@ -49,7 +49,7 @@ namespace MassRPG.Tests
             Assert.AreEqual(new ContentId("normal_shortbow"), restored.Equipment.GetOrNull(EquipmentSlot.MainHand));
             Assert.AreEqual(new ContentId("bronze_arrow"), restored.SelectedAmmunitionItemId.Value);
             Assert.IsFalse(restored.Combat.IsActive);
-            Assert.IsFalse(restored.Movement.HasPath);
+            Assert.IsFalse(restored.Movement.IsMoving);
             Assert.IsFalse(restored.Production.IsActive);
         }
 
