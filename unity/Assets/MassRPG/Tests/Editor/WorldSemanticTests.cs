@@ -29,6 +29,50 @@ namespace MassRPG.Tests
         }
 
         [Test]
+        public void RuntimeAreaQuery_RespectsPlane()
+        {
+            var catalog = new WorldSemanticCatalog();
+            var shape = new CircleAreaShape(new GridCoord(100, 100), 20);
+            catalog.RegisterArea(new WorldAreaDefinition(
+                new ContentId("region.surface"), "Surface", WorldAreaKind.NamedRegion, shape,
+                PlayerMapVisibility.Public, WorldConstants.SurfacePlane));
+            catalog.RegisterArea(new WorldAreaDefinition(
+                new ContentId("region.cave"), "Cave", WorldAreaKind.DungeonArea, shape,
+                PlayerMapVisibility.NotPlayerMapData, WorldConstants.UndergroundPlane1));
+
+            var surface = catalog.AreasContaining(new GridLocation(new GridCoord(100, 100), WorldConstants.SurfacePlane, 0));
+            var cave = catalog.AreasContaining(new GridLocation(new GridCoord(100, 100), WorldConstants.UndergroundPlane1, 0));
+
+            Assert.AreEqual(1, surface.Count);
+            Assert.AreEqual(new ContentId("region.surface"), surface[0].Id);
+            Assert.AreEqual(1, cave.Count);
+            Assert.AreEqual(new ContentId("region.cave"), cave[0].Id);
+        }
+
+        [Test]
+        public void AreaDocument_RoundTripsPolygonAndPlane()
+        {
+            var area = new WorldAreaDefinition(
+                new ContentId("biome.forest.north"),
+                "Northern Forest",
+                WorldAreaKind.Biome,
+                new PolygonAreaShape(new[]
+                {
+                    new GridCoord(10, 10), new GridCoord(30, 10), new GridCoord(25, 30), new GridCoord(8, 25)
+                }),
+                PlayerMapVisibility.NotPlayerMapData,
+                WorldConstants.SurfacePlane);
+
+            var copy = WorldAreaDocumentCodec.Decode(WorldAreaDocumentCodec.Encode(area));
+
+            Assert.AreEqual(area.Id, copy.Id);
+            Assert.AreEqual(WorldAreaKind.Biome, copy.Kind);
+            Assert.AreEqual(WorldConstants.SurfacePlane, copy.Plane);
+            Assert.IsTrue(copy.Shape.Contains(new GridCoord(20, 20)));
+            Assert.IsFalse(copy.Shape.Contains(new GridCoord(50, 50)));
+        }
+
+        [Test]
         public void NormalPoiIsPublicButProtectionFootprintCanDifferFromVisibleFootprint()
         {
             var poi = new PointOfInterestDefinition(
