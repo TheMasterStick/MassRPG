@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "massrpg://schemas/resource.schema.json",
+  "title": "MassRPG Resource Draft",
+  "type": "object",
+  "required": ["schemaVersion", "id", "displayName", "gatheringSkill", "requiredLevel", "experience", "yieldItemId", "respawnSeconds", "availabilityMode", "minimumYield", "maximumYield", "requiredToolKind", "minimumToolTier"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._/-]{1,79}$" },
+    "displayName": { "type": "string", "minLength": 1, "maxLength": 100 },
+    "gatheringSkill": { "enum": ["Woodcutting", "Mining", "Fishing", "Farming"] },
+    "requiredLevel": { "type": "integer", "minimum": 1, "maximum": 300 },
+    "experience": { "type": "integer", "minimum": 0 },
+    "yieldItemId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._/-]*$" },
+    "respawnSeconds": { "type": "integer", "minimum": 0 },
+    "availabilityMode": { "enum": ["Personal", "Shared"] },
+    "minimumYield": { "type": "integer", "minimum": 1 },
+    "maximumYield": { "type": "integer", "minimum": 1 },
+    "requiredToolKind": { "enum": ["None", "Hatchet", "Pickaxe", "FishingNet", "FishingRod", "LobsterPot", "Harpoon"] },
+    "minimumToolTier": { "type": "integer", "minimum": 0 },
+    "editorState": { "enum": ["draft", "ready-for-review"] }
+  },
+  "additionalProperties": false
+}
