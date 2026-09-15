@@ -10,19 +10,52 @@ namespace MassRPG.Editor.World
     /// <summary>
     /// Editor-side disk persistence for authored world pages. Runtime/editor gameplay data remains
     /// engine-independent; this class only adapts WorldPageDocument to Unity's JSON utility.
+    ///
+    /// IMPORTANT: production world pages deliberately live outside the Unity Assets tree. A complete
+    /// 180k world can contain more than one hundred thousand storage pages; importing every page as a
+    /// Unity asset would make AssetDatabase itself part of the world-streaming bottleneck. The files
+    /// still live in the repository and remain versionable, but Unity treats them as external authored
+    /// data rather than project assets.
     /// </summary>
     public static class WorldPageJsonPersistence
     {
-        public const string ProductionRoot = "Assets/MassRPG/WorldData/Pages";
-        public const string RecoveryRoot = "Library/MassRPG/WorldEditorRecovery";
+        private static string _productionRoot;
+        private static string _recoveryRoot;
 
-        public static string FilePath(WorldPageKey key, string root = ProductionRoot)
+        /// <summary>Repository-level canonical authored pages, e.g. &lt;repo&gt;/WorldData/Pages.</summary>
+        public static string ProductionRoot
         {
+            get
+            {
+                if (string.IsNullOrEmpty(_productionRoot))
+                    _productionRoot = Path.GetFullPath(Path.Combine(Application.dataPath, "..", "..", "WorldData", "Pages"));
+                return _productionRoot;
+            }
+        }
+
+        /// <summary>Local non-versioned crash recovery beneath the Unity project's Library folder.</summary>
+        public static string RecoveryRoot
+        {
+            get
+            {
+                if (string.IsNullOrEmpty(_recoveryRoot))
+                    _recoveryRoot = Path.GetFullPath(Path.Combine(Application.dataPath, "..", "Library", "MassRPG", "WorldEditorRecovery"));
+                return _recoveryRoot;
+            }
+        }
+
+        public static string FilePath(WorldPageKey key) => FilePath(key, ProductionRoot);
+
+        public static string FilePath(WorldPageKey key, string root)
+        {
+            if (string.IsNullOrWhiteSpace(root)) throw new ArgumentException("World page root cannot be empty.", nameof(root));
             var folder = Path.Combine(root, $"plane_{key.Plane}", $"storey_{key.Storey}");
             return Path.Combine(folder, $"page_{key.Page.X}_{key.Page.Y}.json").Replace('\\', '/');
         }
 
-        public static void Save(WorldPageDocument document, string root = ProductionRoot)
+        public static void Save(WorldPageDocument document) => Save(document, ProductionRoot);
+
+        public static void Save(WorldPageDocument document, string root)
         {
             if (document == null) throw new ArgumentNullException(nameof(document));
             var key = new WorldPageKey(new WorldPageCoord(document.PageX, document.PageY), document.Plane, document.Storey);
@@ -32,7 +65,10 @@ namespace MassRPG.Editor.World
             File.WriteAllText(path, JsonUtility.ToJson(ToDto(document), true));
         }
 
-        public static bool TryLoad(WorldPageKey key, out WorldPageDocument document, string root = ProductionRoot)
+        public static bool TryLoad(WorldPageKey key, out WorldPageDocument document)
+            => TryLoad(key, out document, ProductionRoot);
+
+        public static bool TryLoad(WorldPageKey key, out WorldPageDocument document, string root)
         {
             var path = FilePath(key, root);
             if (!File.Exists(path))
@@ -50,6 +86,27 @@ namespace MassRPG.Editor.World
             }
 
             document = FromDto(dto);
+            return true;
+        }
+
+        public static IEnumerable<string> EnumeratePageFiles(int plane, int storey, string root = null)
+        {
+            var baseRoot = string.IsNullOrWhiteSpace(root) ? ProductionRoot : root;
+            var folder = Path.Combine(baseRoot, $"plane_{plane}", $"storey_{storey}");
+            return Directory.Exists(folder)
+                ? Directory.EnumerateFiles(folder, "page_*.json", SearchOption.TopDirectoryOnly)
+                : Array.Empty<string>();
+        }
+
+        public static bool TryParsePageKeyFromFile(string path, int plane, int storey, out WorldPageKey key)
+        {
+            key = default;
+            if (string.IsNullOrWhiteSpace(path)) return false;
+            var file = Path.GetFileNameWithoutExtension(path);
+            if (string.IsNullOrEmpty(file) || !file.StartsWith("page_", StringComparison.Ordinal)) return false;
+            var parts = file.Substring(5).Split('_');
+            if (parts.Length != 2 || !int.TryParse(parts[0], out var x) || !int.TryParse(parts[1], out var y)) return false;
+            key = new WorldPageKey(new WorldPageCoord(x, y), plane, storey);
             return true;
         }
 
