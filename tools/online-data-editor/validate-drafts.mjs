@@ -5,10 +5,11 @@ import { fileURLToPath } from 'node:url';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, '../..');
 const draftRoot = path.join(repoRoot, 'ContentData', 'Drafts');
-const kinds = ['items', 'creatures', 'resources', 'recipes'];
+const kinds = ['items', 'creatures', 'resources', 'recipes', 'definitions'];
 const idPattern = /^[a-z0-9][a-z0-9._/-]{1,79}$/;
 const issues = [];
 const documents = Object.fromEntries(kinds.map(kind => [kind, []]));
+const assetStates = new Set(['needs-assets', 'placeholder', 'linked', 'final', 'not-required']);
 
 function add(severity, kind, id, message) {
   issues.push({ severity, kind, id: id || '(missing id)', message });
@@ -29,6 +30,21 @@ function requiredIdentity(kind, fileName, doc) {
   if (doc.id && fileName !== `${doc.id}.json`) add('error', kind, doc.id, `Filename '${fileName}' does not match permanent ID.`);
   if (doc.editorState !== undefined && !['draft', 'ready-for-review'].includes(doc.editorState)) add('warning', kind, doc.id, `Unknown editorState '${doc.editorState}'.`);
   return true;
+}
+
+function validatePresentation(kind, doc) {
+  if (doc.presentation === undefined) return;
+  const p = doc.presentation;
+  if (!p || typeof p !== 'object' || Array.isArray(p)) {
+    add('error', kind, doc.id, 'presentation must be an object.');
+    return;
+  }
+  if (!assetStates.has(p.assetState)) add('error', kind, doc.id, `Unknown presentation.assetState '${p.assetState}'.`);
+  for (const field of ['iconAssetId', 'modelAssetId', 'portraitAssetId', 'animationSetAssetId']) {
+    const value = p[field];
+    if (value != null && (typeof value !== 'string' || !idPattern.test(value))) add('error', kind, doc.id, `presentation.${field} is invalid.`);
+  }
+  if (p.notes != null && (typeof p.notes !== 'string' || p.notes.length > 2000)) add('error', kind, doc.id, 'presentation.notes must be a string of 2000 characters or less.');
 }
 
 function validateItem(doc) {
@@ -84,6 +100,14 @@ function validateRecipe(doc) {
   if (typeof doc.failureXpFraction !== 'number' || doc.failureXpFraction < 0 || doc.failureXpFraction > 1) add('error', 'recipes', doc.id, 'failureXpFraction must be 0-1.');
 }
 
+function validateDefinition(doc) {
+  if (typeof doc.kind !== 'string' || !doc.kind.trim() || doc.kind.length > 60) add('error', 'definitions', doc.id, 'kind must be a 1-60 character string.');
+  if (typeof doc.description !== 'string' || doc.description.length > 5000) add('error', 'definitions', doc.id, 'description must be a string of 5000 characters or less.');
+  if (typeof doc.notes !== 'string' || doc.notes.length > 10000) add('error', 'definitions', doc.id, 'notes must be a string of 10000 characters or less.');
+  if (!Array.isArray(doc.tags) || doc.tags.length > 32 || doc.tags.some(tag => typeof tag !== 'string' || !tag.trim() || tag.length > 50)) add('error', 'definitions', doc.id, 'tags must contain at most 32 non-empty strings of 50 characters or less.');
+  if (!doc.data || typeof doc.data !== 'object' || Array.isArray(doc.data)) add('error', 'definitions', doc.id, 'data must be a JSON object.');
+}
+
 async function directoryExists(dir) {
   try { await access(dir); return true; } catch { return false; }
 }
@@ -95,27 +119,22 @@ for (const kind of kinds) {
   const seen = new Set();
   for (const name of names) {
     let doc;
-    try {
-      doc = JSON.parse(await readFile(path.join(dir, name), 'utf8'));
-    } catch (error) {
-      add('error', kind, name, `Invalid JSON: ${error instanceof Error ? error.message : String(error)}`);
-      continue;
-    }
+    try { doc = JSON.parse(await readFile(path.join(dir, name), 'utf8')); }
+    catch (error) { add('error', kind, name, `Invalid JSON: ${error instanceof Error ? error.message : String(error)}`); continue; }
     documents[kind].push(doc);
     requiredIdentity(kind, name, doc);
-    if (doc?.id) {
-      if (seen.has(doc.id)) add('error', kind, doc.id, 'Duplicate permanent ID in category.');
-      seen.add(doc.id);
-    }
+    if (doc?.id) { if (seen.has(doc.id)) add('error', kind, doc.id, 'Duplicate permanent ID in category.'); seen.add(doc.id); }
     if (kind === 'items') validateItem(doc);
     else if (kind === 'creatures') validateCreature(doc);
     else if (kind === 'resources') validateResource(doc);
-    else validateRecipe(doc);
+    else if (kind === 'recipes') validateRecipe(doc);
+    else validateDefinition(doc);
+    validatePresentation(kind, doc);
   }
 }
 
-// Repository-only cross-reference warnings. These are not blocking until migration seed data has
-// fully moved into repository files; Unity's authoritative audit can resolve against both sources.
+// Repository-only cross-reference warnings. These remain non-blocking until migration seed data has
+// fully moved into repository files; Unity's authoritative audit resolves against both sources.
 const itemIds = new Set(documents.items.filter(doc => doc?.id).map(doc => doc.id));
 function unresolved(kind, id, field, target) {
   if (target && !itemIds.has(target)) add('warning', kind, id, `${field} '${target}' is absent from repository item drafts; it may resolve from migration/reference data.`);
@@ -132,8 +151,10 @@ const errors = issues.filter(issue => issue.severity === 'error');
 const warnings = issues.filter(issue => issue.severity === 'warning');
 const total = kinds.reduce((sum, kind) => sum + documents[kind].length, 0);
 const ready = kinds.reduce((sum, kind) => sum + documents[kind].filter(doc => doc?.editorState === 'ready-for-review').length, 0);
+const unfinishedAssets = kinds.reduce((sum, kind) => sum + documents[kind].filter(doc => ['needs-assets','placeholder','linked'].includes(doc?.presentation?.assetState)).length, 0);
 
-console.log(`MassRPG draft validation: ${total} documents, ${ready} ready for review, ${errors.length} errors, ${warnings.length} warnings.`);
+console.log(`MassRPG draft validation: ${total} documents, ${ready} ready for review, ${unfinishedAssets} with unfinished presentation assets, ${errors.length} errors, ${warnings.length} warnings.`);
 for (const issue of issues) console.log(`${issue.severity.toUpperCase()} [${issue.kind}/${issue.id}] ${issue.message}`);
 if (warnings.length) console.log('Reference warnings are non-blocking while migration seed catalogs remain valid fallback data.');
+if (documents.definitions.length) console.log('Generic definitions are design-authoring records; runtime-relevant definitions must be promoted to typed schemas before live publication.');
 if (errors.length) process.exitCode = 1;
