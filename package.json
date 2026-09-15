@@ -9,6 +9,7 @@
     "dev": "vite --open",
     "data-editor": "node tools/online-data-editor/server.mjs",
     "data-validate": "node tools/online-data-editor/validate-drafts.mjs",
+    "data-candidate": "node tools/online-data-editor/build-candidate.mjs",
     "prebuild": "npm run sync-character-animations",
     "build": "tsc && vite build",
     "preview": "vite preview"
