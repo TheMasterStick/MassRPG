@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "massrpg://schemas/definition.schema.json",
+  "title": "MassRPG Generic Game Definition Draft",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "id",
+    "displayName",
+    "kind",
+    "description",
+    "tags",
+    "notes",
+    "data",
+    "presentation",
+    "editorState"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._/-]{1,79}$"
+    },
+    "displayName": { "type": "string", "minLength": 1, "maxLength": 100 },
+    "kind": { "type": "string", "minLength": 1, "maxLength": 60 },
+    "description": { "type": "string", "maxLength": 5000 },
+    "tags": {
+      "type": "array",
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1, "maxLength": 50 }
+    },
+    "notes": { "type": "string", "maxLength": 10000 },
+    "data": {
+      "type": "object",
+      "description": "Flexible design/gameplay fields for content types that do not yet have a dedicated runtime schema. Promote to a typed schema before live publication."
+    },
+    "presentation": { "$ref": "presentation.schema.json" },
+    "editorState": { "enum": ["draft", "ready-for-review"] }
+  },
+  "additionalProperties": false
+}
