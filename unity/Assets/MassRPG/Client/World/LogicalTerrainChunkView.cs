@@ -13,6 +13,7 @@ namespace MassRPG.Client.World
     {
         [SerializeField] private GridPresentationSpace presentationSpace;
         [SerializeField] private MeshFilter meshFilter;
+        [SerializeField] private MeshRenderer meshRenderer;
         [SerializeField] private MeshCollider meshCollider;
         [SerializeField] private bool updateCollider = true;
 
@@ -26,7 +27,27 @@ namespace MassRPG.Client.World
         private void Awake()
         {
             if (meshFilter == null) meshFilter = GetComponent<MeshFilter>();
+            if (meshRenderer == null) meshRenderer = GetComponent<MeshRenderer>();
             if (meshCollider == null) meshCollider = GetComponent<MeshCollider>();
+        }
+
+        private void OnEnable() => Subscribe();
+        private void OnDisable() => Unsubscribe();
+
+        public void Configure(GridPresentationSpace space, Material material, bool colliderEnabled)
+        {
+            if (presentationSpace != space)
+            {
+                Unsubscribe();
+                presentationSpace = space;
+                Subscribe();
+            }
+
+            if (meshFilter == null) meshFilter = GetComponent<MeshFilter>();
+            if (meshRenderer == null) meshRenderer = GetComponent<MeshRenderer>();
+            updateCollider = colliderEnabled;
+            if (updateCollider && meshCollider == null) meshCollider = GetComponent<MeshCollider>();
+            if (meshRenderer != null && material != null) meshRenderer.sharedMaterial = material;
         }
 
         public void Rebuild(
@@ -76,8 +97,22 @@ namespace MassRPG.Client.World
             transform.position = presentationSpace.ToWorldPosition(new GridLocation(startTile, Plane, Storey), 0);
         }
 
+        private void Subscribe()
+        {
+            if (presentationSpace != null) presentationSpace.OriginChanged += OnPresentationOriginChanged;
+        }
+
+        private void Unsubscribe()
+        {
+            if (presentationSpace != null) presentationSpace.OriginChanged -= OnPresentationOriginChanged;
+        }
+
+        private void OnPresentationOriginChanged(GridCoord before, GridCoord after)
+            => RefreshAfterOriginShift();
+
         private void OnDestroy()
         {
+            Unsubscribe();
             ReleaseRuntimeMesh();
         }
 
