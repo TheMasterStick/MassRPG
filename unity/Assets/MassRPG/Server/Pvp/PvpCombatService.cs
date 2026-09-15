@@ -49,7 +49,8 @@ namespace MassRPG.Server.Pvp
     /// attack attempt so entering a protected area or changing voluntary flags takes effect without
     /// trusting stale client state. Range/LOS/elevation use the same logical combat geometry as PvE.
     /// A configured PvP death service settles lethal attacks immediately so loot/respawn cannot be
-    /// forgotten by a presentation client or a higher-level input adapter.
+    /// forgotten by a presentation client or a higher-level input adapter. Temporary skill effects
+    /// are read through IEffectiveSkillLevelSource instead of mutating permanent SkillSet XP.
     /// </summary>
     public sealed class PvpCombatService
     {
@@ -59,6 +60,7 @@ namespace MassRPG.Server.Pvp
         private readonly IRangedLineOfSightMap _lineOfSight;
         private readonly RangedAmmunitionService _ammunition;
         private readonly PvpDeathService _deaths;
+        private readonly IEffectiveSkillLevelSource _skillLevels;
 
         public PvpCombatService(
             PvpService pvp,
@@ -66,7 +68,8 @@ namespace MassRPG.Server.Pvp
             IGridTraversalMap movementMap,
             IRangedLineOfSightMap lineOfSight,
             RangedAmmunitionService ammunition = null,
-            PvpDeathService deaths = null)
+            PvpDeathService deaths = null,
+            IEffectiveSkillLevelSource skillLevels = null)
         {
             _pvp = pvp ?? throw new ArgumentNullException(nameof(pvp));
             _profiles = profiles ?? throw new ArgumentNullException(nameof(profiles));
@@ -74,6 +77,7 @@ namespace MassRPG.Server.Pvp
             _lineOfSight = lineOfSight ?? throw new ArgumentNullException(nameof(lineOfSight));
             _ammunition = ammunition;
             _deaths = deaths;
+            _skillLevels = skillLevels ?? BaseEffectiveSkillLevelSource.Instance;
         }
 
         public PvpAttackResult TryAttack(
@@ -102,9 +106,10 @@ namespace MassRPG.Server.Pvp
                     return new PvpAttackResult(PvpAttackKind.Failed, ammoValidation.Code);
             }
 
-            var attackLevel = ResolveAttackLevel(attacker, attack.Style);
+            var attackLevel = ResolveAttackLevel(attacker, attack.Style, nowUnixMilliseconds);
             var attackBonus = ResolveAttackBonus(attack);
-            var defenceRoll = CombatMath.DefenceRoll(defender.Skills.GetLevel(SkillId.Defence), defence.DefenceBonus);
+            var defenceLevel = _skillLevels.GetEffectiveLevel(defender, SkillId.Defence, nowUnixMilliseconds);
+            var defenceRoll = CombatMath.DefenceRoll(defenceLevel, defence.DefenceBonus);
             var attackRoll = CombatMath.AttackRoll(attackLevel, attackBonus);
             var hitChance = CombatMath.HitChance(attackRoll, defenceRoll);
             hitChance = CombatGeometry.ApplyElevationAccuracyModifier(
@@ -114,7 +119,7 @@ namespace MassRPG.Server.Pvp
                 _movementMap.GetLogicalElevation(defender.Location));
 
             var hit = random01() <= hitChance;
-            var damage = hit ? (int)Math.Floor(random01() * (ResolveMaxHit(attacker, attack) + 1)) : 0;
+            var damage = hit ? (int)Math.Floor(random01() * (ResolveMaxHit(attacker, attack, nowUnixMilliseconds) + 1)) : 0;
             damage = Math.Max(0, Math.Min(damage, defender.CurrentHitpoints));
 
             if (attack.Style == CombatStyle.Ranged)
@@ -170,13 +175,16 @@ namespace MassRPG.Server.Pvp
             return CombatGeometry.CanRangedOrMagic(_lineOfSight, attacker.Location, defender.Location, profile.RangeTiles);
         }
 
-        private static int ResolveAttackLevel(PlayerState attacker, CombatStyle style)
+        private int ResolveAttackLevel(PlayerState attacker, CombatStyle style, long nowUnixMilliseconds)
         {
             switch (style)
             {
-                case CombatStyle.Ranged: return attacker.Skills.GetLevel(SkillId.Ranged);
-                case CombatStyle.Magic: return attacker.Skills.GetLevel(SkillId.Magic);
-                default: return attacker.Skills.GetLevel(SkillId.Attack);
+                case CombatStyle.Ranged:
+                    return _skillLevels.GetEffectiveLevel(attacker, SkillId.Ranged, nowUnixMilliseconds);
+                case CombatStyle.Magic:
+                    return _skillLevels.GetEffectiveLevel(attacker, SkillId.Magic, nowUnixMilliseconds);
+                default:
+                    return _skillLevels.GetEffectiveLevel(attacker, SkillId.Attack, nowUnixMilliseconds);
             }
         }
 
@@ -190,16 +198,21 @@ namespace MassRPG.Server.Pvp
             }
         }
 
-        private static int ResolveMaxHit(PlayerState attacker, PlayerAttackProfile profile)
+        private int ResolveMaxHit(PlayerState attacker, PlayerAttackProfile profile, long nowUnixMilliseconds)
         {
             switch (profile.Style)
             {
                 case CombatStyle.Ranged:
-                    return CombatMath.MaxHitRanged(attacker.Skills.GetLevel(SkillId.Ranged), profile.RangedStrengthBonus);
+                    return CombatMath.MaxHitRanged(
+                        _skillLevels.GetEffectiveLevel(attacker, SkillId.Ranged, nowUnixMilliseconds),
+                        profile.RangedStrengthBonus);
                 case CombatStyle.Magic:
-                    return CombatMath.MaxHitMagic(attacker.Skills.GetLevel(SkillId.Magic));
+                    return CombatMath.MaxHitMagic(
+                        _skillLevels.GetEffectiveLevel(attacker, SkillId.Magic, nowUnixMilliseconds));
                 default:
-                    return CombatMath.MaxHitMelee(attacker.Skills.GetLevel(SkillId.Strength), profile.StrengthBonus);
+                    return CombatMath.MaxHitMelee(
+                        _skillLevels.GetEffectiveLevel(attacker, SkillId.Strength, nowUnixMilliseconds),
+                        profile.StrengthBonus);
             }
         }
     }
