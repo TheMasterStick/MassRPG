@@ -127,6 +127,7 @@
       },
       "additionalProperties": false
     },
+    "presentation": { "$ref": "presentation.schema.json" },
     "editorState": {
       "enum": ["draft", "ready-for-review"]
     }
