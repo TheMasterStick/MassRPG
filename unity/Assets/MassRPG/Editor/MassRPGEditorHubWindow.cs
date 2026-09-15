@@ -16,7 +16,7 @@ namespace MassRPG.Editor
         {
             var window = GetWindow<MassRPGEditorHubWindow>();
             window.titleContent = new GUIContent("MassRPG Editor");
-            window.minSize = new Vector2(470, 780);
+            window.minSize = new Vector2(470, 820);
             window.Show();
         }
 
@@ -50,8 +50,12 @@ namespace MassRPG.Editor
                 MassRPGContentBrowserWindow.Open);
             Button(
                 "Repository Drafts",
-                "Inspect and validate the same JSON drafts written by the browser/Codespaces Online Data Editor.",
+                "Inspect and validate repository JSON authored from Unity or the browser/Codespaces Data Editor.",
                 MassRPGRepositoryDraftsWindow.Open);
+            Button(
+                "Asset Backlog",
+                "See every browser-authored item, monster, resource or other definition still waiting for models, icons, portraits or animation assets.",
+                MassRPGAssetBacklogWindow.Open);
 
             Section("Testing");
             Button(
@@ -61,7 +65,7 @@ namespace MassRPG.Editor
 
             GUILayout.FlexibleSpace();
             EditorGUILayout.HelpBox(
-                "The Online Data Editor and Unity now share repository-backed item drafts. Next stages broaden that same bridge to creatures/resources/recipes and promote validated drafts into versioned published data.",
+                "The Online Data Editor can now author items/equipment, creatures, resources, recipes and flexible future game definitions without local art files. Unfinished presentation work is carried into the Asset Backlog for home/Unity linking instead of blocking gameplay design.",
                 MessageType.None);
             GUILayout.Label("Unity 6.3 LTS · MassRPG authored-world tools", EditorStyles.centeredGreyMiniLabel);
         }
