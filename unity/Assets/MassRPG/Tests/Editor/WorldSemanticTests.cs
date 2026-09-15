@@ -55,5 +55,32 @@ namespace MassRPG.Tests
 
             Assert.AreEqual(PlayerMapVisibility.NotPlayerMapData, area.MapVisibility);
         }
+
+        [Test]
+        public void RoadDocument_RoundTripsAuthoringAndRoutingMetadata()
+        {
+            var road = new RoadDefinition(
+                new ContentId("road.capital.north"),
+                "North Road",
+                new[] { new GridCoord(100, 100), new GridCoord(130, 115), new GridCoord(180, 115) })
+            {
+                WidthTiles = 5,
+                SurfaceGroundId = new ContentId("ground.road.dirt"),
+                MovementSpeedMultiplier = 1.05,
+                RoutePreferenceWeight = 0.85,
+                ReduceAggressiveSpawns = true
+            };
+
+            var copy = RoadDocumentCodec.Decode(RoadDocumentCodec.Encode(road));
+
+            Assert.AreEqual(road.Id, copy.Id);
+            Assert.AreEqual("North Road", copy.DisplayName);
+            Assert.AreEqual(5, copy.WidthTiles);
+            Assert.AreEqual(new ContentId("ground.road.dirt"), copy.SurfaceGroundId.Value);
+            Assert.AreEqual(1.05, copy.MovementSpeedMultiplier, 0.0001);
+            Assert.AreEqual(0.85, copy.RoutePreferenceWeight, 0.0001);
+            Assert.AreEqual(3, copy.Points.Count);
+            Assert.AreEqual(new GridCoord(180, 115), copy.Points[2]);
+        }
     }
 }
