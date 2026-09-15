@@ -9,7 +9,13 @@ const execFileAsync = promisify(execFile);
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, '../..');
 const publicRoot = path.join(here, 'public');
-const itemRoot = path.join(repoRoot, 'ContentData', 'Drafts', 'items');
+const draftRoot = path.join(repoRoot, 'ContentData', 'Drafts');
+const roots = {
+  items: path.join(draftRoot, 'items'),
+  creatures: path.join(draftRoot, 'creatures'),
+  resources: path.join(draftRoot, 'resources'),
+  recipes: path.join(draftRoot, 'recipes'),
+};
 const port = Number.parseInt(process.env.PORT ?? '4175', 10);
 const host = process.env.HOST ?? '0.0.0.0';
 
@@ -26,12 +32,17 @@ const skills = new Set([
   'Mining', 'Fishing', 'Farming', 'Cooking', 'Firemaking', 'Smithing', 'Crafting',
   'Fletching', 'Herblore', 'Construction', 'Agility',
 ]);
+const gatheringSkills = new Set(['Woodcutting', 'Mining', 'Fishing', 'Farming']);
+const productionSkills = new Set(['Cooking', 'Firemaking', 'Smithing', 'Crafting', 'Fletching', 'Herblore', 'Construction']);
 const gatheringToolKinds = new Set([
   'None', 'Hatchet', 'Pickaxe', 'FishingNet', 'FishingRod', 'LobsterPot', 'Harpoon',
 ]);
-const itemIdPattern = /^[a-z0-9][a-z0-9._-]{1,79}$/;
+const availabilityModes = new Set(['Personal', 'Shared']);
+const dispositions = new Set(['Passive', 'Neutral', 'Aggressive']);
+const combatStyles = new Set(['Melee', 'Ranged', 'Magic']);
+const contentIdPattern = /^[a-z0-9][a-z0-9._/-]{1,79}$/;
 
-await mkdir(itemRoot, { recursive: true });
+await Promise.all(Object.values(roots).map(root => mkdir(root, { recursive: true })));
 
 function json(res, status, body) {
   const payload = JSON.stringify(body);
@@ -57,7 +68,7 @@ async function readBody(req) {
   const chunks = [];
   for await (const chunk of req) {
     total += chunk.length;
-    if (total > 512 * 1024) throw new Error('Request body is too large.');
+    if (total > 1024 * 1024) throw new Error('Request body is too large.');
     chunks.push(chunk);
   }
   if (chunks.length === 0) return {};
@@ -80,10 +91,22 @@ async function repoStatus() {
   return { branch, changedFiles, pushAllowed };
 }
 
+function ensureObject(input, label) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error(`${label} payload must be an object.`);
+}
+
 function asInteger(value, field, minimum = Number.MIN_SAFE_INTEGER, maximum = Number.MAX_SAFE_INTEGER) {
   const number = Number(value);
   if (!Number.isInteger(number) || number < minimum || number > maximum) {
     throw new Error(`${field} must be an integer between ${minimum} and ${maximum}.`);
+  }
+  return number;
+}
+
+function asNumber(value, field, minimum = -Number.MAX_VALUE, maximum = Number.MAX_VALUE) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number < minimum || number > maximum) {
+    throw new Error(`${field} must be a number between ${minimum} and ${maximum}.`);
   }
   return number;
 }
@@ -93,20 +116,31 @@ function asBoolean(value, field) {
   return value;
 }
 
-function normalizeItem(input) {
-  if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('Item payload must be an object.');
-
-  const id = String(input.id ?? '').trim();
-  if (!itemIdPattern.test(id)) {
-    throw new Error('Permanent ID must be 2-80 characters using lower-case a-z, 0-9, dot, underscore or hyphen.');
+function asId(value, field = 'Permanent ID', optional = false) {
+  if (optional && (value == null || value === '')) return null;
+  const id = String(value ?? '').trim();
+  if (!contentIdPattern.test(id)) {
+    throw new Error(`${field} must be 2-80 characters using lower-case a-z, 0-9, dot, underscore, hyphen or slash.`);
   }
+  return id;
+}
 
-  const displayName = String(input.displayName ?? '').trim();
-  if (displayName.length < 1 || displayName.length > 100) throw new Error('Display name must be 1-100 characters.');
+function asName(value, field = 'Display name') {
+  const name = String(value ?? '').trim();
+  if (name.length < 1 || name.length > 100) throw new Error(`${field} must be 1-100 characters.`);
+  return name;
+}
 
+function stateOf(input) {
+  return input.editorState === 'ready-for-review' ? 'ready-for-review' : 'draft';
+}
+
+function normalizeItem(input) {
+  ensureObject(input, 'Item');
+  const id = asId(input.id);
+  const displayName = asName(input.displayName);
   const description = String(input.description ?? '');
   if (description.length > 2000) throw new Error('Description must be 2000 characters or less.');
-
   const type = String(input.type ?? 'Miscellaneous');
   if (!itemTypes.has(type)) throw new Error(`Unknown item type '${type}'.`);
 
@@ -124,9 +158,7 @@ function normalizeItem(input) {
 
   const gatheringToolKind = String(input.gatheringToolKind ?? 'None');
   if (!gatheringToolKinds.has(gatheringToolKind)) throw new Error(`Unknown gathering tool kind '${gatheringToolKind}'.`);
-
   const bonusInput = input.bonuses && typeof input.bonuses === 'object' ? input.bonuses : {};
-  const editorState = input.editorState === 'ready-for-review' ? 'ready-for-review' : 'draft';
 
   const item = {
     schemaVersion: 1,
@@ -154,26 +186,130 @@ function normalizeItem(input) {
       rangedStrength: asInteger(bonusInput.rangedStrength ?? 0, 'Ranged strength bonus'),
       magic: asInteger(bonusInput.magic ?? 0, 'Magic bonus'),
     },
-    editorState,
+    editorState: stateOf(input),
   };
 
   if (item.twoHanded && item.canDualWield) throw new Error('A two-handed item cannot also be dual-wieldable.');
-  if (item.twoHanded && !item.allowedEquipmentSlots.includes('MainHand')) {
-    throw new Error('Two-handed equipment must include MainHand as an allowed equipment slot.');
-  }
-  if (item.canDualWield && !item.allowedEquipmentSlots.includes('MainHand')) {
-    throw new Error('Dual-wieldable equipment must include MainHand as an allowed equipment slot.');
-  }
-
+  if (item.twoHanded && !item.allowedEquipmentSlots.includes('MainHand')) throw new Error('Two-handed equipment must include MainHand.');
+  if (item.canDualWield && !item.allowedEquipmentSlots.includes('MainHand')) throw new Error('Dual-wieldable equipment must include MainHand.');
   return item;
 }
 
-async function listItems() {
-  const names = (await readdir(itemRoot)).filter(name => name.endsWith('.json')).sort();
+function normalizeCreature(input) {
+  ensureObject(input, 'Creature');
+  const combatStyle = String(input.combatStyle ?? 'Melee');
+  if (!combatStyles.has(combatStyle)) throw new Error(`Unknown combat style '${combatStyle}'.`);
+  const disposition = String(input.disposition ?? 'Neutral');
+  if (!dispositions.has(disposition)) throw new Error(`Unknown disposition '${disposition}'.`);
+
+  return {
+    schemaVersion: 1,
+    id: asId(input.id),
+    displayName: asName(input.displayName),
+    combatLevel: asInteger(input.combatLevel ?? 1, 'Combat level', 1),
+    maxHitpoints: asInteger(input.maxHitpoints ?? 1, 'Max hitpoints', 1),
+    attackLevel: asInteger(input.attackLevel ?? 1, 'Attack level', 1, 300),
+    strengthLevel: asInteger(input.strengthLevel ?? 1, 'Strength level', 1, 300),
+    defenceLevel: asInteger(input.defenceLevel ?? 1, 'Defence level', 1, 300),
+    attackBonus: asInteger(input.attackBonus ?? 0, 'Attack bonus'),
+    strengthBonus: asInteger(input.strengthBonus ?? 0, 'Strength bonus'),
+    defenceBonus: asInteger(input.defenceBonus ?? 0, 'Defence bonus'),
+    combatStyle,
+    attackIntervalMilliseconds: asInteger(input.attackIntervalMilliseconds ?? 2400, 'Attack interval', 1),
+    attackRangeTiles: asInteger(input.attackRangeTiles ?? 1, 'Attack range', 1),
+    disposition,
+    footprintWidth: asInteger(input.footprintWidth ?? 1, 'Footprint width', 1),
+    footprintHeight: asInteger(input.footprintHeight ?? 1, 'Footprint height', 1),
+    aggroRadiusTiles: asInteger(input.aggroRadiusTiles ?? 4, 'Aggro radius', 0),
+    leashRadiusTiles: asInteger(input.leashRadiusTiles ?? 8, 'Leash radius', 0),
+    persistentNamedInstance: asBoolean(input.persistentNamedInstance ?? false, 'Persistent named instance'),
+    editorState: stateOf(input),
+  };
+}
+
+function normalizeResource(input) {
+  ensureObject(input, 'Resource');
+  const gatheringSkill = String(input.gatheringSkill ?? 'Mining');
+  if (!gatheringSkills.has(gatheringSkill)) throw new Error(`Unknown gathering skill '${gatheringSkill}'.`);
+  const availabilityMode = String(input.availabilityMode ?? 'Personal');
+  if (!availabilityModes.has(availabilityMode)) throw new Error(`Unknown availability mode '${availabilityMode}'.`);
+  const requiredToolKind = String(input.requiredToolKind ?? 'None');
+  if (!gatheringToolKinds.has(requiredToolKind)) throw new Error(`Unknown gathering tool kind '${requiredToolKind}'.`);
+  const minimumYield = asInteger(input.minimumYield ?? 1, 'Minimum yield', 1);
+  const maximumYield = asInteger(input.maximumYield ?? 1, 'Maximum yield', 1);
+  if (maximumYield < minimumYield) throw new Error('Maximum yield cannot be lower than minimum yield.');
+
+  return {
+    schemaVersion: 1,
+    id: asId(input.id),
+    displayName: asName(input.displayName),
+    gatheringSkill,
+    requiredLevel: asInteger(input.requiredLevel ?? 1, 'Required level', 1, 300),
+    experience: asInteger(input.experience ?? 0, 'Experience', 0),
+    yieldItemId: asId(input.yieldItemId, 'Yield item ID'),
+    respawnSeconds: asInteger(input.respawnSeconds ?? 0, 'Respawn seconds', 0),
+    availabilityMode,
+    minimumYield,
+    maximumYield,
+    requiredToolKind,
+    minimumToolTier: asInteger(input.minimumToolTier ?? 0, 'Minimum tool tier', 0),
+    editorState: stateOf(input),
+  };
+}
+
+function normalizeRecipe(input) {
+  ensureObject(input, 'Recipe');
+  const skill = String(input.skill ?? 'Cooking');
+  if (!productionSkills.has(skill)) throw new Error(`Unknown production skill '${skill}'.`);
+  const rawInputs = Array.isArray(input.inputs) ? input.inputs : [];
+  if (rawInputs.length < 1) throw new Error('A recipe requires at least one input.');
+  if (rawInputs.length > 16) throw new Error('A recipe may have at most 16 input rows in this editor.');
+  const inputs = rawInputs.map((entry, index) => {
+    ensureObject(entry, `Recipe input ${index + 1}`);
+    return {
+      itemId: asId(entry.itemId, `Input ${index + 1} item ID`),
+      quantity: asInteger(entry.quantity ?? 1, `Input ${index + 1} quantity`, 1),
+    };
+  });
+  const canBurn = asBoolean(input.canBurn ?? false, 'Can burn/fail');
+  const failureOutputItemId = asId(input.failureOutputItemId, 'Failure output item ID', true);
+  if (canBurn && failureOutputItemId === null) throw new Error('Burnable/failable recipes require a failure output item ID.');
+
+  return {
+    schemaVersion: 1,
+    id: asId(input.id),
+    displayName: asName(input.displayName),
+    skill,
+    levelRequired: asInteger(input.levelRequired ?? 1, 'Level required', 1, 300),
+    inputs,
+    outputItemId: asId(input.outputItemId, 'Output item ID'),
+    outputQuantity: asInteger(input.outputQuantity ?? 1, 'Output quantity', 1),
+    xp: asInteger(input.xp ?? 0, 'XP', 0),
+    durationMilliseconds: asInteger(input.durationMilliseconds ?? 1200, 'Duration', 1),
+    category: String(input.category ?? '').trim().slice(0, 100),
+    stationId: asId(input.stationId, 'Station ID', true),
+    toolRequiredId: asId(input.toolRequiredId, 'Tool required ID', true),
+    canBurn,
+    failureOutputItemId,
+    failureXpFraction: asNumber(input.failureXpFraction ?? 0.10, 'Failure XP fraction', 0, 1),
+    editorState: stateOf(input),
+  };
+}
+
+const normalizers = {
+  items: normalizeItem,
+  creatures: normalizeCreature,
+  resources: normalizeResource,
+  recipes: normalizeRecipe,
+};
+
+async function listDocuments(kind) {
+  const root = roots[kind];
+  const names = (await readdir(root)).filter(name => name.endsWith('.json')).sort();
   const result = [];
   for (const name of names) {
     try {
-      const parsed = JSON.parse(await readFile(path.join(itemRoot, name), 'utf8'));
+      const parsed = JSON.parse(await readFile(path.join(root, name), 'utf8'));
       result.push(parsed);
     } catch (error) {
       result.push({
@@ -187,18 +323,16 @@ async function listItems() {
   return result.sort((a, b) => String(a.displayName).localeCompare(String(b.displayName)));
 }
 
-async function saveItem(input) {
-  const item = normalizeItem(input);
-  const filePath = path.join(itemRoot, `${item.id}.json`);
-  await writeFile(filePath, `${JSON.stringify(item, null, 2)}\n`, 'utf8');
-  return item;
+async function saveDocument(kind, input) {
+  const document = normalizers[kind](input);
+  const filePath = path.join(roots[kind], `${document.id}.json`);
+  await writeFile(filePath, `${JSON.stringify(document, null, 2)}\n`, 'utf8');
+  return document;
 }
 
 async function commitAndPush(message) {
   const status = await repoStatus();
-  if (!status.pushAllowed) {
-    throw new Error('Refusing to commit/push from main/master or a detached HEAD. Open the editor from a dedicated data/editor branch.');
-  }
+  if (!status.pushAllowed) throw new Error('Refusing to commit/push from main/master or a detached HEAD. Open the editor from a dedicated data/editor branch.');
   if (status.changedFiles === 0) throw new Error('There are no draft content changes to commit.');
 
   await git(['add', '--', 'ContentData/Drafts']);
@@ -229,13 +363,17 @@ const server = http.createServer(async (req, res) => {
       json(res, 200, await repoStatus());
       return;
     }
-    if (req.method === 'GET' && url.pathname === '/api/items') {
-      json(res, 200, { items: await listItems() });
+
+    const match = url.pathname.match(/^\/api\/(items|creatures|resources|recipes)$/);
+    if (match && req.method === 'GET') {
+      const kind = match[1];
+      json(res, 200, { kind, documents: await listDocuments(kind), [kind]: await listDocuments(kind) });
       return;
     }
-    if (req.method === 'POST' && url.pathname === '/api/items') {
-      const item = await saveItem(await readBody(req));
-      json(res, 200, { item, status: await repoStatus() });
+    if (match && req.method === 'POST') {
+      const kind = match[1];
+      const document = await saveDocument(kind, await readBody(req));
+      json(res, 200, { kind, document, [kind.slice(0, -1)]: document, status: await repoStatus() });
       return;
     }
     if (req.method === 'POST' && url.pathname === '/api/commit') {
