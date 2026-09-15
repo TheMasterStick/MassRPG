@@ -1,0 +1,31 @@
+name: Validate MassRPG content drafts
+
+on:
+  pull_request:
+    paths:
+      - 'ContentData/Drafts/**'
+      - 'ContentData/Schemas/**'
+      - 'tools/online-data-editor/validate-drafts.mjs'
+      - 'package.json'
+  push:
+    paths:
+      - 'ContentData/Drafts/**'
+      - 'ContentData/Schemas/**'
+      - 'tools/online-data-editor/validate-drafts.mjs'
+      - 'package.json'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-drafts:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate repository-backed MassRPG drafts
+        run: node tools/online-data-editor/validate-drafts.mjs
