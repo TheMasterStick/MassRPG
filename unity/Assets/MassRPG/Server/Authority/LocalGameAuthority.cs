@@ -6,6 +6,9 @@ using MassRPG.Core.Inventory;
 using MassRPG.Core.World;
 using MassRPG.Server.Combat;
 using MassRPG.Server.Creatures;
+using MassRPG.Server.Economy;
+using MassRPG.Server.Farming;
+using MassRPG.Server.Firemaking;
 using MassRPG.Server.Production;
 using MassRPG.Server.Resources;
 
@@ -27,6 +30,12 @@ namespace MassRPG.Server.Authority
         private readonly CreatureRegistry _creatures;
         private readonly CreatureCombatSimulationService _creatureCombat;
         private readonly CreaturePopulationService _creaturePopulations;
+        private readonly BankService _banking;
+        private readonly CharacterBankRegistry _banks;
+        private readonly ShopService _shops;
+        private readonly IEconomyAccessSource _economyAccess;
+        private readonly FarmingService _farming;
+        private readonly FiremakingService _firemaking;
 
         public LocalGameAuthority(
             IItemRuleSource itemRules,
@@ -37,7 +46,13 @@ namespace MassRPG.Server.Authority
             ProductionService production = null,
             CreatureRegistry creatures = null,
             CreatureCombatSimulationService creatureCombat = null,
-            CreaturePopulationService creaturePopulations = null)
+            CreaturePopulationService creaturePopulations = null,
+            BankService banking = null,
+            CharacterBankRegistry banks = null,
+            ShopService shops = null,
+            IEconomyAccessSource economyAccess = null,
+            FarmingService farming = null,
+            FiremakingService firemaking = null)
         {
             _itemRules = itemRules ?? throw new ArgumentNullException(nameof(itemRules));
             _movementMap = movementMap;
@@ -48,6 +63,12 @@ namespace MassRPG.Server.Authority
             _creatures = creatures;
             _creatureCombat = creatureCombat;
             _creaturePopulations = creaturePopulations;
+            _banking = banking;
+            _banks = banks;
+            _shops = shops;
+            _economyAccess = economyAccess;
+            _farming = farming;
+            _firemaking = firemaking;
         }
 
         public void RegisterPlayer(PlayerState player)
@@ -95,6 +116,65 @@ namespace MassRPG.Server.Authority
                 if (_gathering == null)
                     return AuthorityDecision.Reject(request.RequestId, "gathering_unavailable", "Gathering is not initialized.");
                 return FromGatheringResult(request.RequestId, _gathering.TryGather(player, gather.Node, nowUnixMilliseconds));
+            }
+
+            if (request is PlantCropRequest plant)
+            {
+                if (_farming == null)
+                    return AuthorityDecision.Reject(request.RequestId, "farming_unavailable", "Farming is not initialized.");
+                return FromFarmingResult(request.RequestId, _farming.Plant(player, plant.Patch, plant.CropId, nowUnixMilliseconds));
+            }
+
+            if (request is HarvestCropRequest harvest)
+            {
+                if (_farming == null)
+                    return AuthorityDecision.Reject(request.RequestId, "farming_unavailable", "Farming is not initialized.");
+                return FromFarmingResult(request.RequestId, _farming.Harvest(player, harvest.Patch, nowUnixMilliseconds));
+            }
+
+            if (request is LightFireRequest lightFire)
+            {
+                if (_firemaking == null)
+                    return AuthorityDecision.Reject(request.RequestId, "firemaking_unavailable", "Firemaking is not initialized.");
+                return FromFiremakingResult(request.RequestId, _firemaking.Light(player, lightFire.LogItemId, nowUnixMilliseconds));
+            }
+
+            if (request is DepositBankItemRequest deposit)
+            {
+                if (_banking == null || _banks == null || _economyAccess == null)
+                    return AuthorityDecision.Reject(request.RequestId, "banking_unavailable", "Banking is not initialized.");
+                if (!_economyAccess.CanUseBank(player, deposit.BankLocation))
+                    return AuthorityDecision.Reject(request.RequestId, "bank_out_of_range", "You must be beside a valid bank to do that.");
+                return FromBankResult(request.RequestId, _banking.Deposit(
+                    player, _banks.GetOrCreate(player.CharacterId), deposit.InventorySlot, deposit.Quantity));
+            }
+
+            if (request is WithdrawBankItemRequest withdraw)
+            {
+                if (_banking == null || _banks == null || _economyAccess == null)
+                    return AuthorityDecision.Reject(request.RequestId, "banking_unavailable", "Banking is not initialized.");
+                if (!_economyAccess.CanUseBank(player, withdraw.BankLocation))
+                    return AuthorityDecision.Reject(request.RequestId, "bank_out_of_range", "You must be beside a valid bank to do that.");
+                return FromBankResult(request.RequestId, _banking.Withdraw(
+                    player, _banks.GetOrCreate(player.CharacterId), withdraw.ItemId, withdraw.Quantity));
+            }
+
+            if (request is BuyShopItemRequest buy)
+            {
+                if (_shops == null || _economyAccess == null)
+                    return AuthorityDecision.Reject(request.RequestId, "shops_unavailable", "Shops are not initialized.");
+                if (!_economyAccess.CanUseShop(player, buy.ShopId, buy.ShopLocation))
+                    return AuthorityDecision.Reject(request.RequestId, "shop_out_of_range", "You must be beside the requested shop to do that.");
+                return FromShopResult(request.RequestId, _shops.Buy(player, buy.ShopId, buy.ItemId, buy.Quantity));
+            }
+
+            if (request is SellShopItemRequest sell)
+            {
+                if (_shops == null || _economyAccess == null)
+                    return AuthorityDecision.Reject(request.RequestId, "shops_unavailable", "Shops are not initialized.");
+                if (!_economyAccess.CanUseShop(player, sell.ShopId, sell.ShopLocation))
+                    return AuthorityDecision.Reject(request.RequestId, "shop_out_of_range", "You must be beside the requested shop to do that.");
+                return FromShopResult(request.RequestId, _shops.Sell(player, sell.ShopId, sell.InventorySlot, sell.Quantity));
             }
 
             if (request is StartProductionRequest startProduction)
@@ -283,8 +363,6 @@ namespace MassRPG.Server.Authority
             if (!path.Success)
                 return AuthorityDecision.Reject(requestId, path.Code, "No valid local path could be found to that destination.");
 
-            // A deliberate movement command interrupts skilling/production and disengages the
-            // player's current auto-attack attempt. Hostile AI may still chase independently.
             player.Production.Clear();
             player.Combat.End();
             player.Movement.ReplacePath(path.Steps);
@@ -295,31 +373,43 @@ namespace MassRPG.Server.Authority
             => slot == EquipmentSlot.Weapon || slot == EquipmentSlot.Shield;
 
         private static AuthorityDecision FromInventoryResult(Guid requestId, InventoryOperationResult result)
-        {
-            return result.Success
+            => result.Success
                 ? AuthorityDecision.Accept(requestId)
                 : AuthorityDecision.Reject(requestId, result.Code, result.Message);
-        }
 
         private static AuthorityDecision FromGatheringResult(Guid requestId, GatheringResult result)
-        {
-            return result.Success
+            => result.Success
                 ? AuthorityDecision.Accept(requestId)
                 : AuthorityDecision.Reject(requestId, result.Code, result.Message);
-        }
 
         private static AuthorityDecision FromCombatTargetingResult(Guid requestId, CombatTargetingResult result)
-        {
-            return result.Success
+            => result.Success
                 ? AuthorityDecision.Accept(requestId)
                 : AuthorityDecision.Reject(requestId, result.Code, result.Message);
-        }
 
         private static AuthorityDecision FromProductionResult(Guid requestId, ProductionResult result)
-        {
-            return result.Success
+            => result.Success
                 ? AuthorityDecision.Accept(requestId)
                 : AuthorityDecision.Reject(requestId, result.Code, result.Code);
-        }
+
+        private static AuthorityDecision FromBankResult(Guid requestId, BankTransactionResult result)
+            => result.Success
+                ? AuthorityDecision.Accept(requestId)
+                : AuthorityDecision.Reject(requestId, result.Code, result.Code);
+
+        private static AuthorityDecision FromShopResult(Guid requestId, ShopTransactionResult result)
+            => result.Success
+                ? AuthorityDecision.Accept(requestId)
+                : AuthorityDecision.Reject(requestId, result.Code, result.Code);
+
+        private static AuthorityDecision FromFarmingResult(Guid requestId, FarmingResult result)
+            => result.Success
+                ? AuthorityDecision.Accept(requestId)
+                : AuthorityDecision.Reject(requestId, result.Code, result.Code);
+
+        private static AuthorityDecision FromFiremakingResult(Guid requestId, FiremakingResult result)
+            => result.Success
+                ? AuthorityDecision.Accept(requestId)
+                : AuthorityDecision.Reject(requestId, result.Code, result.Code);
     }
 }
