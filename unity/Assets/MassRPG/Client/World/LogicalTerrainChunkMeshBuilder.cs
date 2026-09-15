@@ -8,9 +8,10 @@ using UnityEngine.Rendering;
 namespace MassRPG.Client.World
 {
     /// <summary>
-    /// First production-bound visual mesh builder for exact authored logical terrain. It renders
-    /// one top quad per loaded 1x1 cell and vertical cliff faces where a cardinal neighbour is
-    /// lower. Logical elevation/pathing remain data; visual meshes are disposable chunk views.
+    /// Production-bound visual mesh builder for exact authored logical terrain. It renders one top
+    /// surface per loaded 1x1 cell, slopes lower cells toward legal +1 elevation-transition edges,
+    /// and renders vertical cliff faces where a higher cell borders a lower non-ramp neighbour.
+    /// Logical elevation/pathing remain data; visual meshes are disposable chunk views.
     /// </summary>
     public static class LogicalTerrainChunkMeshBuilder
     {
@@ -44,19 +45,30 @@ namespace MassRPG.Client.World
                     var location = new GridLocation(tile, plane, storey);
                     if (!store.TryGetCell(location, out var cell)) continue;
 
-                    var height = cell.Elevation * elevationStepHeight;
-                    AddTop(vertices, triangles, uvs, localX * tileSize, localY * tileSize, tileSize, height);
+                    var baseHeight = cell.Elevation * elevationStepHeight;
+                    var cornerHeights = GetTopCornerHeights(store, location, cell, baseHeight, elevationStepHeight);
+                    AddTop(
+                        vertices,
+                        triangles,
+                        uvs,
+                        localX * tileSize,
+                        localY * tileSize,
+                        tileSize,
+                        cornerHeights.NorthWest,
+                        cornerHeights.SouthWest,
+                        cornerHeights.SouthEast,
+                        cornerHeights.NorthEast);
 
-                    AddCliffIfLower(store, vertices, triangles, uvs, location, cell.Elevation,
+                    AddCliffIfLower(store, vertices, triangles, uvs, location, cell,
                         new GridCoord(tile.X, tile.Y - 1), localX, localY, CardinalEdgeMask.North,
                         tileSize, elevationStepHeight);
-                    AddCliffIfLower(store, vertices, triangles, uvs, location, cell.Elevation,
+                    AddCliffIfLower(store, vertices, triangles, uvs, location, cell,
                         new GridCoord(tile.X + 1, tile.Y), localX, localY, CardinalEdgeMask.East,
                         tileSize, elevationStepHeight);
-                    AddCliffIfLower(store, vertices, triangles, uvs, location, cell.Elevation,
+                    AddCliffIfLower(store, vertices, triangles, uvs, location, cell,
                         new GridCoord(tile.X, tile.Y + 1), localX, localY, CardinalEdgeMask.South,
                         tileSize, elevationStepHeight);
-                    AddCliffIfLower(store, vertices, triangles, uvs, location, cell.Elevation,
+                    AddCliffIfLower(store, vertices, triangles, uvs, location, cell,
                         new GridCoord(tile.X - 1, tile.Y), localX, localY, CardinalEdgeMask.West,
                         tileSize, elevationStepHeight);
                 }
@@ -72,6 +84,59 @@ namespace MassRPG.Client.World
             return mesh;
         }
 
+        private static TopCornerHeights GetTopCornerHeights(
+            AuthoredWorldPageStore store,
+            GridLocation current,
+            AuthoredTileCell cell,
+            float baseHeight,
+            float elevationStepHeight)
+        {
+            var heights = new TopCornerHeights(baseHeight);
+            RaiseTransitionEdge(store, current, cell, CardinalEdgeMask.North, new GridCoord(current.Tile.X, current.Tile.Y - 1), elevationStepHeight, ref heights);
+            RaiseTransitionEdge(store, current, cell, CardinalEdgeMask.East, new GridCoord(current.Tile.X + 1, current.Tile.Y), elevationStepHeight, ref heights);
+            RaiseTransitionEdge(store, current, cell, CardinalEdgeMask.South, new GridCoord(current.Tile.X, current.Tile.Y + 1), elevationStepHeight, ref heights);
+            RaiseTransitionEdge(store, current, cell, CardinalEdgeMask.West, new GridCoord(current.Tile.X - 1, current.Tile.Y), elevationStepHeight, ref heights);
+            return heights;
+        }
+
+        private static void RaiseTransitionEdge(
+            AuthoredWorldPageStore store,
+            GridLocation current,
+            AuthoredTileCell currentCell,
+            CardinalEdgeMask edge,
+            GridCoord neighbourTile,
+            float elevationStepHeight,
+            ref TopCornerHeights heights)
+        {
+            if ((currentCell.ElevationTransitionEdges & edge) == 0) return;
+            if (!WorldConstants.IsInsideWorld(neighbourTile)) return;
+            var neighbour = new GridLocation(neighbourTile, current.Plane, current.Storey);
+            if (!store.TryGetCell(neighbour, out var neighbourCell)) return;
+            if (neighbourCell.Elevation != currentCell.Elevation + 1) return;
+            if ((neighbourCell.ElevationTransitionEdges & CardinalEdges.Opposite(edge)) == 0) return;
+
+            var raised = neighbourCell.Elevation * elevationStepHeight;
+            switch (edge)
+            {
+                case CardinalEdgeMask.North:
+                    heights.NorthWest = Mathf.Max(heights.NorthWest, raised);
+                    heights.NorthEast = Mathf.Max(heights.NorthEast, raised);
+                    break;
+                case CardinalEdgeMask.East:
+                    heights.NorthEast = Mathf.Max(heights.NorthEast, raised);
+                    heights.SouthEast = Mathf.Max(heights.SouthEast, raised);
+                    break;
+                case CardinalEdgeMask.South:
+                    heights.SouthWest = Mathf.Max(heights.SouthWest, raised);
+                    heights.SouthEast = Mathf.Max(heights.SouthEast, raised);
+                    break;
+                case CardinalEdgeMask.West:
+                    heights.NorthWest = Mathf.Max(heights.NorthWest, raised);
+                    heights.SouthWest = Mathf.Max(heights.SouthWest, raised);
+                    break;
+            }
+        }
+
         private static void AddTop(
             List<Vector3> vertices,
             List<int> triangles,
@@ -79,14 +144,17 @@ namespace MassRPG.Client.World
             float centerX,
             float centerZ,
             float tileSize,
-            float height)
+            float northWest,
+            float southWest,
+            float southEast,
+            float northEast)
         {
             var half = tileSize * 0.5f;
             var first = vertices.Count;
-            vertices.Add(new Vector3(centerX - half, height, centerZ - half));
-            vertices.Add(new Vector3(centerX - half, height, centerZ + half));
-            vertices.Add(new Vector3(centerX + half, height, centerZ + half));
-            vertices.Add(new Vector3(centerX + half, height, centerZ - half));
+            vertices.Add(new Vector3(centerX - half, northWest, centerZ - half));
+            vertices.Add(new Vector3(centerX - half, southWest, centerZ + half));
+            vertices.Add(new Vector3(centerX + half, southEast, centerZ + half));
+            vertices.Add(new Vector3(centerX + half, northEast, centerZ - half));
             uvs.Add(new Vector2(0f, 0f));
             uvs.Add(new Vector2(0f, 1f));
             uvs.Add(new Vector2(1f, 1f));
@@ -105,7 +173,7 @@ namespace MassRPG.Client.World
             List<int> triangles,
             List<Vector2> uvs,
             GridLocation current,
-            short currentElevation,
+            AuthoredTileCell currentCell,
             GridCoord neighbourTile,
             int localX,
             int localY,
@@ -116,9 +184,18 @@ namespace MassRPG.Client.World
             if (!WorldConstants.IsInsideWorld(neighbourTile)) return;
             var neighbour = new GridLocation(neighbourTile, current.Plane, current.Storey);
             if (!store.TryGetCell(neighbour, out var neighbourCell)) return;
-            if (neighbourCell.Elevation >= currentElevation) return;
+            if (neighbourCell.Elevation >= currentCell.Elevation) return;
 
-            var upper = currentElevation * elevationStepHeight;
+            // A legal authored +1 transition is drawn as a ramp on the lower tile, not as a cliff on
+            // the higher tile. Require transition bits on both sides so corrupt half-edges still show
+            // a visible cliff instead of creating a misleading traversable-looking seam.
+            var opposite = CardinalEdges.Opposite(edge);
+            var isOneStepRamp = currentCell.Elevation == neighbourCell.Elevation + 1
+                && (currentCell.ElevationTransitionEdges & edge) != 0
+                && (neighbourCell.ElevationTransitionEdges & opposite) != 0;
+            if (isOneStepRamp) return;
+
+            var upper = currentCell.Elevation * elevationStepHeight;
             var lower = neighbourCell.Elevation * elevationStepHeight;
             AddCliffFace(vertices, triangles, uvs, localX * tileSize, localY * tileSize, tileSize, lower, upper, edge);
         }
@@ -186,6 +263,22 @@ namespace MassRPG.Client.World
             triangles.Add(first);
             triangles.Add(first + 2);
             triangles.Add(first + 3);
+        }
+
+        private struct TopCornerHeights
+        {
+            public TopCornerHeights(float height)
+            {
+                NorthWest = height;
+                SouthWest = height;
+                SouthEast = height;
+                NorthEast = height;
+            }
+
+            public float NorthWest;
+            public float SouthWest;
+            public float SouthEast;
+            public float NorthEast;
         }
     }
 }
