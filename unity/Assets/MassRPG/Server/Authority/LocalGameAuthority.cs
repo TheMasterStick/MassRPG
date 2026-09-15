@@ -26,6 +26,7 @@ namespace MassRPG.Server.Authority
         private readonly ProductionService _production;
         private readonly CreatureRegistry _creatures;
         private readonly CreatureCombatSimulationService _creatureCombat;
+        private readonly CreaturePopulationService _creaturePopulations;
 
         public LocalGameAuthority(
             IItemRuleSource itemRules,
@@ -35,7 +36,8 @@ namespace MassRPG.Server.Authority
             CombatSimulationService combatSimulation = null,
             ProductionService production = null,
             CreatureRegistry creatures = null,
-            CreatureCombatSimulationService creatureCombat = null)
+            CreatureCombatSimulationService creatureCombat = null,
+            CreaturePopulationService creaturePopulations = null)
         {
             _itemRules = itemRules ?? throw new ArgumentNullException(nameof(itemRules));
             _movementMap = movementMap;
@@ -45,6 +47,7 @@ namespace MassRPG.Server.Authority
             _production = production;
             _creatures = creatures;
             _creatureCombat = creatureCombat;
+            _creaturePopulations = creaturePopulations;
         }
 
         public void RegisterPlayer(PlayerState player)
@@ -166,7 +169,12 @@ namespace MassRPG.Server.Authority
                 return CombatAdvanceResult.State(CombatAdvanceKind.Failed, "combat_simulation_unavailable");
             if (!_players.TryGetValue(characterId, out var player))
                 return CombatAdvanceResult.State(CombatAdvanceKind.Failed, "unknown_character");
-            return _combatSimulation.AdvancePlayerAttack(player, nowUnixMilliseconds, random01);
+
+            var targetBeforeAttack = player.Combat.TargetActorId;
+            var result = _combatSimulation.AdvancePlayerAttack(player, nowUnixMilliseconds, random01);
+            if (result.Kind == CombatAdvanceKind.TargetKilled && targetBeforeAttack.HasValue)
+                _creaturePopulations?.RecordKillForInstance(targetBeforeAttack.Value, nowUnixMilliseconds);
+            return result;
         }
 
         public int AdvanceAllCombat(long nowUnixMilliseconds, Func<double> random01)
@@ -177,8 +185,11 @@ namespace MassRPG.Server.Authority
             var attacksResolved = 0;
             foreach (var player in _players.Values)
             {
+                var targetBeforeAttack = player.Combat.TargetActorId;
                 var result = _combatSimulation.AdvancePlayerAttack(player, nowUnixMilliseconds, random01);
                 if (result.DidAttack) attacksResolved++;
+                if (result.Kind == CombatAdvanceKind.TargetKilled && targetBeforeAttack.HasValue)
+                    _creaturePopulations?.RecordKillForInstance(targetBeforeAttack.Value, nowUnixMilliseconds);
             }
             return attacksResolved;
         }
