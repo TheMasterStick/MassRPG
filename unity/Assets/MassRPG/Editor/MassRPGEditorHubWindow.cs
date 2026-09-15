@@ -15,7 +15,7 @@ namespace MassRPG.Editor
         {
             var window = GetWindow<MassRPGEditorHubWindow>();
             window.titleContent = new GUIContent("MassRPG Editor");
-            window.minSize = new Vector2(470, 570);
+            window.minSize = new Vector2(470, 620);
             window.Show();
         }
 
@@ -37,12 +37,13 @@ namespace MassRPG.Editor
             Button("POI Editor", "Place public/hidden POIs with independent visible and protection footprints.", MassRPGPointOfInterestEditorWindow.Open);
 
             Section("Actors, objects & resources");
+            Button("Biome Dressing", "Generate deterministic trees/scenery with density overrides, clearings and sparse manual removals.", MassRPGBiomeDressingEditorWindow.Open);
             Button("Creature Spawns", "Author fixed-cap creature populations, roam areas and optional patrol routes.", MassRPGCreatureSpawnEditorWindow.Open);
             Button("Placement Editor", "Place anchored objects, deliberate resources, NPC anchors, transport nodes and manual doodads.", MassRPGPlacementEditorWindow.Open);
 
             GUILayout.FlexibleSpace();
             EditorGUILayout.HelpBox(
-                "Still in progress: searchable content palettes, deterministic biome-dressing controls, selection/stamps in the main 1x1 UI, recovery restore UI and Play From Here.",
+                "Still in progress: searchable content palettes, richer polygon dressing overrides, selection/stamps in the main 1x1 UI, recovery restore UI and Play From Here.",
                 MessageType.None);
             GUILayout.Label("Unity 6.3 LTS · MassRPG authored-world tools", EditorStyles.centeredGreyMiniLabel);
         }
