@@ -2,6 +2,7 @@ using System;
 using MassRPG.Core.Characters;
 using MassRPG.Core.Content;
 using MassRPG.Core.Inventory;
+using MassRPG.Core.Skills;
 using MassRPG.Core.World;
 using MassRPG.Data.Firemaking;
 using MassRPG.Data.Items;
@@ -23,14 +24,14 @@ namespace MassRPG.Tests
             var player = new PlayerState(Guid.NewGuid(), "Firemaker");
             InventoryRules.AddItem(player.Inventory, items, FiremakingService.TinderboxId, 1);
             InventoryRules.AddItem(player.Inventory, items, new ContentId("normal_logs"), 2);
-            var xpBefore = player.Skills.GetXp(Core.Skills.SkillId.Firemaking);
+            var xpBefore = player.Skills.GetXp(SkillId.Firemaking);
 
             var result = service.Light(player, new ContentId("normal_logs"), 1_000, Guid.NewGuid());
 
             Assert.IsTrue(result.Success);
             Assert.AreEqual(91_000, result.ExpiresAtUnixMilliseconds);
             Assert.AreEqual(1, player.Inventory.CountItem(new ContentId("normal_logs")));
-            Assert.AreEqual(xpBefore + 40, player.Skills.GetXp(Core.Skills.SkillId.Firemaking));
+            Assert.AreEqual(xpBefore + 40, player.Skills.GetXp(SkillId.Firemaking));
             Assert.IsTrue(fires.TryGet(player.Location, 90_999, out _));
             Assert.IsFalse(fires.TryGet(player.Location, 91_000, out _));
         }
