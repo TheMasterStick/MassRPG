@@ -18,13 +18,20 @@ namespace MassRPG.Server.Pvp
 
     public readonly struct PvpAttackResult
     {
-        public PvpAttackResult(PvpAttackKind kind, string code, int damage = 0, bool hit = false, double hitChance = 0.0)
+        public PvpAttackResult(
+            PvpAttackKind kind,
+            string code,
+            int damage = 0,
+            bool hit = false,
+            double hitChance = 0.0,
+            PvpDeathResult? deathResult = null)
         {
             Kind = kind;
             Code = code;
             Damage = damage;
             Hit = hit;
             HitChance = hitChance;
+            DeathResult = deathResult;
         }
 
         public PvpAttackKind Kind { get; }
@@ -32,13 +39,17 @@ namespace MassRPG.Server.Pvp
         public int Damage { get; }
         public bool Hit { get; }
         public double HitChance { get; }
+        public PvpDeathResult? DeathResult { get; }
         public bool DidAttack => Kind == PvpAttackKind.Attacked || Kind == PvpAttackKind.TargetKilled;
+        public bool DeathResolved => DeathResult.HasValue && DeathResult.Value.Success;
     }
 
     /// <summary>
     /// Authoritative player-versus-player autoattack resolution. PvP eligibility is checked on every
     /// attack attempt so entering a protected area or changing voluntary flags takes effect without
     /// trusting stale client state. Range/LOS/elevation use the same logical combat geometry as PvE.
+    /// A configured PvP death service settles lethal attacks immediately so loot/respawn cannot be
+    /// forgotten by a presentation client or a higher-level input adapter.
     /// </summary>
     public sealed class PvpCombatService
     {
@@ -47,19 +58,22 @@ namespace MassRPG.Server.Pvp
         private readonly IGridTraversalMap _movementMap;
         private readonly IRangedLineOfSightMap _lineOfSight;
         private readonly RangedAmmunitionService _ammunition;
+        private readonly PvpDeathService _deaths;
 
         public PvpCombatService(
             PvpService pvp,
             IPlayerAttackProfileSource profiles,
             IGridTraversalMap movementMap,
             IRangedLineOfSightMap lineOfSight,
-            RangedAmmunitionService ammunition = null)
+            RangedAmmunitionService ammunition = null,
+            PvpDeathService deaths = null)
         {
             _pvp = pvp ?? throw new ArgumentNullException(nameof(pvp));
             _profiles = profiles ?? throw new ArgumentNullException(nameof(profiles));
             _movementMap = movementMap ?? throw new ArgumentNullException(nameof(movementMap));
             _lineOfSight = lineOfSight ?? throw new ArgumentNullException(nameof(lineOfSight));
             _ammunition = ammunition;
+            _deaths = deaths;
         }
 
         public PvpAttackResult TryAttack(
@@ -117,6 +131,29 @@ namespace MassRPG.Server.Pvp
 
             if (!defender.IsAlive)
             {
+                var wasSkulledAggressor = _pvp.GetOrCreate(defender.CharacterId).IsSkulled(nowUnixMilliseconds);
+                if (_deaths != null)
+                {
+                    var death = _deaths.ResolveDeath(
+                        defender,
+                        wasSkulledAggressor,
+                        attacker.CharacterId,
+                        nowUnixMilliseconds);
+                    if (!death.Success)
+                    {
+                        defender.Combat.End();
+                        defender.Movement.Clear();
+                        defender.Production.Clear();
+                    }
+                    return new PvpAttackResult(
+                        PvpAttackKind.TargetKilled,
+                        death.Success ? "target_killed_respawned" : "target_killed_death_unresolved",
+                        damage,
+                        hit,
+                        hitChance,
+                        death);
+                }
+
                 defender.Combat.End();
                 defender.Movement.Clear();
                 defender.Production.Clear();
