@@ -59,10 +59,67 @@ namespace MassRPG.Core.Construction
         public int RotationQuarterTurns { get; }
 
         public GridLocation Resolve(GridLocation origin)
-            => new GridLocation(
-                new GridCoord(origin.Tile.X + OffsetX, origin.Tile.Y + OffsetY),
+            => Resolve(origin, 0);
+
+        /// <summary>
+        /// Resolves the relative piece after rotating the complete blueprint clockwise around its
+        /// chosen origin. World coordinates use +X east and +Y south, so a clockwise quarter-turn
+        /// transforms (x,y) to (-y,x): north (0,-1) becomes east (1,0).
+        /// </summary>
+        public GridLocation Resolve(GridLocation origin, int blueprintRotationQuarterTurns)
+        {
+            var rotation = NormalizeRotation(blueprintRotationQuarterTurns);
+            RotateOffset(OffsetX, OffsetY, rotation, out var x, out var y);
+            return new GridLocation(
+                new GridCoord(origin.Tile.X + x, origin.Tile.Y + y),
                 origin.Plane,
                 origin.Storey + StoreyOffset);
+        }
+
+        public CardinalEdgeMask ResolveEdge(int blueprintRotationQuarterTurns)
+            => RotateEdge(Edge, blueprintRotationQuarterTurns);
+
+        public int ResolveRotationQuarterTurns(int blueprintRotationQuarterTurns)
+            => NormalizeRotation(RotationQuarterTurns + blueprintRotationQuarterTurns);
+
+        public static void RotateOffset(int x, int y, int quarterTurns, out int rotatedX, out int rotatedY)
+        {
+            switch (NormalizeRotation(quarterTurns))
+            {
+                case 0:
+                    rotatedX = x;
+                    rotatedY = y;
+                    return;
+                case 1:
+                    rotatedX = -y;
+                    rotatedY = x;
+                    return;
+                case 2:
+                    rotatedX = -x;
+                    rotatedY = -y;
+                    return;
+                default:
+                    rotatedX = y;
+                    rotatedY = -x;
+                    return;
+            }
+        }
+
+        public static CardinalEdgeMask RotateEdge(CardinalEdgeMask edge, int quarterTurns)
+        {
+            var result = edge;
+            var turns = NormalizeRotation(quarterTurns);
+            for (var i = 0; i < turns; i++)
+            {
+                var next = CardinalEdgeMask.None;
+                if ((result & CardinalEdgeMask.North) != 0) next |= CardinalEdgeMask.East;
+                if ((result & CardinalEdgeMask.East) != 0) next |= CardinalEdgeMask.South;
+                if ((result & CardinalEdgeMask.South) != 0) next |= CardinalEdgeMask.West;
+                if ((result & CardinalEdgeMask.West) != 0) next |= CardinalEdgeMask.North;
+                result = next;
+            }
+            return result;
+        }
 
         private static int NormalizeRotation(int quarterTurns)
         {
