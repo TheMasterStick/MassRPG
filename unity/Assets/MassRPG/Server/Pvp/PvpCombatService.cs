@@ -1,7 +1,6 @@
 using System;
 using MassRPG.Core.Characters;
 using MassRPG.Core.Combat;
-using MassRPG.Core.Inventory;
 using MassRPG.Core.Skills;
 using MassRPG.Core.World;
 using MassRPG.Server.Combat;
@@ -110,7 +109,9 @@ namespace MassRPG.Server.Pvp
                 if (!ammoResult.Success) return new PvpAttackResult(PvpAttackKind.Failed, ammoResult.Code);
             }
 
-            attacker.Combat.NextAttackAtUnixMilliseconds = checked(nowUnixMilliseconds + attack.AttackIntervalMilliseconds);
+            attacker.Combat.Begin(defender.CharacterId);
+            defender.Combat.Begin(attacker.CharacterId);
+            attacker.Combat.ScheduleNextAttack(nowUnixMilliseconds, attack.AttackIntervalMilliseconds);
             _pvp.MarkAggressor(attacker, defender, nowUnixMilliseconds);
             defender.CurrentHitpoints -= damage;
 
