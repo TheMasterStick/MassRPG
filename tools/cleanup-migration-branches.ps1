@@ -47,7 +47,13 @@ $SafeBranches = @(
 $LegacyDivergedBranch = 'junction-builder-work'
 $LegacyDivergedHead = '115bf2265a7b13cc7a349cbd9c6d74b49badc746'
 
-function Invoke-Git([string[]]$Arguments, [switch]$AllowFailure) {
+function Invoke-Git {
+    param(
+        [Parameter(Mandatory = $true, Position = 0)]
+        [string[]]$Arguments,
+        [switch]$AllowFailure
+    )
+
     & git @Arguments
     $code = $LASTEXITCODE
     if ($code -ne 0 -and -not $AllowFailure) {
@@ -60,11 +66,16 @@ if (-not (Test-Path '.git')) {
     throw 'Run this script from the root of the MassRPG Git working tree.'
 }
 
-Invoke-Git @('fetch', 'origin', '--prune') | Out-Null
-Invoke-Git @('rev-parse', '--verify', "origin/$Canonical") | Out-Null
+Invoke-Git -Arguments @('fetch', 'origin', '--prune') | Out-Null
+Invoke-Git -Arguments @('rev-parse', '--verify', "origin/$Canonical") | Out-Null
 
 Write-Host "Canonical branch: $Canonical"
-Write-Host ($Apply ? 'Mode: APPLY (remote branches will be deleted)' : 'Mode: DRY RUN (nothing will be deleted)')
+if ($Apply) {
+    Write-Host 'Mode: APPLY (remote branches will be deleted)'
+}
+else {
+    Write-Host 'Mode: DRY RUN (nothing will be deleted)'
+}
 Write-Host ''
 
 foreach ($branch in $SafeBranches) {
@@ -82,7 +93,7 @@ foreach ($branch in $SafeBranches) {
 
     if ($Apply) {
         Write-Host "[delete] $branch"
-        Invoke-Git @('push', 'origin', '--delete', $branch) | Out-Null
+        Invoke-Git -Arguments @('push', 'origin', '--delete', $branch) | Out-Null
     }
     else {
         Write-Host "[would delete] $branch"
@@ -98,7 +109,7 @@ if ($DeleteLegacyJunctionWork) {
         }
         elseif ($Apply) {
             Write-Host "[delete audited legacy experiment] $LegacyDivergedBranch"
-            Invoke-Git @('push', 'origin', '--delete', $LegacyDivergedBranch) | Out-Null
+            Invoke-Git -Arguments @('push', 'origin', '--delete', $LegacyDivergedBranch) | Out-Null
         }
         else {
             Write-Host "[would delete audited legacy experiment] $LegacyDivergedBranch"
