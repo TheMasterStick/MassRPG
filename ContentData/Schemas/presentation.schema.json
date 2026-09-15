@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "massrpg://schemas/presentation.schema.json",
+  "title": "MassRPG Presentation Metadata",
+  "type": "object",
+  "required": ["assetState"],
+  "properties": {
+    "assetState": {
+      "enum": ["needs-assets", "placeholder", "linked", "final", "not-required"]
+    },
+    "iconAssetId": {
+      "type": ["string", "null"],
+      "pattern": "^[a-z0-9][a-z0-9._/-]{1,79}$"
+    },
+    "modelAssetId": {
+      "type": ["string", "null"],
+      "pattern": "^[a-z0-9][a-z0-9._/-]{1,79}$"
+    },
+    "portraitAssetId": {
+      "type": ["string", "null"],
+      "pattern": "^[a-z0-9][a-z0-9._/-]{1,79}$"
+    },
+    "animationSetAssetId": {
+      "type": ["string", "null"],
+      "pattern": "^[a-z0-9][a-z0-9._/-]{1,79}$"
+    },
+    "notes": { "type": "string", "maxLength": 2000 }
+  },
+  "additionalProperties": false
+}
