@@ -68,7 +68,6 @@ namespace MassRPG.Tests
             Assert.AreEqual(CombatAdvanceKind.Approaching, approaching.Kind);
             Assert.AreEqual(3, setup.Player.Inventory.CountItem(ArrowId));
 
-            // Put the player in range and resolve one shot.
             setup.Player.Location = Loc(14, 10);
             var attack = setup.Combat.AdvancePlayerAttack(setup.Player, 1001, Sequence(0.0, 0.0));
             Assert.IsTrue(attack.DidAttack);
@@ -123,7 +122,7 @@ namespace MassRPG.Tests
             var occupancy = new CreatureOccupancyIndex();
             var profiles = new DataDrivenPlayerAttackProfileSource(items, fallbackRangedRangeTiles: fallbackRange);
             var ammunition = new RangedAmmunitionService(items);
-            var approach = new CombatApproachPlanner(map, map, occupancy);
+            var approach = new CombatApproachPlanner(map, map);
             var combat = new CombatSimulationService(registry, definitions, profiles, approach, map, ammunition: ammunition);
             var player = new PlayerState(Guid.NewGuid(), "Archer");
             return new Setup(map, items, definitions, registry, occupancy, profiles, ammunition, combat, player);
