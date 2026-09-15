@@ -34,6 +34,7 @@ namespace MassRPG.Client.World
         private RenderChunkKey _focusChunk;
         private bool _hasFocusChunk;
         private Material _runtimeFallbackMaterial;
+        private bool _ownsStore = true;
 
         public AuthoredWorldPageStore LoadedWorld => _store;
         public int ActiveChunkCount => _views.Count;
@@ -67,11 +68,37 @@ namespace MassRPG.Client.World
         }
 
         public void Configure(GridPresentationSpace space, LogicalActorView actor, Material material = null)
+            => Configure(space, actor, null, material);
+
+        /// <summary>
+        /// Uses an existing sparse world store when supplied. This is important for local-authority
+        /// testing: pathfinding/combat and terrain streaming then observe the exact same loaded tile
+        /// data rather than maintaining separate copies that could disagree at page boundaries.
+        /// </summary>
+        public void Configure(
+            GridPresentationSpace space,
+            LogicalActorView actor,
+            AuthoredWorldPageStore sharedWorld,
+            Material material = null)
         {
             presentationSpace = space;
             focusActor = actor;
             if (material != null) terrainMaterial = material;
-            EnsureInitialized();
+
+            if (sharedWorld != null && !ReferenceEquals(_store, sharedWorld))
+            {
+                ClearViews();
+                _store = sharedWorld;
+                _ownsStore = false;
+                RebuildLoadedPageIndex();
+                _knownMissingPages.Clear();
+                _hasFocusChunk = false;
+            }
+            else
+            {
+                EnsureInitialized();
+            }
+
             if (focusActor != null && focusActor.HasAuthoritativeState)
             {
                 _focusChunk = RenderChunkKey.FromLocation(focusActor.LogicalLocation);
@@ -99,6 +126,15 @@ namespace MassRPG.Client.World
             if (_store != null) return;
             if (!ContentId.TryCreate(defaultGroundId, out var ground)) ground = new ContentId("ground.default");
             _store = new AuthoredWorldPageStore(ground, WorldConstants.DefaultStoragePageSize);
+            _ownsStore = true;
+            _loadedPages.Clear();
+        }
+
+        private void RebuildLoadedPageIndex()
+        {
+            _loadedPages.Clear();
+            if (_store == null) return;
+            foreach (var page in _store.LoadedPages) _loadedPages.Add(page.Key);
         }
 
         private void RefreshAroundFocus(bool rebuildExisting)
@@ -127,7 +163,9 @@ namespace MassRPG.Client.World
         {
             foreach (var key in wantedPages)
             {
-                if (forceReload && _loadedPages.Contains(key))
+                // Shared authoritative stores may contain mutable runtime state in the future. Do not
+                // throw their existing pages away merely because the presentation requested a rebuild.
+                if (forceReload && _ownsStore && _loadedPages.Contains(key))
                 {
                     _store.UnloadPage(key);
                     _loadedPages.Remove(key);
