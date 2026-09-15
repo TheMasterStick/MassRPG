@@ -15,6 +15,7 @@ const roots = {
   creatures: path.join(draftRoot, 'creatures'),
   resources: path.join(draftRoot, 'resources'),
   recipes: path.join(draftRoot, 'recipes'),
+  definitions: path.join(draftRoot, 'definitions'),
 };
 const port = Number.parseInt(process.env.PORT ?? '4175', 10);
 const host = process.env.HOST ?? '0.0.0.0';
@@ -40,6 +41,7 @@ const gatheringToolKinds = new Set([
 const availabilityModes = new Set(['Personal', 'Shared']);
 const dispositions = new Set(['Passive', 'Neutral', 'Aggressive']);
 const combatStyles = new Set(['Melee', 'Ranged', 'Magic']);
+const assetStates = new Set(['needs-assets', 'placeholder', 'linked', 'final', 'not-required']);
 const contentIdPattern = /^[a-z0-9][a-z0-9._/-]{1,79}$/;
 
 await Promise.all(Object.values(roots).map(root => mkdir(root, { recursive: true })));
@@ -131,16 +133,36 @@ function asName(value, field = 'Display name') {
   return name;
 }
 
+function asText(value, field, maximum) {
+  const textValue = String(value ?? '');
+  if (textValue.length > maximum) throw new Error(`${field} must be ${maximum} characters or less.`);
+  return textValue;
+}
+
 function stateOf(input) {
   return input.editorState === 'ready-for-review' ? 'ready-for-review' : 'draft';
+}
+
+function normalizePresentation(input, defaultAssetState = 'needs-assets') {
+  const raw = input?.presentation;
+  const source = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+  const assetState = String(source.assetState ?? defaultAssetState);
+  if (!assetStates.has(assetState)) throw new Error(`Unknown presentation asset state '${assetState}'.`);
+  return {
+    assetState,
+    iconAssetId: asId(source.iconAssetId, 'Icon asset ID', true),
+    modelAssetId: asId(source.modelAssetId, 'Model asset ID', true),
+    portraitAssetId: asId(source.portraitAssetId, 'Portrait asset ID', true),
+    animationSetAssetId: asId(source.animationSetAssetId, 'Animation-set asset ID', true),
+    notes: asText(source.notes, 'Presentation notes', 2000),
+  };
 }
 
 function normalizeItem(input) {
   ensureObject(input, 'Item');
   const id = asId(input.id);
   const displayName = asName(input.displayName);
-  const description = String(input.description ?? '');
-  if (description.length > 2000) throw new Error('Description must be 2000 characters or less.');
+  const description = asText(input.description, 'Description', 2000);
   const type = String(input.type ?? 'Miscellaneous');
   if (!itemTypes.has(type)) throw new Error(`Unknown item type '${type}'.`);
 
@@ -186,6 +208,7 @@ function normalizeItem(input) {
       rangedStrength: asInteger(bonusInput.rangedStrength ?? 0, 'Ranged strength bonus'),
       magic: asInteger(bonusInput.magic ?? 0, 'Magic bonus'),
     },
+    presentation: normalizePresentation(input, 'needs-assets'),
     editorState: stateOf(input),
   };
 
@@ -223,6 +246,7 @@ function normalizeCreature(input) {
     aggroRadiusTiles: asInteger(input.aggroRadiusTiles ?? 4, 'Aggro radius', 0),
     leashRadiusTiles: asInteger(input.leashRadiusTiles ?? 8, 'Leash radius', 0),
     persistentNamedInstance: asBoolean(input.persistentNamedInstance ?? false, 'Persistent named instance'),
+    presentation: normalizePresentation(input, 'needs-assets'),
     editorState: stateOf(input),
   };
 }
@@ -253,6 +277,7 @@ function normalizeResource(input) {
     maximumYield,
     requiredToolKind,
     minimumToolTier: asInteger(input.minimumToolTier ?? 0, 'Minimum tool tier', 0),
+    presentation: normalizePresentation(input, 'needs-assets'),
     editorState: stateOf(input),
   };
 }
@@ -292,6 +317,33 @@ function normalizeRecipe(input) {
     canBurn,
     failureOutputItemId,
     failureXpFraction: asNumber(input.failureXpFraction ?? 0.10, 'Failure XP fraction', 0, 1),
+    presentation: normalizePresentation(input, 'not-required'),
+    editorState: stateOf(input),
+  };
+}
+
+function normalizeDefinition(input) {
+  ensureObject(input, 'Definition');
+  const kind = String(input.kind ?? 'Other').trim();
+  if (!kind || kind.length > 60) throw new Error('Definition kind must be 1-60 characters.');
+  const tags = Array.isArray(input.tags)
+    ? input.tags.map(value => String(value).trim()).filter(Boolean)
+    : [];
+  if (tags.length > 32) throw new Error('A definition may have at most 32 tags.');
+  if (tags.some(tag => tag.length > 50)) throw new Error('Definition tags must be 50 characters or less.');
+  const rawData = input.data == null ? {} : input.data;
+  ensureObject(rawData, 'Definition data');
+
+  return {
+    schemaVersion: 1,
+    id: asId(input.id),
+    displayName: asName(input.displayName),
+    kind,
+    description: asText(input.description, 'Description', 5000),
+    tags: [...new Set(tags)],
+    notes: asText(input.notes, 'Design notes', 10000),
+    data: rawData,
+    presentation: normalizePresentation(input, 'needs-assets'),
     editorState: stateOf(input),
   };
 }
@@ -301,6 +353,7 @@ const normalizers = {
   creatures: normalizeCreature,
   resources: normalizeResource,
   recipes: normalizeRecipe,
+  definitions: normalizeDefinition,
 };
 
 async function listDocuments(kind) {
@@ -328,6 +381,32 @@ async function saveDocument(kind, input) {
   const filePath = path.join(roots[kind], `${document.id}.json`);
   await writeFile(filePath, `${JSON.stringify(document, null, 2)}\n`, 'utf8');
   return document;
+}
+
+async function assetBacklog() {
+  const result = [];
+  for (const kind of Object.keys(roots)) {
+    const documents = await listDocuments(kind);
+    for (const document of documents) {
+      if (document?._loadError) continue;
+      const presentation = document?.presentation;
+      if (!presentation || presentation.assetState === 'final' || presentation.assetState === 'not-required') continue;
+      result.push({
+        kind,
+        id: document.id,
+        displayName: document.displayName,
+        definitionKind: document.kind ?? null,
+        assetState: presentation.assetState ?? 'needs-assets',
+        iconAssetId: presentation.iconAssetId ?? null,
+        modelAssetId: presentation.modelAssetId ?? null,
+        portraitAssetId: presentation.portraitAssetId ?? null,
+        animationSetAssetId: presentation.animationSetAssetId ?? null,
+        notes: presentation.notes ?? '',
+      });
+    }
+  }
+  result.sort((a, b) => `${a.kind}/${a.displayName}`.localeCompare(`${b.kind}/${b.displayName}`));
+  return result;
 }
 
 async function commitAndPush(message) {
@@ -363,16 +442,24 @@ const server = http.createServer(async (req, res) => {
       await servePage(res, 'index.html');
       return;
     }
-    if (req.method === 'GET' && ['/creatures', '/resources', '/recipes'].includes(url.pathname)) {
+    if (req.method === 'GET' && ['/creatures', '/resources', '/recipes', '/definitions'].includes(url.pathname)) {
       await servePage(res, 'structured.html');
+      return;
+    }
+    if (req.method === 'GET' && url.pathname === '/assets') {
+      await servePage(res, 'assets.html');
       return;
     }
     if (req.method === 'GET' && url.pathname === '/api/status') {
       json(res, 200, await repoStatus());
       return;
     }
+    if (req.method === 'GET' && url.pathname === '/api/asset-backlog') {
+      json(res, 200, { entries: await assetBacklog() });
+      return;
+    }
 
-    const match = url.pathname.match(/^\/api\/(items|creatures|resources|recipes)$/);
+    const match = url.pathname.match(/^\/api\/(items|creatures|resources|recipes|definitions)$/);
     if (match && req.method === 'GET') {
       const kind = match[1];
       const documents = await listDocuments(kind);
@@ -382,7 +469,7 @@ const server = http.createServer(async (req, res) => {
     if (match && req.method === 'POST') {
       const kind = match[1];
       const document = await saveDocument(kind, await readBody(req));
-      json(res, 200, { kind, document, [kind.slice(0, -1)]: document, status: await repoStatus() });
+      json(res, 200, { kind, document, status: await repoStatus() });
       return;
     }
     if (req.method === 'POST' && url.pathname === '/api/commit') {
