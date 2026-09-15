@@ -10,7 +10,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, '../..');
 const draftRoot = path.join(repoRoot, 'ContentData', 'Drafts');
 const candidateRoot = path.join(repoRoot, 'ContentData', 'Candidates');
-const kinds = ['items', 'creatures', 'resources', 'recipes'];
+const kinds = ['items', 'creatures', 'resources', 'recipes', 'definitions'];
 const args = process.argv.slice(2);
 const requireReady = args.includes('--require-ready');
 const labelArg = args.filter(arg => arg !== '--require-ready').join(' ').trim();
@@ -75,6 +75,14 @@ const shortCommit = sourceCommit.slice(0, 8);
 
 const documentCounts = Object.fromEntries(kinds.map(kind => [kind, 0]));
 const readyCounts = Object.fromEntries(kinds.map(kind => [kind, 0]));
+const assetStateCounts = {
+  'needs-assets': 0,
+  placeholder: 0,
+  linked: 0,
+  final: 0,
+  'not-required': 0,
+  unspecified: 0,
+};
 const files = [];
 
 for (const kind of kinds) {
@@ -84,13 +92,17 @@ for (const kind of kinds) {
     const bytes = await readFile(file.full);
     const document = JSON.parse(bytes.toString('utf8'));
     const editorState = document.editorState === 'ready-for-review' ? 'ready-for-review' : 'draft';
+    const assetState = document.presentation?.assetState ?? 'unspecified';
     documentCounts[kind] += 1;
     if (editorState === 'ready-for-review') readyCounts[kind] += 1;
+    if (assetStateCounts[assetState] === undefined) assetStateCounts.unspecified += 1;
+    else assetStateCounts[assetState] += 1;
     files.push({
       path: path.posix.join('ContentData', 'Drafts', kind, file.relative),
       sha256: createHash('sha256').update(bytes).digest('hex'),
       bytes: bytes.length,
       editorState,
+      assetState,
     });
   }
 }
@@ -115,6 +127,8 @@ const manifest = {
   sourceCommit,
   documentCounts,
   readyCounts,
+  assetStateCounts,
+  designOnlyDefinitionCount: documentCounts.definitions,
   allDraftsReady,
   files,
 };
@@ -125,5 +139,6 @@ await writeFile(output, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
 console.log(`Created candidate ${candidateId}`);
 console.log(`Source: ${branch}@${shortCommit}`);
 console.log(`Documents: ${total}; ready for review: ${ready}; all ready: ${allDraftsReady ? 'yes' : 'no'}`);
+console.log(`Generic design definitions: ${documentCounts.definitions}; unfinished asset entries: ${assetStateCounts['needs-assets'] + assetStateCounts.placeholder + assetStateCounts.linked}`);
 console.log(`Manifest: ${path.relative(repoRoot, output)}`);
-console.log('This is a review/local-test candidate only. It does not publish or activate live data.');
+console.log('This is a review/local-test candidate only. Generic definitions require promotion to typed runtime schemas before live publication.');
