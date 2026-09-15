@@ -7,6 +7,7 @@ using MassRPG.Core.Skills;
 using MassRPG.Core.World;
 using MassRPG.Data.Spells;
 using MassRPG.Server.Creatures;
+using MassRPG.Server.Pvp;
 
 namespace MassRPG.Server.Spells
 {
@@ -28,20 +29,27 @@ namespace MassRPG.Server.Spells
 
     /// <summary>
     /// Authoritative spell validation/execution. Reagents, skill requirements, cooldown, range and
-    /// logical LOS are server-owned. This foundation deliberately keeps exact spell balance in data.
+    /// logical LOS are server-owned. Player-target damage additionally passes through the same PvP
+    /// eligibility/skull policy as ordinary weapon attacks.
     /// </summary>
     public sealed class SpellCastingService
     {
         private readonly ISpellDefinitionSource _spells;
         private readonly IItemRuleSource _items;
         private readonly IRangedLineOfSightMap _lineOfSight;
+        private readonly PvpService _pvp;
         private readonly Dictionary<Guid, long> _nextCastAt = new Dictionary<Guid, long>();
 
-        public SpellCastingService(ISpellDefinitionSource spells, IItemRuleSource items, IRangedLineOfSightMap lineOfSight)
+        public SpellCastingService(
+            ISpellDefinitionSource spells,
+            IItemRuleSource items,
+            IRangedLineOfSightMap lineOfSight,
+            PvpService pvp = null)
         {
             _spells = spells ?? throw new ArgumentNullException(nameof(spells));
             _items = items ?? throw new ArgumentNullException(nameof(items));
             _lineOfSight = lineOfSight ?? throw new ArgumentNullException(nameof(lineOfSight));
+            _pvp = pvp;
         }
 
         public SpellCastResult TryCastOnCreature(
@@ -65,6 +73,42 @@ namespace MassRPG.Server.Spells
 
             var damage = Math.Min(spell.EffectMagnitude, target.CurrentHitpoints);
             target.CurrentHitpoints -= damage;
+            return new SpellCastResult(true, "ok", damage, !target.IsAlive);
+        }
+
+        public SpellCastResult TryCastOnPlayer(
+            PlayerState caster,
+            ContentId spellId,
+            PlayerState target,
+            long nowUnixMilliseconds)
+        {
+            if (caster == null) return new SpellCastResult(false, "caster_missing");
+            if (target == null || !target.IsAlive) return new SpellCastResult(false, "target_missing");
+            if (_pvp == null) return new SpellCastResult(false, "pvp_unavailable");
+            if (!_spells.TryGet(spellId, out var spell)) return new SpellCastResult(false, "spell_missing");
+            if (spell.TargetKind != SpellTargetKind.Player) return new SpellCastResult(false, "wrong_target_kind");
+            if (spell.EffectKind != SpellEffectKind.Damage) return new SpellCastResult(false, "unsupported_effect");
+
+            var pvpDecision = _pvp.EvaluateAttack(caster, target);
+            if (!pvpDecision.Allowed) return new SpellCastResult(false, pvpDecision.Code);
+            var validation = ValidateCommon(caster, spell, target.Location, nowUnixMilliseconds);
+            if (!validation.Success) return validation;
+
+            ConsumeReagents(caster, spell);
+            StartCooldown(caster.CharacterId, spell, nowUnixMilliseconds);
+            caster.Skills.AddXp(SkillId.Magic, spell.MagicXp);
+            _pvp.MarkAggressor(caster, target, nowUnixMilliseconds);
+            caster.Combat.Begin(target.CharacterId);
+            target.Combat.Begin(caster.CharacterId);
+
+            var damage = Math.Min(spell.EffectMagnitude, target.CurrentHitpoints);
+            target.CurrentHitpoints -= damage;
+            if (!target.IsAlive)
+            {
+                target.Combat.End();
+                target.Movement.Clear();
+                target.Production.Clear();
+            }
             return new SpellCastResult(true, "ok", damage, !target.IsAlive);
         }
 
