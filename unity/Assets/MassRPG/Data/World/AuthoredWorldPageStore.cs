@@ -40,6 +40,20 @@ namespace MassRPG.Data.World
             return page;
         }
 
+        /// <summary>
+        /// Installs a decoded page into the sparse store. Used by editor/runtime streaming so the
+        /// complete 180k world never has to be loaded at once.
+        /// </summary>
+        public void ImportPage(AuthoredWorldPage page, bool replaceExisting = true)
+        {
+            if (page == null) throw new ArgumentNullException(nameof(page));
+            if (page.PageSize != PageSize)
+                throw new InvalidOperationException($"Page size {page.PageSize} does not match store page size {PageSize}.");
+            if (_pages.ContainsKey(page.Key) && !replaceExisting)
+                throw new InvalidOperationException($"World page '{page.Key}' is already loaded.");
+            _pages[page.Key] = page;
+        }
+
         public bool TryGetPage(WorldPageKey key, out AuthoredWorldPage page) => _pages.TryGetValue(key, out page);
         public bool UnloadPage(WorldPageKey key) => _pages.Remove(key);
 
