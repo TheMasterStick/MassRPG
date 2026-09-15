@@ -15,7 +15,18 @@ dist-ssr
 # Generated runtime copies; canonical character animation frames stay in Female/, Male/, etc.
 /public/sprites/character_animations/
 
-# Editor directories and files
+# Unity generated directories. Commit Assets, Packages, ProjectSettings and all .meta files.
+/unity/[Ll]ibrary/
+/unity/[Tt]emp/
+/unity/[Oo]bj/
+/unity/[Bb]uild/
+/unity/[Bb]uilds/
+/unity/[Ll]ogs/
+/unity/[Uu]ser[Ss]ettings/
+/unity/[Mm]emoryCaptures/
+/unity/[Rr]ecordings/
+
+# IDE/editor generated files
 .vscode/*
 !.vscode/extensions.json
 .idea
@@ -24,4 +35,13 @@ dist-ssr
 *.ntvs*
 *.njsproj
 *.sln
+*.csproj
+*.unityproj
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
 *.sw?
