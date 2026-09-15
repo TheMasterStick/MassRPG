@@ -179,6 +179,7 @@ namespace MassRPG.Editor.World
 
                     case WorldEditorMode.Water:
                         _waterMode = (WaterPaintMode)GUILayout.Toolbar((int)_waterMode, new[] { "Water", "Deep Water", "Erase" }, GUILayout.Width(260));
+                        GUILayout.Label("Water inherently blocks walking and building; explicit pathing/no-build paint remains independent.");
                         break;
 
                     case WorldEditorMode.Edges:
@@ -492,8 +493,8 @@ namespace MassRPG.Editor.World
                 case WorldEditorMode.Water:
                 {
                     var flags = cell.Flags & ~(TileFlags.Water | TileFlags.DeepWater);
-                    if (_waterMode == WaterPaintMode.Water) flags |= TileFlags.Water | TileFlags.MovementBlocked | TileFlags.NoBuild;
-                    else if (_waterMode == WaterPaintMode.DeepWater) flags |= TileFlags.DeepWater | TileFlags.MovementBlocked | TileFlags.NoBuild;
+                    if (_waterMode == WaterPaintMode.Water) flags |= TileFlags.Water;
+                    else if (_waterMode == WaterPaintMode.DeepWater) flags |= TileFlags.DeepWater;
                     return Copy(cell, flags: flags);
                 }
 
