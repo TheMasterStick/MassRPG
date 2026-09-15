@@ -25,7 +25,7 @@
     "schemaVersion": { "const": 1 },
     "id": {
       "type": "string",
-      "pattern": "^[a-z0-9][a-z0-9._-]{1,79}$"
+      "pattern": "^[a-z0-9][a-z0-9._/-]{1,79}$"
     },
     "displayName": { "type": "string", "minLength": 1, "maxLength": 100 },
     "description": { "type": "string", "maxLength": 2000 },
