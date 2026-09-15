@@ -16,7 +16,7 @@ namespace MassRPG.Editor
         {
             var window = GetWindow<MassRPGEditorHubWindow>();
             window.titleContent = new GUIContent("MassRPG Editor");
-            window.minSize = new Vector2(470, 740);
+            window.minSize = new Vector2(470, 780);
             window.Show();
         }
 
@@ -48,6 +48,10 @@ namespace MassRPG.Editor
                 "Content Browser",
                 "Search and inspect permanent IDs and migration definitions for items, creatures, recipes, skills and build pieces.",
                 MassRPGContentBrowserWindow.Open);
+            Button(
+                "Repository Drafts",
+                "Inspect and validate the same JSON drafts written by the browser/Codespaces Online Data Editor.",
+                MassRPGRepositoryDraftsWindow.Open);
 
             Section("Testing");
             Button(
@@ -57,7 +61,7 @@ namespace MassRPG.Editor
 
             GUILayout.FlexibleSpace();
             EditorGUILayout.HelpBox(
-                "Still in progress: turning the read-only Content Browser into the publishable Data Editor, richer polygon dressing overrides and production-quality in-world presentation. Play From Here already exercises authority-driven movement, nearby terrain streaming and floating-origin rebasing.",
+                "The Online Data Editor and Unity now share repository-backed item drafts. Next stages broaden that same bridge to creatures/resources/recipes and promote validated drafts into versioned published data.",
                 MessageType.None);
             GUILayout.Label("Unity 6.3 LTS · MassRPG authored-world tools", EditorStyles.centeredGreyMiniLabel);
         }
