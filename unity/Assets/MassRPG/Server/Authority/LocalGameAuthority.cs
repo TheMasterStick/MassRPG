@@ -5,6 +5,7 @@ using MassRPG.Core.Characters;
 using MassRPG.Core.Inventory;
 using MassRPG.Core.World;
 using MassRPG.Server.Combat;
+using MassRPG.Server.Creatures;
 using MassRPG.Server.Production;
 using MassRPG.Server.Resources;
 
@@ -23,6 +24,8 @@ namespace MassRPG.Server.Authority
         private readonly CombatTargetingService _combatTargeting;
         private readonly CombatSimulationService _combatSimulation;
         private readonly ProductionService _production;
+        private readonly CreatureRegistry _creatures;
+        private readonly CreatureCombatSimulationService _creatureCombat;
 
         public LocalGameAuthority(
             IItemRuleSource itemRules,
@@ -30,7 +33,9 @@ namespace MassRPG.Server.Authority
             GatheringService gathering = null,
             CombatTargetingService combatTargeting = null,
             CombatSimulationService combatSimulation = null,
-            ProductionService production = null)
+            ProductionService production = null,
+            CreatureRegistry creatures = null,
+            CreatureCombatSimulationService creatureCombat = null)
         {
             _itemRules = itemRules ?? throw new ArgumentNullException(nameof(itemRules));
             _movementMap = movementMap;
@@ -38,6 +43,8 @@ namespace MassRPG.Server.Authority
             _combatTargeting = combatTargeting;
             _combatSimulation = combatSimulation;
             _production = production;
+            _creatures = creatures;
+            _creatureCombat = creatureCombat;
         }
 
         public void RegisterPlayer(PlayerState player)
@@ -174,6 +181,46 @@ namespace MassRPG.Server.Authority
                 if (result.DidAttack) attacksResolved++;
             }
             return attacksResolved;
+        }
+
+        public CreatureAdvanceResult AdvanceCreatureCombat(Guid creatureInstanceId, long nowUnixMilliseconds, Func<double> random01)
+        {
+            if (_creatureCombat == null || _creatures == null)
+                return new CreatureAdvanceResult(CreatureAdvanceKind.Failed, "creature_combat_unavailable");
+            if (!_creatures.TryGet(creatureInstanceId, out var creature))
+                return new CreatureAdvanceResult(CreatureAdvanceKind.Failed, "unknown_creature");
+
+            if (!creature.TargetCharacterId.HasValue)
+            {
+                var acquisition = _creatureCombat.TryAcquireAggro(creature, _players.Values);
+                if (acquisition.Kind == CreatureAdvanceKind.AcquiredTarget) return acquisition;
+            }
+
+            if (!creature.TargetCharacterId.HasValue)
+                return new CreatureAdvanceResult(CreatureAdvanceKind.Idle, "no_target");
+            if (!_players.TryGetValue(creature.TargetCharacterId.Value, out var target))
+            {
+                creature.TargetCharacterId = null;
+                return new CreatureAdvanceResult(CreatureAdvanceKind.GaveUp, "target_unavailable");
+            }
+
+            return _creatureCombat.Advance(creature, target, nowUnixMilliseconds, random01);
+        }
+
+        public int AdvanceAllCreatureCombat(long nowUnixMilliseconds, Func<double> random01)
+        {
+            if (_creatureCombat == null || _creatures == null) return 0;
+            if (random01 == null) throw new ArgumentNullException(nameof(random01));
+
+            var meaningfulChanges = 0;
+            var snapshot = new List<CreatureState>(_creatures.All);
+            for (var i = 0; i < snapshot.Count; i++)
+            {
+                var result = AdvanceCreatureCombat(snapshot[i].InstanceId, nowUnixMilliseconds, random01);
+                if (result.Kind != CreatureAdvanceKind.Idle && result.Kind != CreatureAdvanceKind.WaitingForCooldown)
+                    meaningfulChanges++;
+            }
+            return meaningfulChanges;
         }
 
         public ProductionResult AdvanceProduction(Guid characterId, long nowUnixMilliseconds)
