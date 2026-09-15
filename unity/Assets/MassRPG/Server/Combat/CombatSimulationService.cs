@@ -24,6 +24,7 @@ namespace MassRPG.Server.Combat
         private readonly CombatApproachPlanner _approach;
         private readonly IGridTraversalMap _movementMap;
         private readonly ICombatContributionSink _contributions;
+        private readonly RangedAmmunitionService _ammunition;
 
         public CombatSimulationService(
             CreatureRegistry creatures,
@@ -31,7 +32,8 @@ namespace MassRPG.Server.Combat
             IPlayerAttackProfileSource profiles,
             CombatApproachPlanner approach,
             IGridTraversalMap movementMap,
-            ICombatContributionSink contributions = null)
+            ICombatContributionSink contributions = null,
+            RangedAmmunitionService ammunition = null)
         {
             _creatures = creatures ?? throw new ArgumentNullException(nameof(creatures));
             _definitions = definitions ?? throw new ArgumentNullException(nameof(definitions));
@@ -39,6 +41,7 @@ namespace MassRPG.Server.Combat
             _approach = approach ?? throw new ArgumentNullException(nameof(approach));
             _movementMap = movementMap ?? throw new ArgumentNullException(nameof(movementMap));
             _contributions = contributions;
+            _ammunition = ammunition;
         }
 
         public CombatAdvanceResult AdvancePlayerAttack(PlayerState player, long nowUnixMilliseconds, Func<double> random01)
@@ -81,6 +84,20 @@ namespace MassRPG.Server.Combat
             player.Movement.Clear();
             if (!player.Combat.IsAttackReady(nowUnixMilliseconds))
                 return CombatAdvanceResult.State(CombatAdvanceKind.WaitingForCooldown, "attack_cooldown");
+
+            // Ranged ammunition is consumed only when an actual attack attempt is ready to resolve,
+            // never while the player is merely approaching or waiting on cooldown. The already-built
+            // profile retains the final arrow's ranged-strength contribution for that shot.
+            if (profile.Style == CombatStyle.Ranged && _ammunition != null)
+            {
+                var ammunition = _ammunition.ConsumeForAttack(player);
+                if (!ammunition.Success)
+                {
+                    player.Combat.End();
+                    player.Movement.Clear();
+                    return CombatAdvanceResult.State(CombatAdvanceKind.Failed, ammunition.Code);
+                }
+            }
 
             var attackLevel = ResolvePlayerAttackLevel(player);
             var attackBonus = ResolvePlayerAttackBonus(profile);
