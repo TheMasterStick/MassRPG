@@ -1,5 +1,7 @@
 using System;
+using MassRPG.Core.Characters;
 using MassRPG.Core.Content;
+using MassRPG.Data.Items;
 using MassRPG.Data.Quests;
 using MassRPG.Server.Quests;
 using NUnit.Framework;
@@ -15,18 +17,20 @@ namespace MassRPG.Tests
             var readyId = new ContentId("quest.ready");
             var completedId = new ContentId("quest.done");
             var catalog = CreateCatalog(activeId, readyId, completedId);
-            var state = new CharacterQuestState();
+            var service = new QuestService(catalog, MigrationSeedItemCatalog.Create());
+            var player = new PlayerState(Guid.NewGuid(), "Quester");
 
-            var active = new QuestProgressState(activeId);
-            active.SetCount("step", 1);
-            state.Add(active);
+            Assert.IsTrue(service.TryStart(player, activeId).Success);
+            service.RecordContentEvent(player, QuestObjectiveKind.TalkToNpc, new ContentId("npc.a"), 1);
 
-            var ready = new QuestProgressState(readyId);
-            ready.SetCount("step", 2);
-            ready.Status = QuestRunStatus.ReadyToClaim;
-            state.Add(ready);
-            state.Complete(completedId, true);
+            Assert.IsTrue(service.TryStart(player, readyId).Success);
+            service.RecordContentEvent(player, QuestObjectiveKind.TalkToNpc, new ContentId("npc.b"), 2);
 
+            Assert.IsTrue(service.TryStart(player, completedId).Success);
+            service.RecordContentEvent(player, QuestObjectiveKind.TalkToNpc, new ContentId("npc.c"), 1);
+            Assert.IsTrue(service.TryClaim(player, completedId).Success);
+
+            var state = service.GetOrCreateState(player.CharacterId);
             var snapshot = QuestPersistenceSnapshotCodec.Capture(state);
             var restored = QuestPersistenceSnapshotCodec.Restore(snapshot, catalog);
 
