@@ -1,3 +1,4 @@
+using System;
 using MassRPG.Core.World;
 using UnityEngine;
 
@@ -6,7 +7,7 @@ namespace MassRPG.Client.World
     /// <summary>
     /// Converts stable 180k-world logical coordinates into a small Unity-local coordinate space.
     /// The logical grid remains authoritative; changing the presentation origin never changes a
-    /// character's real GridCoord and is therefore safe for future floating-origin streaming.
+    /// character's real GridCoord and is therefore safe for floating-origin streaming.
     /// </summary>
     public sealed class GridPresentationSpace : MonoBehaviour
     {
@@ -21,10 +22,19 @@ namespace MassRPG.Client.World
         public float BuildingStoreyHeight => Mathf.Max(0.01f, buildingStoreyHeight);
         public GridCoord OriginTile => new GridCoord(originTileX, originTileY);
 
+        /// <summary>
+        /// Presentation-only origin change. Subscribers should rebuild/refresh their Transform state;
+        /// authoritative logical locations do not change.
+        /// </summary>
+        public event Action<GridCoord, GridCoord> OriginChanged;
+
         public void SetOrigin(GridCoord origin)
         {
+            var before = OriginTile;
+            if (before == origin) return;
             originTileX = origin.X;
             originTileY = origin.Y;
+            OriginChanged?.Invoke(before, origin);
         }
 
         public Vector3 ToLocalPosition(GridLocation location, int logicalElevation)
