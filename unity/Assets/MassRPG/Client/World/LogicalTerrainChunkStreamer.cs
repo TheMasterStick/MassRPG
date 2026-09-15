@@ -41,21 +41,7 @@ namespace MassRPG.Client.World
         public int LoadedStoragePageCount => _store?.LoadedPageCount ?? 0;
 
         private void Awake() => EnsureInitialized();
-
-        private void Update()
-        {
-            if (focusActor == null || !focusActor.HasAuthoritativeState) return;
-            EnsureInitialized();
-            MaybeShiftOrigin(focusActor.LogicalLocation.Tile);
-
-            var chunk = RenderChunkKey.FromLocation(focusActor.LogicalLocation);
-            if (!_hasFocusChunk || chunk != _focusChunk)
-            {
-                _focusChunk = chunk;
-                _hasFocusChunk = true;
-                RefreshAroundFocus(false);
-            }
-        }
+        private void Update() => SyncToFocusNow(false);
 
         private void OnDestroy()
         {
@@ -99,26 +85,39 @@ namespace MassRPG.Client.World
                 EnsureInitialized();
             }
 
-            if (focusActor != null && focusActor.HasAuthoritativeState)
-            {
-                _focusChunk = RenderChunkKey.FromLocation(focusActor.LogicalLocation);
-                _hasFocusChunk = true;
-                RefreshAroundFocus(true);
-            }
+            SyncToFocusNow(true);
+        }
+
+        /// <summary>
+        /// Synchronizes the loaded page/chunk window immediately instead of waiting for Unity's next
+        /// component Update ordering. Authoritative test sessions call this directly after applying
+        /// a new logical actor position, which avoids one-frame page-boundary disagreement.
+        /// </summary>
+        public void SyncToFocusNow(bool rebuildExisting = false)
+        {
+            if (focusActor == null || !focusActor.HasAuthoritativeState) return;
+            EnsureInitialized();
+            MaybeShiftOrigin(focusActor.LogicalLocation.Tile);
+
+            var chunk = RenderChunkKey.FromLocation(focusActor.LogicalLocation);
+            var movedChunk = !_hasFocusChunk || chunk != _focusChunk;
+            if (!movedChunk && !rebuildExisting) return;
+
+            _focusChunk = chunk;
+            _hasFocusChunk = true;
+            RefreshAroundFocus(rebuildExisting);
         }
 
         /// <summary>
         /// Manual development refresh after editing world page files while the scene is running.
-        /// Missing-page cache is cleared and all visible meshes are rebuilt from disk.
+        /// Missing-page cache is cleared and all visible meshes are rebuilt from the currently loaded
+        /// authoritative store. An internally owned store also reloads its visible files from disk.
         /// </summary>
         public void RefreshNow()
         {
             EnsureInitialized();
             _knownMissingPages.Clear();
-            if (focusActor == null || !focusActor.HasAuthoritativeState) return;
-            _focusChunk = RenderChunkKey.FromLocation(focusActor.LogicalLocation);
-            _hasFocusChunk = true;
-            RefreshAroundFocus(true);
+            SyncToFocusNow(true);
         }
 
         private void EnsureInitialized()
