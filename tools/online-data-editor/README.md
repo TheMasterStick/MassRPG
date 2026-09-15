@@ -1,19 +1,41 @@
 # MassRPG Online Data Editor
 
-This is the browser-accessible companion to the Unity Data Editor. It exists so content can be authored from a machine where Unity is unavailable, including a work computer, while still writing normal version-controlled MassRPG data.
+This is the browser-accessible companion to the Unity Data Editor. It exists so gameplay content can be authored from a machine where Unity, Blender and the final art library are unavailable, including a work computer, while still writing normal version-controlled MassRPG data.
 
 ## Current scope
 
-The browser editor now has repository-backed authoring for:
+The dashboard now supports repository-backed authoring for:
 
-- **Items** — equipment, dual wield/two-handed rules, requirements, tools, healing, combat bonuses, range and timing.
-- **Creatures** — combat stats, behavior disposition, attack style/range, footprint, aggro/leash and persistent named identity.
+- **Items & Equipment** — weapons, armour, tools, consumables, materials, equipment slots, requirements, dual-wield/two-handed rules, combat bonuses, range and timing.
+- **Creatures & Monsters** — combat stats, passive/neutral/aggressive behavior, attack style/range, footprint, aggro/leash and persistent named identity.
 - **Resources** — gathering skill/level, XP, yields, respawn, personal/shared availability and tool requirements.
-- **Recipes** — production skill/level, ingredients, outputs, XP, duration, station/tool requirements and failure/burn output.
+- **Recipes & Production** — skill/level, ingredients, outputs, XP, duration, station/tool requirements and failure/burn output.
+- **Other Game Definitions** — immediate design records for NPCs, shops, loot tables, quests, abilities, spells, status effects, factions, services, transports, build pieces, dialogue, world events, achievements and future content types that do not yet have a dedicated typed schema.
+- **Asset Backlog** — every draft whose icon/model/portrait/animation presentation is still unfinished.
 
-Drafts are stored as one JSON document per permanent content ID under `ContentData/Drafts/<category>/`, with matching JSON schemas in `ContentData/Schemas/`.
+Drafts are stored as one JSON document per permanent content ID under `ContentData/Drafts/<category>/`, with schemas in `ContentData/Schemas/`.
 
-Drafts are deliberately separate from live-published data. Unity reads the same files through **MassRPG → Repository Drafts**, so web authoring and Unity authoring share one repository source of truth.
+## Work computer → home computer workflow
+
+The gameplay definition and its presentation assets are deliberately separate.
+
+While away from the home development machine you can create and balance the actual gameplay entry, leave model/icon/portrait/animation IDs blank, keep its presentation state as **Needs assets**, and write visual notes. The entry is immediately visible in the **Asset Backlog**.
+
+Later, at home, pull the branch/repository changes, open the backlog, create or import the proper assets in Unity/Blender, link their stable asset IDs, and move the presentation state through `placeholder` / `linked` / `final` as appropriate. Missing art therefore does not block content design.
+
+Presentation states are:
+
+- `needs-assets` — gameplay/design exists but one or more required visual assets have not been made or linked.
+- `placeholder` — temporary art exists.
+- `linked` — assets are connected but are not considered final.
+- `final` — required presentation assets are finished and linked.
+- `not-required` — the definition intentionally has no presentation asset requirement.
+
+## Generic definitions versus typed runtime content
+
+**Other Game Definitions** are intentionally flexible so a new game idea never has to wait for us to first build an editor form. They preserve the permanent ID, description, tags, design notes, optional structured JSON and asset requirements immediately.
+
+They are **design-authoring records**, not a loophole around runtime validation. If a generic definition will affect live simulation, saves, networking or economy, it must be promoted to a dedicated typed schema/runtime system before live publication. Review candidates record how many generic definitions they contain, and the C# publication gate refuses to begin a live published manifest while any remain.
 
 ## Browser-only workflow with GitHub Codespaces
 
@@ -21,41 +43,41 @@ Drafts are deliberately separate from live-published data. Unity reads the same 
 2. Create/open a Codespace on a dedicated work branch (for example `data-editor/work`). Do not use `main` or `master` for direct data editing.
 3. The repository dev-container runs `npm ci` and starts the data editor automatically.
 4. Open forwarded port **4175** if it did not open automatically. Keep the port visibility **Private**.
-5. Choose Items, Creatures, Resources or Recipes from the dashboard.
+5. Author any supported content from the dashboard.
 6. **Save draft file** writes JSON into the Codespace working tree.
-7. Use the dashboard **Draft preflight** before committing. It catches malformed drafts and highlights repository-only reference gaps.
+7. Use dashboard **Draft preflight** before committing.
 8. **Commit & Push** explicitly commits `ContentData/Drafts` and pushes the current branch to GitHub.
 
 You can still start it manually with `npm run data-editor`.
 
 No GitHub personal access token is placed in the browser UI. The server relies on the Git credentials already supplied to the Codespace.
 
-## Validation layers
+## Validation and review candidates
 
-There are now three deliberately separate validation layers:
+There are deliberately separate validation layers:
 
-1. **Editor form/server validation** prevents obviously invalid values from being saved by the web UI.
-2. **Browser preflight / `npm run data-validate`** scans every repository draft, validates filenames/IDs/basic invariants, and warns about item references that do not exist in repository drafts.
-3. **Unity `MassRPG → Validate Repository Drafts`** reconstructs the C# definitions and runs the authoritative cross-catalog audit against repository drafts plus temporary migration seed catalogs.
+1. **Editor form/server validation** prevents obviously invalid values from being saved by the browser UI.
+2. **Browser preflight / `npm run data-validate`** scans repository drafts, validates filenames/IDs/basic invariants and reports reference/asset issues.
+3. **Unity `MassRPG → Validate Repository Drafts`** reconstructs typed C# definitions and performs the stronger cross-catalog audit against repository drafts plus temporary migration seed catalogs.
+4. **Review candidates** (`npm run data-candidate -- "label"`) hash a committed snapshot and record document readiness, generic-definition count and presentation-asset state.
 
-GitHub Actions runs the command-line draft validator automatically when draft/schema validation files change. Structural errors fail the check. Missing repository-only references are warnings for now because they may still resolve from migration seed content; that distinction disappears once all canonical content has moved into repository data.
+GitHub Actions runs the command-line draft validator automatically for relevant changes. Structural errors fail the check. Missing repository-only item references are warnings while temporary migration seed content can still satisfy them.
 
 ## Safety boundaries
 
 - The editor refuses Commit & Push while the current branch is `main`, `master`, or detached HEAD.
-- Saving a draft does not publish it to a live MMO server.
-- Permanent IDs are locked in the UI after an existing draft is loaded. Renaming a permanent ID should be handled as an explicit migration, not as an ordinary text edit.
-- Only `ContentData/Drafts` is staged by the Commit & Push action.
-- This development server has no independent login layer. Use it only through a private Codespaces forwarded port or another trusted private environment. It is **not** yet the public hosted editor.
+- Saving a draft never publishes it to a live MMO server.
+- Permanent IDs lock after an existing draft is loaded. Renaming a permanent ID is an explicit migration, not an ordinary edit.
+- Only `ContentData/Drafts` is staged by the browser Commit & Push action.
+- Generic definitions cannot pass the C# live-publication gate until promoted into typed content.
+- The development server has no independent login layer. Use it only through a private Codespaces forwarded port or another trusted private environment.
 
 ## Unity bridge
 
-Unity's repository-draft inspector parses the same JSON into `ItemDefinition`, `CreatureDefinition`, `ResourceDefinition` and `RecipeDefinition` objects. Malformed files, unsupported schema versions, duplicate IDs and filename/ID mismatches are surfaced as invalid drafts instead of being silently accepted.
+Unity's repository-draft inspector currently reconstructs typed `ItemDefinition`, `CreatureDefinition`, `ResourceDefinition` and `RecipeDefinition` objects from the same files. The browser's added presentation metadata is separate from those gameplay definitions, so typed Unity readers can continue operating while richer Unity-side asset-linking tools are built.
 
-The temporary migration seed catalogs remain useful fallback/reference data. Valid repository item/creature/recipe drafts can override matching seed IDs when a resolved draft catalog is built; resource drafts currently form their own repository catalog because no centralized resource seed catalog exists yet.
+Temporary migration seed catalogs remain fallback/reference data. The next content-migration stage is to move those seed definitions themselves into repository-backed data so the browser editor can search and edit the existing canonical catalog as naturally as newly authored content.
 
-## Hosted editor later
+The long-term flow is:
 
-The production version can be hosted as a normal website. It should authenticate with GitHub through a GitHub App/OAuth-backed server component, then write changes to a dedicated branch and normally create/review a pull request. A static GitHub Pages page alone should not hold a repository write token.
-
-The long-term flow remains **draft → validate → local test → review → versioned publish → live activation/rollback**.
+**draft → validate → committed review candidate → local/QA test → typed/versioned publish → live activation/rollback**
