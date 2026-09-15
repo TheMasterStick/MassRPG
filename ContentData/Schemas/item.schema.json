@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "massrpg://schemas/item.schema.json",
+  "title": "MassRPG Item Draft",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "id",
+    "displayName",
+    "type",
+    "stackable",
+    "value",
+    "allowedEquipmentSlots",
+    "twoHanded",
+    "canDualWield",
+    "equipRequirementLevel",
+    "healAmount",
+    "toolTier",
+    "gatheringToolKind",
+    "attackIntervalMilliseconds",
+    "attackRangeTiles",
+    "bonuses"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{1,79}$"
+    },
+    "displayName": { "type": "string", "minLength": 1, "maxLength": 100 },
+    "description": { "type": "string", "maxLength": 2000 },
+    "type": {
+      "enum": [
+        "Tool",
+        "Weapon",
+        "Armor",
+        "Resource",
+        "Food",
+        "Potion",
+        "Material",
+        "Currency",
+        "Seed",
+        "Ammunition",
+        "Miscellaneous"
+      ]
+    },
+    "stackable": { "type": "boolean" },
+    "value": { "type": "integer", "minimum": 0 },
+    "allowedEquipmentSlots": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "Head",
+          "Amulet",
+          "Cape",
+          "Chest",
+          "Legs",
+          "Hands",
+          "Boots",
+          "MainHand",
+          "OffHand",
+          "Ring1",
+          "Ring2"
+        ]
+      }
+    },
+    "twoHanded": { "type": "boolean" },
+    "canDualWield": { "type": "boolean" },
+    "equipRequirementSkill": {
+      "type": ["string", "null"],
+      "enum": [
+        null,
+        "Hitpoints",
+        "Attack",
+        "Strength",
+        "Defence",
+        "Ranged",
+        "Magic",
+        "Woodcutting",
+        "Mining",
+        "Fishing",
+        "Farming",
+        "Cooking",
+        "Firemaking",
+        "Smithing",
+        "Crafting",
+        "Fletching",
+        "Herblore",
+        "Construction",
+        "Agility"
+      ]
+    },
+    "equipRequirementLevel": { "type": "integer", "minimum": 1, "maximum": 300 },
+    "healAmount": { "type": "integer", "minimum": 0 },
+    "toolTier": { "type": "integer", "minimum": 0 },
+    "gatheringToolKind": {
+      "enum": [
+        "None",
+        "Hatchet",
+        "Pickaxe",
+        "FishingNet",
+        "FishingRod",
+        "LobsterPot",
+        "Harpoon"
+      ]
+    },
+    "attackIntervalMilliseconds": { "type": "integer", "minimum": 0 },
+    "attackRangeTiles": { "type": "integer", "minimum": 0 },
+    "bonuses": {
+      "type": "object",
+      "required": [
+        "attack",
+        "strength",
+        "defence",
+        "rangedAttack",
+        "rangedStrength",
+        "magic"
+      ],
+      "properties": {
+        "attack": { "type": "integer" },
+        "strength": { "type": "integer" },
+        "defence": { "type": "integer" },
+        "rangedAttack": { "type": "integer" },
+        "rangedStrength": { "type": "integer" },
+        "magic": { "type": "integer" }
+      },
+      "additionalProperties": false
+    },
+    "editorState": {
+      "enum": ["draft", "ready-for-review"]
+    }
+  },
+  "additionalProperties": false
+}
