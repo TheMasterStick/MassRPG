@@ -7,6 +7,7 @@ namespace MassRPG.EditorCore.World
         Terrain,
         Elevation,
         Water,
+        Edges,
         Roads,
         Objects,
         Doodads,
@@ -31,7 +32,8 @@ namespace MassRPG.EditorCore.World
         Water = 1 << 7,
         PointsOfInterest = 1 << 8,
         StoragePages = 1 << 9,
-        RenderChunks = 1 << 10
+        RenderChunks = 1 << 10,
+        Edges = 1 << 11
     }
 
     public enum BrushShape
