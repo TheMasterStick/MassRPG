@@ -15,7 +15,7 @@ namespace MassRPG.Editor
         {
             var window = GetWindow<MassRPGEditorHubWindow>();
             window.titleContent = new GUIContent("MassRPG Editor");
-            window.minSize = new Vector2(470, 660);
+            window.minSize = new Vector2(470, 700);
             window.Show();
         }
 
@@ -29,7 +29,7 @@ namespace MassRPG.Editor
 
             Section("Terrain & geography");
             Button("World Overview", "Block the entire 180,000 x 180,000 world at 512x512 storage-page scale.", MassRPGWorldOverviewWindow.Open);
-            Button("1x1 World Editor", "Hand-paint exact terrain, elevation, water, pathing, ramps and wall/fence edges.", MassRPGWorldEditorWindow.Open);
+            Button("1x1 World Editor", "Hand-paint exact terrain, elevation, water, pathing, ramps, wall/fence edges and reusable tile stamps.", MassRPGWorldEditorWindow.Open);
             Button("World Recovery", "Inspect autosaved crash-recovery pages; restore only newer unsaved work or discard stale copies.", MassRPGWorldRecoveryWindow.Open);
 
             Section("World semantics");
@@ -42,9 +42,15 @@ namespace MassRPG.Editor
             Button("Creature Spawns", "Author fixed-cap creature populations, roam areas and optional patrol routes.", MassRPGCreatureSpawnEditorWindow.Open);
             Button("Placement Editor", "Place anchored objects, deliberate resources, NPC anchors, transport nodes and manual doodads.", MassRPGPlacementEditorWindow.Open);
 
+            Section("Testing");
+            Button(
+                "Play From Here",
+                "Save the open 1x1 editor and launch an authoritative local play test at its current coordinate.",
+                MassRPGPlayFromHereCoordinator.StartFromOpenWorldEditor);
+
             GUILayout.FlexibleSpace();
             EditorGUILayout.HelpBox(
-                "Still in progress: searchable content palettes, richer polygon dressing overrides, selection/stamps in the main 1x1 UI and Play From Here.",
+                "Still in progress: searchable content palettes, richer polygon dressing overrides and production-quality in-world presentation. Play From Here already exercises authority-driven movement, nearby terrain streaming and floating-origin rebasing.",
                 MessageType.None);
             GUILayout.Label("Unity 6.3 LTS · MassRPG authored-world tools", EditorStyles.centeredGreyMiniLabel);
         }
