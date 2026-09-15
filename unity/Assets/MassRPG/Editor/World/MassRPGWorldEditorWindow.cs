@@ -10,13 +10,14 @@ using UnityEngine;
 namespace MassRPG.Editor.World
 {
     /// <summary>
-    /// First real tactile MassRPG world-authoring surface. It deliberately edits the canonical
-    /// 1x1 logical tile data directly rather than Unity Terrain or scene GameObjects.
+    /// Tactile MassRPG world-authoring surface. It deliberately edits the canonical 1x1 logical
+    /// tile data directly rather than Unity Terrain or scene GameObjects.
     /// </summary>
     public sealed class MassRPGWorldEditorWindow : EditorWindow
     {
         private enum WaterPaintMode { Water, DeepWater, Erase }
         private enum PathingPaintMode { Movement, LineOfSight, NoBuild }
+        private enum EdgePaintMode { Ramp, MovementBarrier, FullBarrier, Clear }
 
         private static readonly int[] BrushSizes = { 1, 3, 5, 7, 11, 21, 41, 81, 161, 321 };
         private static readonly string[] BrushLabels = { "1", "3", "5", "7", "11", "21", "41", "81", "161", "321" };
@@ -34,7 +35,8 @@ namespace MassRPG.Editor.World
         private BrushShape _brushShape = BrushShape.Square;
         private WaterPaintMode _waterMode = WaterPaintMode.Water;
         private PathingPaintMode _pathingMode = PathingPaintMode.Movement;
-        private int _brushIndex = 0;
+        private EdgePaintMode _edgeMode = EdgePaintMode.Ramp;
+        private int _brushIndex;
         private string _groundId = "ground.grass";
         private float _centerX = WorldConstants.WorldWidthTiles * 0.5f;
         private float _centerY = WorldConstants.WorldHeightTiles * 0.5f;
@@ -53,6 +55,21 @@ namespace MassRPG.Editor.World
             window.titleContent = new GUIContent("MassRPG World Editor");
             window.minSize = new Vector2(900, 600);
             window.Show();
+        }
+
+        public static void OpenAt(int x, int y, int plane = WorldConstants.SurfacePlane, int storey = 0)
+        {
+            var window = GetWindow<MassRPGWorldEditorWindow>();
+            window.titleContent = new GUIContent("MassRPG World Editor");
+            window.minSize = new Vector2(900, 600);
+            window._centerX = Mathf.Clamp(x, 0, WorldConstants.WorldWidthTiles - 1);
+            window._centerY = Mathf.Clamp(y, 0, WorldConstants.WorldHeightTiles - 1);
+            window._plane = plane;
+            window._storey = Mathf.Max(0, storey);
+            window._status = $"Jumped to {Mathf.RoundToInt(window._centerX)}, {Mathf.RoundToInt(window._centerY)}.";
+            window.Show();
+            window.Focus();
+            window.Repaint();
         }
 
         private void OnEnable()
@@ -103,8 +120,10 @@ namespace MassRPG.Editor.World
             using (new EditorGUILayout.HorizontalScope(EditorStyles.toolbar))
             {
                 _mode = (WorldEditorMode)EditorGUILayout.EnumPopup(_mode, EditorStyles.toolbarPopup, GUILayout.Width(120));
+                GUI.enabled = _mode != WorldEditorMode.Edges;
                 _brushIndex = EditorGUILayout.Popup(_brushIndex, BrushLabels, EditorStyles.toolbarPopup, GUILayout.Width(50));
                 _brushShape = (BrushShape)EditorGUILayout.EnumPopup(_brushShape, EditorStyles.toolbarPopup, GUILayout.Width(70));
+                GUI.enabled = true;
 
                 GUILayout.Space(8);
                 GUILayout.Label("X", GUILayout.Width(12));
@@ -123,6 +142,7 @@ namespace MassRPG.Editor.World
                 _storey = Mathf.Max(0, EditorGUILayout.IntField(_storey, EditorStyles.toolbarTextField, GUILayout.Width(30)));
 
                 GUILayout.FlexibleSpace();
+                if (GUILayout.Button("Overview", EditorStyles.toolbarButton, GUILayout.Width(65))) MassRPGWorldOverviewWindow.Open();
                 GUI.enabled = _session.CanUndo;
                 if (GUILayout.Button("Undo", EditorStyles.toolbarButton, GUILayout.Width(45))) { _session.Undo(); Repaint(); }
                 GUI.enabled = _session.CanRedo;
@@ -136,7 +156,11 @@ namespace MassRPG.Editor.World
         {
             using (new EditorGUILayout.HorizontalScope(EditorStyles.helpBox))
             {
-                GUILayout.Label($"Brush {BrushSizes[_brushIndex]}x{BrushSizes[_brushIndex]}", GUILayout.Width(105));
+                if (_mode != WorldEditorMode.Edges)
+                    GUILayout.Label($"Brush {BrushSizes[_brushIndex]}x{BrushSizes[_brushIndex]}", GUILayout.Width(105));
+                else
+                    GUILayout.Label("Edge tool", GUILayout.Width(105));
+
                 switch (_mode)
                 {
                     case WorldEditorMode.Terrain:
@@ -155,6 +179,12 @@ namespace MassRPG.Editor.World
 
                     case WorldEditorMode.Water:
                         _waterMode = (WaterPaintMode)GUILayout.Toolbar((int)_waterMode, new[] { "Water", "Deep Water", "Erase" }, GUILayout.Width(260));
+                        break;
+
+                    case WorldEditorMode.Edges:
+                        _edgeMode = (EdgePaintMode)GUILayout.Toolbar((int)_edgeMode,
+                            new[] { "Ramp", "Fence / movement", "Wall / movement + LOS", "Clear" }, GUILayout.Width(520));
+                        GUILayout.Label("Click a tile edge. Shift removes a ramp/barrier.");
                         break;
 
                     case WorldEditorMode.Pathing:
@@ -179,6 +209,7 @@ namespace MassRPG.Editor.World
             var bounds = VisibleBounds(localRect);
             DrawTiles(localRect, bounds);
             DrawGrid(localRect, bounds);
+            DrawAuthoredEdges(localRect, bounds);
             DrawStrokePreview(localRect, bounds);
             GUI.EndGroup();
 
@@ -209,10 +240,7 @@ namespace MassRPG.Editor.World
                         EditorGUI.DrawRect(rect, new Color(0.65f, 0.45f, 0.05f, 0.16f));
 
                     if (_pixelsPerTile >= 26f && cell.Elevation != 0)
-                    {
-                        var style = EditorStyles.miniLabel;
-                        GUI.Label(rect, cell.Elevation.ToString(), style);
-                    }
+                        GUI.Label(rect, cell.Elevation.ToString(), EditorStyles.miniLabel);
                 }
             }
         }
@@ -236,6 +264,52 @@ namespace MassRPG.Editor.World
             }
             Handles.color = previous;
             Handles.EndGUI();
+        }
+
+        private void DrawAuthoredEdges(Rect localRect, TileBounds bounds)
+        {
+            if (_pixelsPerTile < 8f) return;
+            Handles.BeginGUI();
+            var old = Handles.color;
+            for (var y = bounds.MinY; y <= bounds.MaxY; y++)
+            {
+                if (y < 0 || y >= WorldConstants.WorldHeightTiles) continue;
+                for (var x = bounds.MinX; x <= bounds.MaxX; x++)
+                {
+                    if (x < 0 || x >= WorldConstants.WorldWidthTiles) continue;
+                    if (!_store.TryGetCell(Loc(x, y), out var cell)) continue;
+                    DrawCellEdge(cell, CardinalEdgeMask.East, x, y, bounds);
+                    DrawCellEdge(cell, CardinalEdgeMask.South, x, y, bounds);
+                    if (x == 0) DrawCellEdge(cell, CardinalEdgeMask.West, x, y, bounds);
+                    if (y == 0) DrawCellEdge(cell, CardinalEdgeMask.North, x, y, bounds);
+                }
+            }
+            Handles.color = old;
+            Handles.EndGUI();
+        }
+
+        private void DrawCellEdge(AuthoredTileCell cell, CardinalEdgeMask edge, int x, int y, TileBounds bounds)
+        {
+            var ramp = (cell.ElevationTransitionEdges & edge) != 0;
+            var move = (cell.MovementBlockedEdges & edge) != 0;
+            var los = (cell.LineOfSightBlockedEdges & edge) != 0;
+            if (!ramp && !move && !los) return;
+
+            Handles.color = ramp ? new Color(0.25f, 0.95f, 0.35f, 0.95f)
+                : los ? new Color(0.95f, 0.22f, 0.20f, 0.95f)
+                : new Color(1f, 0.68f, 0.13f, 0.95f);
+            var rect = TileRect(x, y, bounds);
+            Vector3 a;
+            Vector3 b;
+            switch (edge)
+            {
+                case CardinalEdgeMask.North: a = new Vector3(rect.xMin, rect.yMin); b = new Vector3(rect.xMax, rect.yMin); break;
+                case CardinalEdgeMask.East: a = new Vector3(rect.xMax, rect.yMin); b = new Vector3(rect.xMax, rect.yMax); break;
+                case CardinalEdgeMask.South: a = new Vector3(rect.xMin, rect.yMax); b = new Vector3(rect.xMax, rect.yMax); break;
+                case CardinalEdgeMask.West: a = new Vector3(rect.xMin, rect.yMin); b = new Vector3(rect.xMin, rect.yMax); break;
+                default: return;
+            }
+            Handles.DrawAAPolyLine(3f, a, b);
         }
 
         private void DrawStrokePreview(Rect localRect, TileBounds bounds)
@@ -275,6 +349,18 @@ namespace MassRPG.Editor.World
                 bounds.MinX + Mathf.FloorToInt(local.x / _pixelsPerTile),
                 bounds.MinY + Mathf.FloorToInt(local.y / _pixelsPerTile));
 
+            if (_mode == WorldEditorMode.Edges)
+            {
+                if (e.button == 0 && !e.alt && e.type == EventType.MouseDown
+                    && TryNearestEdge(local, bounds, out var from, out var to))
+                {
+                    ApplyEdgeTool(from, to, e.shift);
+                    e.Use();
+                    Repaint();
+                }
+                return;
+            }
+
             if (e.button == 1 && e.type == EventType.MouseDown)
             {
                 Eyedrop(tile);
@@ -305,6 +391,61 @@ namespace MassRPG.Editor.World
                 _strokeTiles.Clear();
                 e.Use();
                 Repaint();
+            }
+        }
+
+        private bool TryNearestEdge(Vector2 local, TileBounds bounds, out GridLocation from, out GridLocation to)
+        {
+            var tileX = bounds.MinX + Mathf.FloorToInt(local.x / _pixelsPerTile);
+            var tileY = bounds.MinY + Mathf.FloorToInt(local.y / _pixelsPerTile);
+            var tile = new GridCoord(tileX, tileY);
+            from = default;
+            to = default;
+            if (!WorldConstants.IsInsideWorld(tile)) return false;
+
+            var fx = local.x / _pixelsPerTile - Mathf.Floor(local.x / _pixelsPerTile);
+            var fy = local.y / _pixelsPerTile - Mathf.Floor(local.y / _pixelsPerTile);
+            var min = fx;
+            var neighbor = new GridCoord(tile.X - 1, tile.Y);
+            if (1f - fx < min) { min = 1f - fx; neighbor = new GridCoord(tile.X + 1, tile.Y); }
+            if (fy < min) { min = fy; neighbor = new GridCoord(tile.X, tile.Y - 1); }
+            if (1f - fy < min) neighbor = new GridCoord(tile.X, tile.Y + 1);
+            if (!WorldConstants.IsInsideWorld(neighbor)) return false;
+
+            from = new GridLocation(tile, _plane, _storey);
+            to = new GridLocation(neighbor, _plane, _storey);
+            return true;
+        }
+
+        private void ApplyEdgeTool(GridLocation from, GridLocation to, bool erase)
+        {
+            bool changed;
+            switch (_edgeMode)
+            {
+                case EdgePaintMode.Ramp:
+                    changed = erase
+                        ? WorldEdgeEditing.TryRemoveRamp(_session, from, to)
+                        : WorldEdgeEditing.TryPlaceRamp(_session, from, to);
+                    _status = changed
+                        ? (erase ? "Removed ramp." : "Placed ramp transition.")
+                        : "Ramp requires two cardinally adjacent tiles differing by exactly one logical elevation.";
+                    return;
+
+                case EdgePaintMode.MovementBarrier:
+                    changed = WorldEdgeEditing.SetBarrier(_session, from, to, !erase, false);
+                    _status = changed ? (erase ? "Cleared movement barrier." : "Placed movement-only edge (fence/hedge style).") : "Edge made no change.";
+                    return;
+
+                case EdgePaintMode.FullBarrier:
+                    changed = WorldEdgeEditing.SetBarrier(_session, from, to, !erase, !erase);
+                    _status = changed ? (erase ? "Cleared full barrier." : "Placed movement + ranged LOS barrier (wall style).") : "Edge made no change.";
+                    return;
+
+                default:
+                    var barrier = WorldEdgeEditing.SetBarrier(_session, from, to, false, false);
+                    var ramp = WorldEdgeEditing.TryRemoveRamp(_session, from, to);
+                    _status = barrier || ramp ? "Cleared authored edge." : "Nothing authored on that edge.";
+                    return;
             }
         }
 
@@ -351,8 +492,8 @@ namespace MassRPG.Editor.World
                 case WorldEditorMode.Water:
                 {
                     var flags = cell.Flags & ~(TileFlags.Water | TileFlags.DeepWater);
-                    if (_waterMode == WaterPaintMode.Water) flags |= TileFlags.Water;
-                    else if (_waterMode == WaterPaintMode.DeepWater) flags |= TileFlags.DeepWater;
+                    if (_waterMode == WaterPaintMode.Water) flags |= TileFlags.Water | TileFlags.MovementBlocked | TileFlags.NoBuild;
+                    else if (_waterMode == WaterPaintMode.DeepWater) flags |= TileFlags.DeepWater | TileFlags.MovementBlocked | TileFlags.NoBuild;
                     return Copy(cell, flags: flags);
                 }
 
@@ -419,8 +560,7 @@ namespace MassRPG.Editor.World
             var documents = _session.BuildDirtyPageDocuments();
             for (var i = 0; i < documents.Count; i++) WorldPageJsonPersistence.Save(documents[i]);
             _session.MarkAllSaved();
-            AssetDatabase.Refresh();
-            _status = $"Saved {documents.Count} changed page(s) to {WorldPageJsonPersistence.ProductionRoot}.";
+            _status = $"Saved {documents.Count} changed page(s) to repository WorldData/Pages.";
         }
 
         private void SaveRecovery()
