@@ -2,12 +2,15 @@ using System;
 using MassRPG.Core.Characters;
 using MassRPG.Core.Content;
 using MassRPG.Core.Inventory;
+using MassRPG.Core.Skills;
 using MassRPG.Core.World;
+using MassRPG.Data.Effects;
 using MassRPG.Data.Items;
 using MassRPG.Data.Quests;
 using MassRPG.Data.World.Semantics;
 using MassRPG.Server.Death;
 using MassRPG.Server.Economy;
+using MassRPG.Server.Effects;
 using MassRPG.Server.Items;
 using MassRPG.Server.Persistence;
 using MassRPG.Server.Pvp;
@@ -22,14 +25,18 @@ namespace MassRPG.Tests
         private static readonly ContentId SwordId = new ContentId("test_sword");
         private static readonly ContentId QuestId = new ContentId("quest.persist_everything");
         private static readonly ContentId NpcId = new ContentId("npc.guide");
+        private static readonly ContentId PotionId = new ContentId("potion.persist_everything");
+        private static readonly ContentId EffectId = new ContentId("effect.persist_everything");
 
         [Test]
-        public void CompleteRoundTripPreservesQuestDurabilityAndPvpAlongsideBaseCharacterState()
+        public void CompleteRoundTripPreservesQuestDurabilityPvpAndTimedEffectsAlongsideBaseCharacterState()
         {
             var items = CreateItems();
             var quests = CreateQuestService(items);
             var durability = new EquipmentDurabilityService();
             var pvp = new PvpService(new WorldSemanticCatalog());
+            var effects = CreateEffectCatalog();
+            var statusEffects = new StatusEffectService();
             var banks = new CharacterBankRegistry();
             var respawns = new PlayerRespawnRegistry();
             var travel = new FastTravelStateRegistry();
@@ -58,6 +65,8 @@ namespace MassRPG.Tests
             Assert.IsTrue(durability.TryGet(player, EquipmentSlot.MainHand, out var damaged));
             Assert.AreEqual(7500, damaged.DurabilityBasisPoints);
 
+            Assert.IsTrue(effects.TryGetByEffect(EffectId, out var effect));
+            statusEffects.Apply(player, effect, 1000);
             pvp.RestoreStatus(player.CharacterId, new PlayerPvpStatusSnapshot(true, 123456789));
             var respawn = respawns.GetOrCreate(player.CharacterId);
             respawn.Preference = RespawnPreference.Home;
@@ -70,11 +79,14 @@ namespace MassRPG.Tests
                 travel,
                 quests,
                 durability,
-                pvp);
+                pvp,
+                statusEffects,
+                3000);
 
             var restoredQuests = CreateQuestService(items);
             var restoredDurability = new EquipmentDurabilityService();
             var restoredPvp = new PvpService(new WorldSemanticCatalog());
+            var restoredEffects = new StatusEffectService();
             var restored = CompleteCharacterPersistenceSnapshotCodec.Restore(
                 snapshot,
                 items,
@@ -83,8 +95,12 @@ namespace MassRPG.Tests
                 new FastTravelStateRegistry(),
                 restoredQuests,
                 restoredDurability,
-                restoredPvp);
+                restoredPvp,
+                restoredEffects,
+                effects,
+                5000);
 
+            Assert.AreEqual(CompleteCharacterPersistenceSnapshot.CurrentVersion, snapshot.Version);
             Assert.AreEqual(player.CharacterId, restored.Player.CharacterId);
             Assert.AreEqual(Loc(40, 50), restored.Player.Location);
             Assert.AreEqual(Loc(7, 8), restored.Respawn.HomeLocation.Value);
@@ -101,6 +117,12 @@ namespace MassRPG.Tests
 
             Assert.IsTrue(restored.Pvp.OptedIn);
             Assert.AreEqual(123456789, restored.Pvp.SkulledUntilUnixMilliseconds);
+            Assert.AreEqual(1, restored.StatusEffects.Effects.Count);
+            Assert.AreEqual(11000, restored.StatusEffects.Effects[0].ExpiresAtUnixMilliseconds);
+            Assert.AreEqual(restored.Player.Skills.GetLevel(SkillId.Attack) + 4,
+                restoredEffects.GetEffectiveLevel(restored.Player, SkillId.Attack, 10999));
+            Assert.AreEqual(restored.Player.Skills.GetLevel(SkillId.Attack),
+                restoredEffects.GetEffectiveLevel(restored.Player, SkillId.Attack, 11000));
         }
 
         [Test]
@@ -121,10 +143,45 @@ namespace MassRPG.Tests
                 valid.Character,
                 valid.Quests,
                 valid.EquipmentDurability,
-                valid.Pvp);
+                valid.Pvp,
+                valid.StatusEffects);
 
             Assert.Throws<InvalidOperationException>(() => CompleteCharacterPersistenceSnapshotCodec.Restore(
                 future,
+                items,
+                new CharacterBankRegistry(),
+                new PlayerRespawnRegistry(),
+                new FastTravelStateRegistry(),
+                CreateQuestService(items),
+                new EquipmentDurabilityService(),
+                new PvpService(new WorldSemanticCatalog())));
+        }
+
+        [Test]
+        public void RestoreRequiresStatusEffectServicesWhenSnapshotContainsActiveEffects()
+        {
+            var items = CreateItems();
+            var player = new PlayerState(Guid.NewGuid(), "Effects Need Service");
+            var quests = CreateQuestService(items);
+            var durability = new EquipmentDurabilityService();
+            var pvp = new PvpService(new WorldSemanticCatalog());
+            var effects = CreateEffectCatalog();
+            Assert.IsTrue(effects.TryGetByEffect(EffectId, out var effect));
+            var status = new StatusEffectService();
+            status.Apply(player, effect, 1000);
+            var snapshot = CompleteCharacterPersistenceSnapshotCodec.Capture(
+                player,
+                new CharacterBankRegistry(),
+                new PlayerRespawnRegistry(),
+                new FastTravelStateRegistry(),
+                quests,
+                durability,
+                pvp,
+                status,
+                2000);
+
+            Assert.Throws<InvalidOperationException>(() => CompleteCharacterPersistenceSnapshotCodec.Restore(
+                snapshot,
                 items,
                 new CharacterBankRegistry(),
                 new PlayerRespawnRegistry(),
@@ -159,6 +216,17 @@ namespace MassRPG.Tests
                     new QuestObjectiveDefinition("talk", QuestObjectiveKind.TalkToNpc, 1, NpcId)
                 }));
             return new QuestService(catalog, items);
+        }
+
+        private static PotionEffectCatalog CreateEffectCatalog()
+        {
+            var catalog = new PotionEffectCatalog();
+            catalog.Register(new PotionEffectDefinition(
+                PotionId,
+                EffectId,
+                10000,
+                new[] { new SkillLevelModifier(SkillId.Attack, 4) }));
+            return catalog;
         }
 
         private static int FindSlot(InventoryState inventory, ContentId itemId)
