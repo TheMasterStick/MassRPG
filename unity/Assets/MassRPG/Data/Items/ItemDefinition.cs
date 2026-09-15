@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using MassRPG.Core.Content;
 using MassRPG.Core.Inventory;
 using MassRPG.Core.Resources;
@@ -47,7 +48,8 @@ namespace MassRPG.Data.Items
             int equipRequirementLevel = 1,
             int healAmount = 0,
             int toolTier = 0,
-            GatheringToolKind gatheringToolKind = GatheringToolKind.None)
+            GatheringToolKind gatheringToolKind = GatheringToolKind.None,
+            bool? canDualWield = null)
         {
             if (id.IsEmpty) throw new ArgumentException("Item id cannot be empty.", nameof(id));
             if (equipRequirementLevel < 1 || equipRequirementLevel > 300) throw new ArgumentOutOfRangeException(nameof(equipRequirementLevel));
@@ -68,6 +70,10 @@ namespace MassRPG.Data.Items
             HealAmount = healAmount;
             ToolTier = toolTier;
             GatheringToolKind = gatheringToolKind;
+
+            // MassRPG's default weapon rule: a normal one-handed weapon can be used in either hand.
+            // Individual specialist weapons can opt out later without changing inventory rules.
+            CanDualWield = canDualWield ?? (type == ItemType.Weapon && !twoHanded && ContainsMainHand(AllowedEquipmentSlots));
         }
 
         public ContentId Id { get; }
@@ -78,6 +84,7 @@ namespace MassRPG.Data.Items
         public string Description { get; set; }
         public EquipmentSlot[] AllowedEquipmentSlots { get; set; }
         public bool TwoHanded { get; set; }
+        public bool CanDualWield { get; set; }
         public CombatBonuses Bonuses { get; set; }
         public SkillId? EquipRequirementSkill { get; set; }
         public int EquipRequirementLevel { get; set; }
@@ -93,9 +100,34 @@ namespace MassRPG.Data.Items
         public ItemRule ToRule() => new ItemRule(
             Id,
             Stackable,
-            AllowedEquipmentSlots,
+            ExpandedEquipmentSlots(),
             TwoHanded,
             EquipRequirementSkill,
             EquipRequirementLevel);
+
+        private EquipmentSlot[] ExpandedEquipmentSlots()
+        {
+            if (!CanDualWield || TwoHanded || ContainsOffHand(AllowedEquipmentSlots))
+                return AllowedEquipmentSlots;
+
+            var slots = new List<EquipmentSlot>(AllowedEquipmentSlots.Length + 1);
+            for (var i = 0; i < AllowedEquipmentSlots.Length; i++) slots.Add(AllowedEquipmentSlots[i]);
+            slots.Add(EquipmentSlot.OffHand);
+            return slots.ToArray();
+        }
+
+        private static bool ContainsMainHand(EquipmentSlot[] slots)
+        {
+            for (var i = 0; i < slots.Length; i++)
+                if (slots[i] == EquipmentSlot.MainHand) return true;
+            return false;
+        }
+
+        private static bool ContainsOffHand(EquipmentSlot[] slots)
+        {
+            for (var i = 0; i < slots.Length; i++)
+                if (slots[i] == EquipmentSlot.OffHand) return true;
+            return false;
+        }
     }
 }
