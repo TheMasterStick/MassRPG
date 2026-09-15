@@ -38,6 +38,7 @@ namespace MassRPG.Server.Authority
         private readonly FarmingService _farming;
         private readonly FiremakingService _firemaking;
         private readonly GroundItemService _groundItems;
+        private readonly FoodConsumptionService _food;
 
         public LocalGameAuthority(
             IItemRuleSource itemRules,
@@ -55,7 +56,8 @@ namespace MassRPG.Server.Authority
             IEconomyAccessSource economyAccess = null,
             FarmingService farming = null,
             FiremakingService firemaking = null,
-            GroundItemService groundItems = null)
+            GroundItemService groundItems = null,
+            FoodConsumptionService food = null)
         {
             _itemRules = itemRules ?? throw new ArgumentNullException(nameof(itemRules));
             _movementMap = movementMap;
@@ -73,6 +75,7 @@ namespace MassRPG.Server.Authority
             _farming = farming;
             _firemaking = firemaking;
             _groundItems = groundItems;
+            _food = food;
         }
 
         public void RegisterPlayer(PlayerState player)
@@ -104,6 +107,13 @@ namespace MassRPG.Server.Authority
                     return AuthorityDecision.Reject(request.RequestId, "equipment_locked_in_combat", "Armor and accessories cannot be changed during combat.");
                 return FromInventoryResult(request.RequestId,
                     InventoryRules.Unequip(player.Inventory, player.Equipment, _itemRules, unequip.Slot));
+            }
+
+            if (request is EatFoodRequest eat)
+            {
+                if (_food == null)
+                    return AuthorityDecision.Reject(request.RequestId, "food_unavailable", "Food consumption is not initialized.");
+                return FromFoodResult(request.RequestId, _food.Eat(player, eat.InventorySlot));
             }
 
             if (request is DropInventoryItemRequest drop)
@@ -433,6 +443,11 @@ namespace MassRPG.Server.Authority
                 : AuthorityDecision.Reject(requestId, result.Code, result.Code);
 
         private static AuthorityDecision FromGroundItemResult(Guid requestId, GroundItemResult result)
+            => result.Success
+                ? AuthorityDecision.Accept(requestId)
+                : AuthorityDecision.Reject(requestId, result.Code, result.Code);
+
+        private static AuthorityDecision FromFoodResult(Guid requestId, FoodConsumptionResult result)
             => result.Success
                 ? AuthorityDecision.Accept(requestId)
                 : AuthorityDecision.Reject(requestId, result.Code, result.Code);
