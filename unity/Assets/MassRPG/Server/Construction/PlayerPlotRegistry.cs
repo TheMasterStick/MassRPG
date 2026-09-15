@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using MassRPG.Core.Construction;
 using MassRPG.Core.World;
 
 namespace MassRPG.Server.Construction
@@ -12,7 +13,8 @@ namespace MassRPG.Server.Construction
     /// <summary>
     /// Authoritative plot registry. Placement checks the full future Large-tier reservation, not
     /// merely the currently owned Small footprint, preventing neighboring plots from blocking each
-    /// other's legitimate upgrades later.
+    /// other's legitimate upgrades later. Upgrade shapes remain caller/data driven so final Small,
+    /// Medium and Large dimensions can change without rewriting persistence.
     /// </summary>
     public sealed class PlayerPlotRegistry
     {
@@ -81,6 +83,26 @@ namespace MassRPG.Server.Construction
             return PlotPlacementResult.Ok(plot);
         }
 
+        public PlotUpgradeResult TryUpgrade(
+            Guid plotId,
+            PlotTier targetTier,
+            IEnumerable<GridCoord> targetClaimedTiles)
+        {
+            if (!_plots.TryGetValue(plotId, out var plot)) return PlotUpgradeResult.Fail("unknown_plot");
+            if (targetClaimedTiles == null) return PlotUpgradeResult.Fail("missing_footprint");
+            if ((int)targetTier != (int)plot.Tier + 1) return PlotUpgradeResult.Fail("invalid_tier_progression");
+
+            var target = new HashSet<GridCoord>(targetClaimedTiles);
+            if (target.Count == 0) return PlotUpgradeResult.Fail("empty_footprint");
+            foreach (var existing in plot.ClaimedTiles)
+                if (!target.Contains(existing)) return PlotUpgradeResult.Fail("upgrade_cannot_remove_claimed_land");
+            foreach (var tile in target)
+                if (!plot.Reserves(tile)) return PlotUpgradeResult.Fail("upgrade_outside_reservation");
+
+            plot.ApplyUpgrade(targetTier, target);
+            return PlotUpgradeResult.Ok(plot);
+        }
+
         public bool Remove(Guid plotId)
         {
             if (!_plots.TryGetValue(plotId, out var plot)) return false;
@@ -115,5 +137,22 @@ namespace MassRPG.Server.Construction
 
         public static PlotPlacementResult Ok(PlayerPlotState plot) => new PlotPlacementResult(true, "ok", plot);
         public static PlotPlacementResult Fail(string code) => new PlotPlacementResult(false, code, null);
+    }
+
+    public readonly struct PlotUpgradeResult
+    {
+        private PlotUpgradeResult(bool success, string code, PlayerPlotState plot)
+        {
+            Success = success;
+            Code = code ?? string.Empty;
+            Plot = plot;
+        }
+
+        public bool Success { get; }
+        public string Code { get; }
+        public PlayerPlotState Plot { get; }
+
+        public static PlotUpgradeResult Ok(PlayerPlotState plot) => new PlotUpgradeResult(true, "ok", plot);
+        public static PlotUpgradeResult Fail(string code) => new PlotUpgradeResult(false, code, null);
     }
 }
