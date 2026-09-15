@@ -40,20 +40,7 @@ namespace MassRPG.Tests
         public void FastTravelRequestsActivateOpenCommitAndMovementEndsArrivalProtection()
         {
             var setup = CreateSetup();
-            InventoryRules.AddItem(setup.Player.Inventory, setup.Items, FastTravelService.CoinId, 100);
-
-            setup.Player.Location = Loc(10, 10);
-            Assert.IsTrue(setup.Gateway.Submit(
-                new ActivateFastTravelNodeRequest(Guid.NewGuid(), setup.Player.CharacterId, OriginId), 1000).Accepted);
-            setup.Player.Location = Loc(12, 10);
-            Assert.IsTrue(setup.Gateway.Submit(
-                new ActivateFastTravelNodeRequest(Guid.NewGuid(), setup.Player.CharacterId, DestinationId), 1000).Accepted);
-            setup.Player.Location = Loc(10, 10);
-
-            Assert.IsTrue(setup.Gateway.Submit(
-                new OpenFastTravelMapRequest(Guid.NewGuid(), setup.Player.CharacterId, OriginId), 2000).Accepted);
-            Assert.IsTrue(setup.Gateway.Submit(
-                new CommitFastTravelRequest(Guid.NewGuid(), setup.Player.CharacterId, DestinationId), 2001).Accepted);
+            TravelToDestination(setup, 2000);
             Assert.AreEqual(Loc(12, 10), setup.Player.Location);
             Assert.IsTrue(setup.TravelStates.GetOrCreate(setup.Player.CharacterId).HasArrivalProtection(2002));
 
@@ -67,14 +54,31 @@ namespace MassRPG.Tests
         public void FailedMeaningfulRequestDoesNotStripArrivalProtection()
         {
             var setup = CreateSetup();
+            TravelToDestination(setup, 2000);
             var state = setup.TravelStates.GetOrCreate(setup.Player.CharacterId);
-            state.ArrivalProtectionUntilUnixMilliseconds = 5000;
+            Assert.IsTrue(state.HasArrivalProtection(2002));
 
             var result = setup.Gateway.Submit(
-                new MoveToRequest(Guid.NewGuid(), setup.Player.CharacterId, Loc(-1, -1)), 2000);
+                new MoveToRequest(Guid.NewGuid(), setup.Player.CharacterId, Loc(-1, -1)), 2002);
 
             Assert.IsFalse(result.Accepted);
-            Assert.IsTrue(state.HasArrivalProtection(2000));
+            Assert.IsTrue(state.HasArrivalProtection(2002));
+        }
+
+        private static void TravelToDestination(Setup setup, long now)
+        {
+            InventoryRules.AddItem(setup.Player.Inventory, setup.Items, FastTravelService.CoinId, 100);
+            setup.Player.Location = Loc(10, 10);
+            Assert.IsTrue(setup.Gateway.Submit(
+                new ActivateFastTravelNodeRequest(Guid.NewGuid(), setup.Player.CharacterId, OriginId), now - 2).Accepted);
+            setup.Player.Location = Loc(12, 10);
+            Assert.IsTrue(setup.Gateway.Submit(
+                new ActivateFastTravelNodeRequest(Guid.NewGuid(), setup.Player.CharacterId, DestinationId), now - 2).Accepted);
+            setup.Player.Location = Loc(10, 10);
+            Assert.IsTrue(setup.Gateway.Submit(
+                new OpenFastTravelMapRequest(Guid.NewGuid(), setup.Player.CharacterId, OriginId), now - 1).Accepted);
+            Assert.IsTrue(setup.Gateway.Submit(
+                new CommitFastTravelRequest(Guid.NewGuid(), setup.Player.CharacterId, DestinationId), now).Accepted);
         }
 
         private static Setup CreateSetup()
