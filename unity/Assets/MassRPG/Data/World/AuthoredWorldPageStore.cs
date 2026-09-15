@@ -9,7 +9,7 @@ namespace MassRPG.Data.World
     /// Sparse loaded-page world view. Semantic regions/POIs remain separate data layers; pages are
     /// only storage/streaming units for the exact logical tile surface.
     /// </summary>
-    public sealed class AuthoredWorldPageStore : IGridTraversalMap
+    public sealed class AuthoredWorldPageStore : IGridTraversalMap, IRangedLineOfSightMap
     {
         private readonly Dictionary<WorldPageKey, AuthoredWorldPage> _pages = new Dictionary<WorldPageKey, AuthoredWorldPage>();
         private readonly ContentId _defaultGround;
@@ -104,7 +104,10 @@ namespace MassRPG.Data.World
                 && (toCell.ElevationTransitionEdges & toEdge) != 0;
         }
 
-        public bool BlocksRangedLineOfSight(GridLocation from, GridLocation to)
+        public bool IsRangedLineOfSightBlockingTile(GridLocation location)
+            => !TryGetCell(location, out var cell) || (cell.Flags & TileFlags.RangedLineOfSightBlocked) != 0;
+
+        public bool IsRangedLineOfSightBlockedCardinalEdge(GridLocation from, GridLocation to)
         {
             if (!from.SameLayer(to)) return true;
             CardinalEdgeMask fromEdge;
@@ -112,11 +115,13 @@ namespace MassRPG.Data.World
             catch (ArgumentException) { return true; }
 
             if (!TryGetCell(from, out var fromCell) || !TryGetCell(to, out var toCell)) return true;
-            if ((toCell.Flags & TileFlags.RangedLineOfSightBlocked) != 0) return true;
             var toEdge = CardinalEdges.Opposite(fromEdge);
             return (fromCell.LineOfSightBlockedEdges & fromEdge) != 0
                 || (toCell.LineOfSightBlockedEdges & toEdge) != 0;
         }
+
+        public bool BlocksRangedLineOfSight(GridLocation from, GridLocation to)
+            => IsRangedLineOfSightBlockingTile(to) || IsRangedLineOfSightBlockedCardinalEdge(from, to);
 
         private void UpdateEdge(
             GridLocation location,

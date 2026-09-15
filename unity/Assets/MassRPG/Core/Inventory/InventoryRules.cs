@@ -134,7 +134,7 @@ namespace MassRPG.Core.Inventory
                     return InventoryOperationResult.Fail("requirement_not_met", $"You need {rule.EquipRequirementSkill.Value} level {rule.EquipRequirementLevel} to equip that item.");
             }
 
-            var target = ResolveTargetSlot(equipment, rule, requestedSlot);
+            var target = ResolveEquipmentTargetSlot(equipment, rule, requestedSlot);
             if (!target.HasValue)
                 return InventoryOperationResult.Fail("invalid_equipment_slot", "That item cannot be equipped in the requested slot.");
 
@@ -165,6 +165,24 @@ namespace MassRPG.Core.Inventory
             return InventoryOperationResult.Ok();
         }
 
+        public static EquipmentSlot? ResolveEquipmentTargetSlot(EquipmentState equipment, ItemRule rule, EquipmentSlot? requested)
+        {
+            if (requested.HasValue)
+            {
+                for (var i = 0; i < rule.AllowedEquipmentSlots.Length; i++)
+                    if (rule.AllowedEquipmentSlots[i] == requested.Value) return requested.Value;
+                return null;
+            }
+
+            for (var i = 0; i < rule.AllowedEquipmentSlots.Length; i++)
+            {
+                var slot = rule.AllowedEquipmentSlots[i];
+                if (!equipment.IsOccupied(slot)) return slot;
+            }
+
+            return rule.AllowedEquipmentSlots.Length > 0 ? rule.AllowedEquipmentSlots[0] : (EquipmentSlot?)null;
+        }
+
         public static InventoryOperationResult Unequip(
             InventoryState inventory,
             EquipmentState equipment,
@@ -181,24 +199,6 @@ namespace MassRPG.Core.Inventory
                 throw new InvalidOperationException("Unequip capacity check failed.");
 
             return InventoryOperationResult.Ok();
-        }
-
-        private static EquipmentSlot? ResolveTargetSlot(EquipmentState equipment, ItemRule rule, EquipmentSlot? requested)
-        {
-            if (requested.HasValue)
-            {
-                for (var i = 0; i < rule.AllowedEquipmentSlots.Length; i++)
-                    if (rule.AllowedEquipmentSlots[i] == requested.Value) return requested.Value;
-                return null;
-            }
-
-            for (var i = 0; i < rule.AllowedEquipmentSlots.Length; i++)
-            {
-                var slot = rule.AllowedEquipmentSlots[i];
-                if (!equipment.IsOccupied(slot)) return slot;
-            }
-
-            return rule.AllowedEquipmentSlots[0];
         }
 
         private static bool InBounds(InventoryState inventory, int index) => index >= 0 && index < inventory.Capacity;

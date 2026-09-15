@@ -35,6 +35,7 @@ namespace MassRPG.Core.Characters
             Inventory = new InventoryState(inventoryCapacity);
             Equipment = new EquipmentState();
             Movement = new MovementState();
+            Combat = new CombatState();
             CurrentHitpoints = MaxHitpoints;
             CombatStyle = CombatStyle.Melee;
             MeleeTrainingStyle = MeleeTrainingStyle.Aggressive;
@@ -49,6 +50,7 @@ namespace MassRPG.Core.Characters
         public InventoryState Inventory { get; }
         public EquipmentState Equipment { get; }
         public MovementState Movement { get; }
+        public CombatState Combat { get; }
         public int CurrentHitpoints { get; set; }
         public CombatStyle CombatStyle { get; set; }
         public MeleeTrainingStyle MeleeTrainingStyle { get; set; }

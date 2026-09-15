@@ -50,12 +50,15 @@ namespace MassRPG.Server.Authority
                 return FromInventoryResult(request.RequestId, InventoryRules.MoveSlot(player.Inventory, _itemRules, move.FromIndex, move.ToIndex));
 
             if (request is EquipInventoryItemRequest equip)
-                return FromInventoryResult(request.RequestId,
-                    InventoryRules.EquipFromInventory(player.Inventory, player.Equipment, _itemRules, player.Skills, equip.InventoryIndex, equip.RequestedSlot));
+                return HandleEquipRequest(request.RequestId, player, equip);
 
             if (request is UnequipItemRequest unequip)
+            {
+                if (player.Combat.IsActive && !CanSwapDuringCombat(unequip.Slot))
+                    return AuthorityDecision.Reject(request.RequestId, "equipment_locked_in_combat", "Armor and accessories cannot be changed during combat.");
                 return FromInventoryResult(request.RequestId,
                     InventoryRules.Unequip(player.Inventory, player.Equipment, _itemRules, unequip.Slot));
+            }
 
             if (request is MoveToRequest moveTo)
                 return HandleMoveTo(request.RequestId, player, moveTo.Destination);
@@ -101,6 +104,23 @@ namespace MassRPG.Server.Authority
             return moved;
         }
 
+        private AuthorityDecision HandleEquipRequest(Guid requestId, PlayerState player, EquipInventoryItemRequest equip)
+        {
+            if (player.Combat.IsActive)
+            {
+                var stack = player.Inventory.GetSlot(equip.InventoryIndex);
+                if (stack != null && _itemRules.TryGetRule(stack.ItemId, out var rule))
+                {
+                    var target = InventoryRules.ResolveEquipmentTargetSlot(player.Equipment, rule, equip.RequestedSlot);
+                    if (target.HasValue && !CanSwapDuringCombat(target.Value))
+                        return AuthorityDecision.Reject(requestId, "equipment_locked_in_combat", "Armor and accessories cannot be changed during combat.");
+                }
+            }
+
+            return FromInventoryResult(requestId,
+                InventoryRules.EquipFromInventory(player.Inventory, player.Equipment, _itemRules, player.Skills, equip.InventoryIndex, equip.RequestedSlot));
+        }
+
         private AuthorityDecision HandleMoveTo(Guid requestId, PlayerState player, GridLocation destination)
         {
             if (_movementMap == null)
@@ -117,6 +137,9 @@ namespace MassRPG.Server.Authority
             player.Movement.ReplacePath(path.Steps);
             return AuthorityDecision.Accept(requestId);
         }
+
+        private static bool CanSwapDuringCombat(EquipmentSlot slot)
+            => slot == EquipmentSlot.Weapon || slot == EquipmentSlot.Shield;
 
         private static AuthorityDecision FromInventoryResult(Guid requestId, InventoryOperationResult result)
         {
