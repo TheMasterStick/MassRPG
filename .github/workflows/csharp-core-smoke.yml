@@ -9,6 +9,8 @@ on:
       - 'unity/Assets/MassRPG/Core/**'
       - 'unity/Assets/MassRPG/Data/**'
       - 'unity/Assets/MassRPG/Server/**'
+      - 'unity/Assets/MassRPG/EditorCore/**'
+      - 'unity/Assets/MassRPG/Tests/Editor/**'
       - '.github/workflows/csharp-core-smoke.yml'
   workflow_dispatch:
 
@@ -49,3 +51,58 @@ jobs:
 
       - name: Compile engine-independent migration assemblies
         run: dotnet build .ci/csharp-smoke/MassRPG.Smoke.csproj --configuration Release --nologo
+
+  test-engine-independent-rules:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Generate engine-independent NUnit project
+        shell: bash
+        run: |
+          mkdir -p .ci/csharp-tests
+          cat > .ci/csharp-tests/MassRPG.EngineTests.csproj <<'EOF'
+          <Project Sdk="Microsoft.NET.Sdk">
+            <PropertyGroup>
+              <TargetFramework>net8.0</TargetFramework>
+              <LangVersion>latest</LangVersion>
+              <Nullable>disable</Nullable>
+              <ImplicitUsings>disable</ImplicitUsings>
+              <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+              <IsTestProject>true</IsTestProject>
+              <IsPackable>false</IsPackable>
+            </PropertyGroup>
+            <ItemGroup>
+              <Compile Include="../../unity/Assets/MassRPG/Core/**/*.cs" />
+              <Compile Include="../../unity/Assets/MassRPG/Data/**/*.cs" />
+              <Compile Include="../../unity/Assets/MassRPG/Server/**/*.cs" />
+              <Compile Include="../../unity/Assets/MassRPG/EditorCore/**/*.cs" />
+          EOF
+
+          count=0
+          while IFS= read -r file; do
+            if grep -Eq 'UnityEngine|UnityEditor|MassRPG\.Client|using MassRPG\.Editor;' "$file"; then
+              echo "Skipping Unity-dependent test: $file"
+              continue
+            fi
+            printf '    <Compile Include="../../%s" />\n' "$file" >> .ci/csharp-tests/MassRPG.EngineTests.csproj
+            count=$((count + 1))
+          done < <(find unity/Assets/MassRPG/Tests/Editor -maxdepth 1 -name '*.cs' -type f | sort)
+
+          cat >> .ci/csharp-tests/MassRPG.EngineTests.csproj <<'EOF'
+            </ItemGroup>
+            <ItemGroup>
+              <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.10.0" />
+              <PackageReference Include="NUnit" Version="3.14.0" />
+              <PackageReference Include="NUnit3TestAdapter" Version="4.5.0" />
+            </ItemGroup>
+          </Project>
+          EOF
+          echo "Selected $count engine-independent test source files."
+
+      - name: Run engine-independent migration tests
+        run: dotnet test .ci/csharp-tests/MassRPG.EngineTests.csproj --configuration Release --nologo --verbosity normal
