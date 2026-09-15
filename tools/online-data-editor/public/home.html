@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MassRPG Online Data Editor</title>
+  <style>
+    :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; background:#17191d; color:#eef1f5; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:#17191d; }
+    header { padding:18px 22px; border-bottom:1px solid #343840; background:#202329; display:flex; gap:16px; flex-wrap:wrap; align-items:center; }
+    h1 { margin:0; font-size:21px; }
+    header p { margin:3px 0 0; color:#aab1bc; font-size:13px; }
+    .status { margin-left:auto; display:flex; gap:8px; flex-wrap:wrap; }
+    .pill { padding:5px 9px; border:1px solid #454b56; border-radius:999px; background:#282c33; font-size:12px; }
+    main { max-width:980px; margin:0 auto; padding:24px 18px 40px; }
+    .intro { border:1px solid #343a44; border-radius:9px; background:#20242a; padding:15px; color:#c8ced7; line-height:1.5; }
+    .grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin-top:16px; }
+    a.card { display:block; color:inherit; text-decoration:none; border:1px solid #3b414b; border-radius:9px; background:#20242a; padding:18px; min-height:126px; }
+    a.card:hover { border-color:#607896; background:#252b33; }
+    a.card strong { display:block; font-size:17px; margin-bottom:7px; }
+    a.card span { color:#aeb6c1; line-height:1.45; font-size:13px; }
+    .tag { display:inline-block; margin-top:12px; padding:4px 8px; border-radius:999px; background:#2e3946; color:#bfd1e6; font-size:11px; }
+    .foot { margin-top:18px; color:#929aa6; font-size:12px; line-height:1.5; }
+    @media(max-width:650px){ .grid{grid-template-columns:1fr;} .status{margin-left:0;} }
+  </style>
+</head>
+<body>
+<header>
+  <div><h1>MassRPG Online Data Editor</h1><p>Browser authoring for repository-backed gameplay drafts</p></div>
+  <div class="status"><span class="pill" id="branch">Branch: …</span><span class="pill" id="changes">Draft changes: …</span></div>
+</header>
+<main>
+  <div class="intro">
+    Work here when Unity is unavailable. Saving edits repository draft JSON only; live MMO data still requires validation and deliberate publishing. Permanent IDs are save/network references and lock after an existing draft is loaded.
+  </div>
+  <div class="grid">
+    <a class="card" href="/items"><strong>Items</strong><span>Weapons, armor, tools, consumables, materials, equipment slots, dual wield rules, combat bonuses and timing.</span><div class="tag">Rich editor</div></a>
+    <a class="card" href="/creatures"><strong>Creatures</strong><span>Combat levels, stats, behavior disposition, attack style/range, footprint, aggro and leash rules.</span><div class="tag">Draft editor</div></a>
+    <a class="card" href="/resources"><strong>Resources</strong><span>Mining, woodcutting, fishing and farming definitions, yields, tools, XP, respawns and personal/shared availability.</span><div class="tag">Draft editor</div></a>
+    <a class="card" href="/recipes"><strong>Recipes</strong><span>Production requirements, ingredients, outputs, stations, tools, XP, duration and cooking/failure outputs.</span><div class="tag">Draft editor</div></a>
+  </div>
+  <div class="foot">All four categories save beneath <code>ContentData/Drafts/</code>. Commit &amp; Push is available inside each editor and stages only that draft tree.</div>
+</main>
+<script>
+(async()=>{try{const r=await fetch('/api/status');const s=await r.json();document.getElementById('branch').textContent=`Branch: ${s.branch||'(detached)'}`;document.getElementById('changes').textContent=`Draft changes: ${s.changedFiles??'?'}`;}catch{document.getElementById('branch').textContent='Repository status unavailable';}})();
+</script>
+</body>
+</html>
