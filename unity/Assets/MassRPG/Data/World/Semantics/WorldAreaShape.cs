@@ -46,7 +46,7 @@ namespace MassRPG.Data.World.Semantics
         public override bool Contains(GridCoord tile)
         {
             var inside = false;
-            for (var i = 0, j = _points.Count - 1; i < _points.Count; j = i++)
+            for (int i = 0, j = _points.Count - 1; i < _points.Count; j = i++)
             {
                 var a = _points[j];
                 var b = _points[i];
