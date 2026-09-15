@@ -228,14 +228,14 @@ namespace MassRPG.Server.Death
             if (selected == null || selected.Count == 0) return 0;
 
             var unique = new HashSet<int>();
-            var snapshots = new List<ItemStack>();
+            var snapshots = new List<InventoryStack>();
             for (var i = 0; i < selected.Count; i++)
             {
                 var slot = selected[i];
                 if (slot < 0 || slot >= player.Inventory.Capacity || !unique.Add(slot)) continue;
                 var stack = player.Inventory.GetSlot(slot);
                 if (stack == null || stack.ItemId == CoinId) continue;
-                snapshots.Add(new ItemStack(stack.ItemId, stack.Quantity));
+                snapshots.Add(new InventoryStack(stack.ItemId, stack.Quantity));
             }
 
             var dropped = 0;
