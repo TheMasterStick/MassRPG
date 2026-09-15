@@ -107,6 +107,20 @@ namespace MassRPG.Core.Authority
         public int InventorySlot { get; }
     }
 
+    /// <summary>
+    /// Client intent to drink the potion occupying one inventory slot. The client does not submit
+    /// effect magnitudes, durations or skill changes; authority resolves all of those from item data.
+    /// </summary>
+    public sealed class DrinkPotionRequest : GameRequest
+    {
+        public DrinkPotionRequest(Guid requestId, Guid characterId, int inventorySlot)
+            : base(requestId, characterId)
+        {
+            InventorySlot = inventorySlot;
+        }
+        public int InventorySlot { get; }
+    }
+
     public sealed class DropInventoryItemRequest : GameRequest
     {
         public DropInventoryItemRequest(Guid requestId, Guid characterId, int inventorySlot, int quantity)
