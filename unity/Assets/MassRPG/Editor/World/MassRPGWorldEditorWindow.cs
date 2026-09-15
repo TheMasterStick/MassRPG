@@ -48,6 +48,12 @@ namespace MassRPG.Editor.World
         private double _nextRecoveryAt;
         private string _status = "Ready";
 
+        private GridCoord? _selectionStart;
+        private GridCoord? _selectionEnd;
+        private bool _selectionDragging;
+        private WorldTileStamp _stamp;
+        private bool _pasteStampMode;
+
         [MenuItem("MassRPG/World Editor %#m")]
         public static void Open()
         {
@@ -120,7 +126,7 @@ namespace MassRPG.Editor.World
             using (new EditorGUILayout.HorizontalScope(EditorStyles.toolbar))
             {
                 _mode = (WorldEditorMode)EditorGUILayout.EnumPopup(_mode, EditorStyles.toolbarPopup, GUILayout.Width(120));
-                GUI.enabled = _mode != WorldEditorMode.Edges;
+                GUI.enabled = _mode != WorldEditorMode.Edges && _mode != WorldEditorMode.Selection;
                 _brushIndex = EditorGUILayout.Popup(_brushIndex, BrushLabels, EditorStyles.toolbarPopup, GUILayout.Width(50));
                 _brushShape = (BrushShape)EditorGUILayout.EnumPopup(_brushShape, EditorStyles.toolbarPopup, GUILayout.Width(70));
                 GUI.enabled = true;
@@ -156,8 +162,10 @@ namespace MassRPG.Editor.World
         {
             using (new EditorGUILayout.HorizontalScope(EditorStyles.helpBox))
             {
-                if (_mode != WorldEditorMode.Edges)
+                if (_mode != WorldEditorMode.Edges && _mode != WorldEditorMode.Selection)
                     GUILayout.Label($"Brush {BrushSizes[_brushIndex]}x{BrushSizes[_brushIndex]}", GUILayout.Width(105));
+                else if (_mode == WorldEditorMode.Selection)
+                    GUILayout.Label("Select / Stamp", GUILayout.Width(105));
                 else
                     GUILayout.Label("Edge tool", GUILayout.Width(105));
 
@@ -188,6 +196,28 @@ namespace MassRPG.Editor.World
                         GUILayout.Label("Click a tile edge. Shift removes a ramp/barrier.");
                         break;
 
+                    case WorldEditorMode.Selection:
+                        GUILayout.Label(SelectionSummary(), GUILayout.Width(180));
+                        GUI.enabled = HasSelection();
+                        if (GUILayout.Button("Capture Stamp", GUILayout.Width(95))) CaptureSelection();
+                        GUI.enabled = _stamp != null;
+                        var pasteLabel = _pasteStampMode && _stamp != null
+                            ? $"Pasting {_stamp.Width}x{_stamp.Height}"
+                            : _stamp != null ? $"Paste {_stamp.Width}x{_stamp.Height}" : "Paste Stamp";
+                        _pasteStampMode = GUILayout.Toggle(_pasteStampMode && _stamp != null, pasteLabel, GUI.skin.button, GUILayout.Width(110));
+                        GUI.enabled = HasSelection() || _stamp != null;
+                        if (GUILayout.Button("Clear", GUILayout.Width(55)))
+                        {
+                            _selectionStart = null;
+                            _selectionEnd = null;
+                            _stamp = null;
+                            _pasteStampMode = false;
+                            _status = "Selection and stamp cleared.";
+                        }
+                        GUI.enabled = true;
+                        GUILayout.Label("Drag to select. Stamps copy terrain/elevation/tile flags, not wall/ramp edges.");
+                        break;
+
                     case WorldEditorMode.Pathing:
                         _pathingMode = (PathingPaintMode)GUILayout.Toolbar((int)_pathingMode, new[] { "Movement", "Ranged LOS", "No Build" }, GUILayout.Width(300));
                         GUILayout.Label("Shift+paint erases the selected flag.");
@@ -212,6 +242,7 @@ namespace MassRPG.Editor.World
             DrawGrid(localRect, bounds);
             DrawAuthoredEdges(localRect, bounds);
             DrawStrokePreview(localRect, bounds);
+            DrawSelection(bounds);
             GUI.EndGroup();
 
             HandleCanvasInput(canvas, bounds);
@@ -323,6 +354,39 @@ namespace MassRPG.Editor.World
             }
         }
 
+        private void DrawSelection(TileBounds bounds)
+        {
+            if (!_selectionStart.HasValue || !_selectionEnd.HasValue) return;
+            var a = _selectionStart.Value;
+            var b = _selectionEnd.Value;
+            var minX = Math.Min(a.X, b.X);
+            var maxX = Math.Max(a.X, b.X);
+            var minY = Math.Min(a.Y, b.Y);
+            var maxY = Math.Max(a.Y, b.Y);
+            if (maxX < bounds.MinX || minX > bounds.MaxX || maxY < bounds.MinY || minY > bounds.MaxY) return;
+
+            var rect = new Rect(
+                (minX - bounds.MinX) * _pixelsPerTile,
+                (minY - bounds.MinY) * _pixelsPerTile,
+                (maxX - minX + 1) * _pixelsPerTile,
+                (maxY - minY + 1) * _pixelsPerTile);
+            EditorGUI.DrawRect(rect, new Color(0.25f, 0.65f, 1f, 0.13f));
+            Handles.BeginGUI();
+            var old = Handles.color;
+            Handles.color = _pasteStampMode ? new Color(1f, 0.75f, 0.2f, 0.95f) : new Color(0.3f, 0.78f, 1f, 0.95f);
+            var points = new[]
+            {
+                new Vector3(rect.xMin, rect.yMin),
+                new Vector3(rect.xMax, rect.yMin),
+                new Vector3(rect.xMax, rect.yMax),
+                new Vector3(rect.xMin, rect.yMax),
+                new Vector3(rect.xMin, rect.yMin)
+            };
+            Handles.DrawAAPolyLine(2f, points);
+            Handles.color = old;
+            Handles.EndGUI();
+        }
+
         private void HandleCanvasInput(Rect canvas, TileBounds bounds)
         {
             var e = Event.current;
@@ -349,6 +413,12 @@ namespace MassRPG.Editor.World
             var tile = new GridCoord(
                 bounds.MinX + Mathf.FloorToInt(local.x / _pixelsPerTile),
                 bounds.MinY + Mathf.FloorToInt(local.y / _pixelsPerTile));
+
+            if (_mode == WorldEditorMode.Selection)
+            {
+                HandleSelectionInput(e, tile);
+                return;
+            }
 
             if (_mode == WorldEditorMode.Edges)
             {
@@ -393,6 +463,114 @@ namespace MassRPG.Editor.World
                 e.Use();
                 Repaint();
             }
+        }
+
+        private void HandleSelectionInput(Event e, GridCoord tile)
+        {
+            if (!WorldConstants.IsInsideWorld(tile)) return;
+
+            if (e.button == 1 && e.type == EventType.MouseDown)
+            {
+                if (_pasteStampMode)
+                {
+                    _pasteStampMode = false;
+                    _status = "Stamp paste mode cancelled.";
+                    e.Use();
+                    Repaint();
+                }
+                return;
+            }
+
+            if (e.button != 0 || e.alt) return;
+            if (e.type == EventType.MouseDown)
+            {
+                if (_pasteStampMode && _stamp != null)
+                {
+                    PasteStamp(tile);
+                    e.Use();
+                    Repaint();
+                    return;
+                }
+
+                _selectionDragging = true;
+                _selectionStart = tile;
+                _selectionEnd = tile;
+                _status = "Selecting tiles...";
+                e.Use();
+                Repaint();
+            }
+            else if (_selectionDragging && e.type == EventType.MouseDrag)
+            {
+                _selectionEnd = tile;
+                e.Use();
+                Repaint();
+            }
+            else if (_selectionDragging && (e.type == EventType.MouseUp || e.rawType == EventType.MouseUp))
+            {
+                _selectionEnd = tile;
+                _selectionDragging = false;
+                _status = "Selected " + SelectionSummary() + ". Capture it as a reusable stamp or drag a new selection.";
+                e.Use();
+                Repaint();
+            }
+        }
+
+        private void CaptureSelection()
+        {
+            if (!HasSelection()) return;
+            var a = _selectionStart.Value;
+            var b = _selectionEnd.Value;
+            var minX = Math.Min(a.X, b.X);
+            var maxX = Math.Max(a.X, b.X);
+            var minY = Math.Min(a.Y, b.Y);
+            var maxY = Math.Max(a.Y, b.Y);
+            var width = maxX - minX + 1;
+            var height = maxY - minY + 1;
+            if (width > 256 || height > 256)
+            {
+                _status = $"Stamp selection is {width}x{height}. Keep reusable stamps at 256x256 tiles or smaller.";
+                return;
+            }
+
+            for (var y = minY; y <= maxY; y++)
+                for (var x = minX; x <= maxX; x++)
+                    _store.GetOrCreatePage(Loc(x, y));
+
+            try
+            {
+                _stamp = WorldTileStamp.Capture(
+                    _store,
+                    Loc(minX, minY),
+                    Loc(maxX, maxY),
+                    false);
+                _pasteStampMode = false;
+                _status = $"Captured {_stamp.Width}x{_stamp.Height} tile stamp. Edge barriers/ramps were intentionally excluded.";
+            }
+            catch (Exception ex)
+            {
+                _stamp = null;
+                _pasteStampMode = false;
+                _status = "Stamp capture failed: " + ex.Message;
+            }
+        }
+
+        private void PasteStamp(GridCoord topLeft)
+        {
+            if (_stamp == null) return;
+            var changed = _stamp.Paste(_session, Loc(topLeft.X, topLeft.Y));
+            _status = changed > 0
+                ? $"Pasted {_stamp.Width}x{_stamp.Height} stamp at {topLeft.X}, {topLeft.Y}; {changed:N0} tile(s) changed."
+                : "Stamp paste made no changes.";
+        }
+
+        private bool HasSelection() => _selectionStart.HasValue && _selectionEnd.HasValue;
+
+        private string SelectionSummary()
+        {
+            if (!HasSelection()) return "No selection";
+            var a = _selectionStart.Value;
+            var b = _selectionEnd.Value;
+            return $"{Math.Abs(a.X - b.X) + 1}x{Math.Abs(a.Y - b.Y) + 1} tiles";
         }
 
         private bool TryNearestEdge(Vector2 local, TileBounds bounds, out GridLocation from, out GridLocation to)
