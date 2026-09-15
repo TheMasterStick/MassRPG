@@ -346,8 +346,8 @@ async function commitAndPush(message) {
   };
 }
 
-async function serveIndex(res) {
-  const body = await readFile(path.join(publicRoot, 'index.html'), 'utf8');
+async function servePage(res, fileName) {
+  const body = await readFile(path.join(publicRoot, fileName), 'utf8');
   text(res, 200, body, 'text/html; charset=utf-8');
 }
 
@@ -356,7 +356,15 @@ const server = http.createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
 
     if (req.method === 'GET' && url.pathname === '/') {
-      await serveIndex(res);
+      await servePage(res, 'home.html');
+      return;
+    }
+    if (req.method === 'GET' && url.pathname === '/items') {
+      await servePage(res, 'index.html');
+      return;
+    }
+    if (req.method === 'GET' && ['/creatures', '/resources', '/recipes'].includes(url.pathname)) {
+      await servePage(res, 'structured.html');
       return;
     }
     if (req.method === 'GET' && url.pathname === '/api/status') {
@@ -367,7 +375,8 @@ const server = http.createServer(async (req, res) => {
     const match = url.pathname.match(/^\/api\/(items|creatures|resources|recipes)$/);
     if (match && req.method === 'GET') {
       const kind = match[1];
-      json(res, 200, { kind, documents: await listDocuments(kind), [kind]: await listDocuments(kind) });
+      const documents = await listDocuments(kind);
+      json(res, 200, { kind, documents, [kind]: documents });
       return;
     }
     if (match && req.method === 'POST') {
