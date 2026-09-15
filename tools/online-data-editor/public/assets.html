@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MassRPG Asset Backlog</title>
+  <style>
+    :root{color-scheme:dark;font-family:Inter,ui-sans-serif,system-ui,sans-serif;background:#17191d;color:#eef1f5}*{box-sizing:border-box}body{margin:0;background:#17191d}a{color:#b9cce3;text-decoration:none}header{padding:14px 18px;border-bottom:1px solid #343840;background:#202329;display:flex;gap:14px;align-items:center;flex-wrap:wrap}header strong{font-size:18px}.status{margin-left:auto;color:#aab1bc;font-size:12px}main{max-width:1100px;margin:0 auto;padding:20px 16px 42px}.intro,.toolbar{border:1px solid #343a44;border-radius:8px;background:#20242a;padding:14px}.intro{line-height:1.5;color:#c8ced7}.toolbar{margin-top:12px;display:grid;grid-template-columns:minmax(220px,1fr) 190px;gap:10px}input,select{width:100%;font:inherit;color:#eef1f5;background:#131519;border:1px solid #3a4049;border-radius:6px;padding:8px 9px}.summary{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0}.pill{padding:5px 9px;border:1px solid #454b56;border-radius:999px;background:#282c33;font-size:12px}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.entry{border:1px solid #343a44;border-radius:8px;background:#20242a;padding:13px}.entry h2{font-size:16px;margin:0 0 3px}.meta{font-size:12px;color:#9fa7b3;margin-bottom:9px}.state{display:inline-block;padding:3px 7px;border-radius:999px;background:#3b3527;color:#f0d39b;font-size:11px;margin-bottom:8px}.state.placeholder{background:#303b4c;color:#c6daf0}.state.linked{background:#294031;color:#bfe5c6}.assets{font-size:12px;line-height:1.6;color:#c7ced8}.assets b{color:#eef1f5}.notes{margin-top:8px;padding-top:8px;border-top:1px solid #343a44;color:#b6bec9;font-size:12px;white-space:pre-wrap}.empty{padding:22px;border:1px dashed #48505d;border-radius:8px;color:#aab1bc;text-align:center}@media(max-width:760px){.grid{grid-template-columns:1fr}.toolbar{grid-template-columns:1fr}.status{margin-left:0}}
+  </style>
+</head>
+<body>
+<header><a href="/">← Data Editor</a><strong>Asset Backlog</strong><div class="status" id="status">Loading…</div></header>
+<main>
+  <div class="intro">This is the bridge between work-time data authoring and home-time Unity/model work. New gameplay entries can be fully designed without an icon or 3D model. Leave them as <b>Needs assets</b>, add visual notes, and they stay on this backlog until proper assets are linked later.</div>
+  <div class="toolbar"><input id="search" type="search" placeholder="Search name, ID, category or notes"><select id="filter"><option value="">All asset states</option><option value="needs-assets">Needs assets</option><option value="placeholder">Placeholder</option><option value="linked">Linked, not final</option></select></div>
+  <div class="summary" id="summary"></div>
+  <div class="grid" id="grid"></div>
+</main>
+<script>
+(()=>{
+  const $=id=>document.getElementById(id);let entries=[];
+  const labels={items:'Items & Equipment',creatures:'Creatures',resources:'Resources',recipes:'Recipes',definitions:'Other Definitions'};
+  function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+  function render(){const q=$('search').value.trim().toLowerCase(),f=$('filter').value;const visible=entries.filter(x=>{const hay=`${x.kind} ${x.definitionKind||''} ${x.id} ${x.displayName} ${x.notes||''}`.toLowerCase();return(!q||hay.includes(q))&&(!f||x.assetState===f);});
+    const needs=entries.filter(x=>x.assetState==='needs-assets').length,placeholder=entries.filter(x=>x.assetState==='placeholder').length,linked=entries.filter(x=>x.assetState==='linked').length;$('summary').innerHTML=`<span class="pill">${entries.length} open asset entr${entries.length===1?'y':'ies'}</span><span class="pill">${needs} need assets</span><span class="pill">${placeholder} placeholders</span><span class="pill">${linked} linked / unfinished</span>`;
+    const grid=$('grid');grid.replaceChildren();if(!visible.length){const e=document.createElement('div');e.className='empty';e.textContent=entries.length?'No backlog entries match this filter.':'No unfinished presentation assets are currently recorded.';grid.append(e);return;}
+    for(const x of visible){const card=document.createElement('div');card.className='entry';const stateLabel={'needs-assets':'Needs assets','placeholder':'Placeholder','linked':'Linked, not final'}[x.assetState]||x.assetState;card.innerHTML=`<h2><a href="/${esc(x.kind)}">${esc(x.displayName||x.id)}</a></h2><div class="meta">${esc(labels[x.kind]||x.kind)}${x.definitionKind?' · '+esc(x.definitionKind):''} · <code>${esc(x.id)}</code></div><div class="state ${esc(x.assetState)}">${esc(stateLabel)}</div><div class="assets"><b>Icon:</b> ${esc(x.iconAssetId||'—')}<br><b>Model:</b> ${esc(x.modelAssetId||'—')}<br><b>Portrait:</b> ${esc(x.portraitAssetId||'—')}<br><b>Animation set:</b> ${esc(x.animationSetAssetId||'—')}</div>${x.notes?`<div class="notes">${esc(x.notes)}</div>`:''}`;grid.append(card);}
+  }
+  async function start(){try{const [backlog,status]=await Promise.all([fetch('/api/asset-backlog').then(r=>r.json()),fetch('/api/status').then(r=>r.json())]);entries=backlog.entries||[];$('status').textContent=`Branch: ${status.branch||'(detached)'} · ${status.changedFiles??'?'} draft changes`;render();}catch(e){$('status').textContent='Unable to load backlog';$('grid').innerHTML=`<div class="empty">${esc(e.message)}</div>`;}}
+  $('search').addEventListener('input',render);$('filter').addEventListener('change',render);start();
+})();
+</script>
+</body>
+</html>
