@@ -1,5 +1,6 @@
 using System;
 using MassRPG.Core.Combat;
+using MassRPG.Core.Content;
 using MassRPG.Core.Inventory;
 using MassRPG.Core.Skills;
 using MassRPG.Core.World;
@@ -56,6 +57,14 @@ namespace MassRPG.Core.Characters
         public int CurrentHitpoints { get; set; }
         public CombatStyle CombatStyle { get; set; }
         public MeleeTrainingStyle MeleeTrainingStyle { get; set; }
+
+        /// <summary>
+        /// Ranged ammunition is deliberately not an equipment slot in the final MassRPG loadout.
+        /// This optional id records the player's selected ammunition stack while the arrows remain
+        /// ordinary inventory items consumed by authoritative combat.
+        /// </summary>
+        public ContentId? SelectedAmmunitionItemId { get; set; }
+
         public GridCoord Tile { get; set; }
         public int Plane { get; set; }
         public int Storey { get; set; }
