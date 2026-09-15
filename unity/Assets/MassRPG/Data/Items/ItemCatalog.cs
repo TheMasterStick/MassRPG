@@ -14,6 +14,7 @@ namespace MassRPG.Data.Items
         private readonly Dictionary<ContentId, ItemDefinition> _items = new Dictionary<ContentId, ItemDefinition>();
 
         public IEnumerable<ItemDefinition> All => _items.Values;
+        public int Count => _items.Count;
 
         public void Register(ItemDefinition definition)
         {

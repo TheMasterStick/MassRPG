@@ -1,5 +1,6 @@
 using System;
 using MassRPG.Core.Content;
+using MassRPG.Core.Skills;
 
 namespace MassRPG.Core.Inventory
 {
@@ -9,18 +10,30 @@ namespace MassRPG.Core.Inventory
     /// </summary>
     public sealed class ItemRule
     {
-        public ItemRule(ContentId id, bool stackable, EquipmentSlot[] allowedEquipmentSlots, bool twoHanded)
+        public ItemRule(
+            ContentId id,
+            bool stackable,
+            EquipmentSlot[] allowedEquipmentSlots,
+            bool twoHanded,
+            SkillId? equipRequirementSkill = null,
+            int equipRequirementLevel = 1)
         {
+            if (equipRequirementLevel < 1 || equipRequirementLevel > 300)
+                throw new ArgumentOutOfRangeException(nameof(equipRequirementLevel));
             Id = id;
             Stackable = stackable;
             AllowedEquipmentSlots = allowedEquipmentSlots ?? Array.Empty<EquipmentSlot>();
             TwoHanded = twoHanded;
+            EquipRequirementSkill = equipRequirementSkill;
+            EquipRequirementLevel = equipRequirementLevel;
         }
 
         public ContentId Id { get; }
         public bool Stackable { get; }
         public EquipmentSlot[] AllowedEquipmentSlots { get; }
         public bool TwoHanded { get; }
+        public SkillId? EquipRequirementSkill { get; }
+        public int EquipRequirementLevel { get; }
     }
 
     public interface IItemRuleSource

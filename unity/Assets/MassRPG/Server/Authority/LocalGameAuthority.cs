@@ -42,7 +42,7 @@ namespace MassRPG.Server.Authority
 
             if (request is EquipInventoryItemRequest equip)
                 return FromInventoryResult(request.RequestId,
-                    InventoryRules.EquipFromInventory(player.Inventory, player.Equipment, _itemRules, equip.InventoryIndex, equip.RequestedSlot));
+                    InventoryRules.EquipFromInventory(player.Inventory, player.Equipment, _itemRules, player.Skills, equip.InventoryIndex, equip.RequestedSlot));
 
             if (request is UnequipItemRequest unequip)
                 return FromInventoryResult(request.RequestId,
@@ -60,18 +60,12 @@ namespace MassRPG.Server.Authority
             return AuthorityDecision.Reject(request.RequestId, "unsupported_request", "This request type is not implemented by the local authority yet.");
         }
 
-        /// <summary>
-        /// Advances one authoritative logical movement step. A later fixed-step server simulation
-        /// will call this according to movement speed; the Unity client only interpolates visuals.
-        /// </summary>
         public bool AdvanceMovementOneStep(Guid characterId)
         {
             if (_movementMap == null) return false;
             if (!_players.TryGetValue(characterId, out var player)) return false;
             if (!player.Movement.TryPeekNext(out var next)) return false;
 
-            // Revalidate at execution time because a door, wall or other world state may have
-            // changed since the path was originally planned.
             if (!GridTraversal.CanStep(_movementMap, player.Location, next))
             {
                 player.Movement.Clear();

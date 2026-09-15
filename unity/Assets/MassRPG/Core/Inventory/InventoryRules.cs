@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using MassRPG.Core.Content;
+using MassRPG.Core.Skills;
 
 namespace MassRPG.Core.Inventory
 {
@@ -106,6 +107,15 @@ namespace MassRPG.Core.Inventory
             IItemRuleSource rules,
             int inventoryIndex,
             EquipmentSlot? requestedSlot = null)
+            => EquipFromInventory(inventory, equipment, rules, null, inventoryIndex, requestedSlot);
+
+        public static InventoryOperationResult EquipFromInventory(
+            InventoryState inventory,
+            EquipmentState equipment,
+            IItemRuleSource rules,
+            SkillSet skills,
+            int inventoryIndex,
+            EquipmentSlot? requestedSlot = null)
         {
             if (!InBounds(inventory, inventoryIndex))
                 return InventoryOperationResult.Fail("invalid_slot", "Inventory slot is out of range.");
@@ -117,6 +127,12 @@ namespace MassRPG.Core.Inventory
                 return InventoryOperationResult.Fail("unknown_item", "Unknown item id.");
             if (rule.AllowedEquipmentSlots.Length == 0)
                 return InventoryOperationResult.Fail("not_equippable", "That item cannot be equipped.");
+
+            if (rule.EquipRequirementSkill.HasValue)
+            {
+                if (skills == null || skills.GetLevel(rule.EquipRequirementSkill.Value) < rule.EquipRequirementLevel)
+                    return InventoryOperationResult.Fail("requirement_not_met", $"You need {rule.EquipRequirementSkill.Value} level {rule.EquipRequirementLevel} to equip that item.");
+            }
 
             var target = ResolveTargetSlot(equipment, rule, requestedSlot);
             if (!target.HasValue)

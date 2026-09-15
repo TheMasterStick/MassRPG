@@ -1,6 +1,7 @@
 using System;
 using MassRPG.Core.Content;
 using MassRPG.Core.Inventory;
+using MassRPG.Core.Skills;
 
 namespace MassRPG.Data.Items
 {
@@ -15,6 +16,7 @@ namespace MassRPG.Data.Items
         Material,
         Currency,
         Seed,
+        Ammunition,
         Miscellaneous
     }
 
@@ -39,8 +41,17 @@ namespace MassRPG.Data.Items
             string description = "",
             EquipmentSlot[] allowedEquipmentSlots = null,
             bool twoHanded = false,
-            CombatBonuses bonuses = null)
+            CombatBonuses bonuses = null,
+            SkillId? equipRequirementSkill = null,
+            int equipRequirementLevel = 1,
+            int healAmount = 0,
+            int toolTier = 0)
         {
+            if (id.IsEmpty) throw new ArgumentException("Item id cannot be empty.", nameof(id));
+            if (equipRequirementLevel < 1 || equipRequirementLevel > 300) throw new ArgumentOutOfRangeException(nameof(equipRequirementLevel));
+            if (healAmount < 0) throw new ArgumentOutOfRangeException(nameof(healAmount));
+            if (toolTier < 0) throw new ArgumentOutOfRangeException(nameof(toolTier));
+
             Id = id;
             DisplayName = displayName ?? string.Empty;
             Type = type;
@@ -50,6 +61,10 @@ namespace MassRPG.Data.Items
             AllowedEquipmentSlots = allowedEquipmentSlots ?? Array.Empty<EquipmentSlot>();
             TwoHanded = twoHanded;
             Bonuses = bonuses ?? new CombatBonuses();
+            EquipRequirementSkill = equipRequirementSkill;
+            EquipRequirementLevel = equipRequirementLevel;
+            HealAmount = healAmount;
+            ToolTier = toolTier;
         }
 
         public ContentId Id { get; }
@@ -61,7 +76,17 @@ namespace MassRPG.Data.Items
         public EquipmentSlot[] AllowedEquipmentSlots { get; set; }
         public bool TwoHanded { get; set; }
         public CombatBonuses Bonuses { get; set; }
+        public SkillId? EquipRequirementSkill { get; set; }
+        public int EquipRequirementLevel { get; set; }
+        public int HealAmount { get; set; }
+        public int ToolTier { get; set; }
 
-        public ItemRule ToRule() => new ItemRule(Id, Stackable, AllowedEquipmentSlots, TwoHanded);
+        public ItemRule ToRule() => new ItemRule(
+            Id,
+            Stackable,
+            AllowedEquipmentSlots,
+            TwoHanded,
+            EquipRequirementSkill,
+            EquipRequirementLevel);
     }
 }
