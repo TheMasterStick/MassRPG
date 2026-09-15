@@ -1,5 +1,6 @@
 using UnityEditor;
 using UnityEngine;
+using MassRPG.Editor.Data;
 using MassRPG.Editor.World;
 
 namespace MassRPG.Editor
@@ -15,7 +16,7 @@ namespace MassRPG.Editor
         {
             var window = GetWindow<MassRPGEditorHubWindow>();
             window.titleContent = new GUIContent("MassRPG Editor");
-            window.minSize = new Vector2(470, 700);
+            window.minSize = new Vector2(470, 740);
             window.Show();
         }
 
@@ -42,6 +43,12 @@ namespace MassRPG.Editor
             Button("Creature Spawns", "Author fixed-cap creature populations, roam areas and optional patrol routes.", MassRPGCreatureSpawnEditorWindow.Open);
             Button("Placement Editor", "Place anchored objects, deliberate resources, NPC anchors, transport nodes and manual doodads.", MassRPGPlacementEditorWindow.Open);
 
+            Section("Game data");
+            Button(
+                "Content Browser",
+                "Search and inspect permanent IDs and migration definitions for items, creatures, recipes, skills and build pieces.",
+                MassRPGContentBrowserWindow.Open);
+
             Section("Testing");
             Button(
                 "Play From Here",
@@ -50,7 +57,7 @@ namespace MassRPG.Editor
 
             GUILayout.FlexibleSpace();
             EditorGUILayout.HelpBox(
-                "Still in progress: searchable content palettes, richer polygon dressing overrides and production-quality in-world presentation. Play From Here already exercises authority-driven movement, nearby terrain streaming and floating-origin rebasing.",
+                "Still in progress: turning the read-only Content Browser into the publishable Data Editor, richer polygon dressing overrides and production-quality in-world presentation. Play From Here already exercises authority-driven movement, nearby terrain streaming and floating-origin rebasing.",
                 MessageType.None);
             GUILayout.Label("Unity 6.3 LTS · MassRPG authored-world tools", EditorStyles.centeredGreyMiniLabel);
         }
