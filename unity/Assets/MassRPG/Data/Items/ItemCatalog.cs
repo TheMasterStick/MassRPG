@@ -6,11 +6,16 @@ using MassRPG.Core.Resources;
 
 namespace MassRPG.Data.Items
 {
+    public interface IItemDefinitionSource
+    {
+        bool TryGetDefinition(ContentId id, out ItemDefinition definition);
+    }
+
     /// <summary>
     /// Runtime-facing catalog contract. The Unity editor will eventually publish versioned data
     /// into this shape instead of hard-coding content in gameplay assemblies.
     /// </summary>
-    public sealed class ItemCatalog : IItemRuleSource, IGatheringToolSource
+    public sealed class ItemCatalog : IItemRuleSource, IGatheringToolSource, IItemDefinitionSource
     {
         private readonly Dictionary<ContentId, ItemDefinition> _items = new Dictionary<ContentId, ItemDefinition>();
 
