@@ -1,4 +1,5 @@
 using System;
+using System.Reflection;
 using MassRPG.Client.Testing;
 using MassRPG.Core.Content;
 using MassRPG.Core.World;
@@ -30,6 +31,33 @@ namespace MassRPG.Editor.World
 
         public static bool HasPendingRequest => SessionState.GetBool(PendingKey, false);
 
+        [MenuItem("MassRPG/Play From Here %#p", priority = 3)]
+        public static void StartFromOpenWorldEditor()
+        {
+            if (!TryGetOpenWorldEditorLocation(out var editor, out var location))
+            {
+                EditorUtility.DisplayDialog(
+                    "MassRPG Play From Here",
+                    "Open the MassRPG 1x1 World Editor first. Its current X/Y/Plane/Floor coordinate is used as the launch point.",
+                    "OK");
+                return;
+            }
+
+            // Play From Here should test exactly what the designer currently sees. Save any dirty
+            // pages first; this calls the World Editor's existing production save rather than
+            // inventing a second persistence path for the test harness.
+            var save = typeof(MassRPGWorldEditorWindow).GetMethod(
+                "SaveProduction",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            save?.Invoke(editor, null);
+            Start(location);
+        }
+
+        [MenuItem("MassRPG/Play From Here %#p", true)]
+        private static bool ValidateStartFromOpenWorldEditor()
+            => !EditorApplication.isPlayingOrWillChangePlaymode
+                && Resources.FindObjectsOfTypeAll<MassRPGWorldEditorWindow>().Length > 0;
+
         public static void Start(GridLocation location)
         {
             if (!WorldConstants.IsInsideWorld(location.Tile))
@@ -51,6 +79,44 @@ namespace MassRPG.Editor.World
             SessionState.EraseInt(YKey);
             SessionState.EraseInt(PlaneKey);
             SessionState.EraseInt(StoreyKey);
+        }
+
+        private static bool TryGetOpenWorldEditorLocation(
+            out MassRPGWorldEditorWindow editor,
+            out GridLocation location)
+        {
+            editor = EditorWindow.focusedWindow as MassRPGWorldEditorWindow;
+            if (editor == null)
+            {
+                var windows = Resources.FindObjectsOfTypeAll<MassRPGWorldEditorWindow>();
+                editor = windows.Length > 0 ? windows[0] : null;
+            }
+
+            if (editor == null)
+            {
+                location = default;
+                return false;
+            }
+
+            const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
+            var type = typeof(MassRPGWorldEditorWindow);
+            var centerX = type.GetField("_centerX", flags);
+            var centerY = type.GetField("_centerY", flags);
+            var plane = type.GetField("_plane", flags);
+            var storey = type.GetField("_storey", flags);
+            if (centerX == null || centerY == null || plane == null || storey == null)
+            {
+                location = default;
+                return false;
+            }
+
+            var x = Mathf.Clamp(Mathf.RoundToInt((float)centerX.GetValue(editor)), 0, WorldConstants.WorldWidthTiles - 1);
+            var y = Mathf.Clamp(Mathf.RoundToInt((float)centerY.GetValue(editor)), 0, WorldConstants.WorldHeightTiles - 1);
+            location = new GridLocation(
+                new GridCoord(x, y),
+                (int)plane.GetValue(editor),
+                Math.Max(0, (int)storey.GetValue(editor)));
+            return true;
         }
 
         private static void OnPlayModeStateChanged(PlayModeStateChange change)
