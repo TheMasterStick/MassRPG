@@ -14,9 +14,7 @@ namespace MassRPG.Tests
             var leader = Guid.NewGuid();
             var second = Guid.NewGuid();
             var outOfRange = Guid.NewGuid();
-            var party = new PartyState(Guid.NewGuid(), leader, PartyLootMode.RoundRobin);
-            party.AddMember(second);
-            party.AddMember(outOfRange);
+            var party = CreateParty(PartyLootMode.RoundRobin, leader, second, outOfRange);
             var service = new PartyLootPoolService();
 
             var pool = service.Create(
@@ -46,9 +44,7 @@ namespace MassRPG.Tests
             var needer = Guid.NewGuid();
             var greeder = Guid.NewGuid();
             var stranger = Guid.NewGuid();
-            var party = new PartyState(Guid.NewGuid(), leader, PartyLootMode.NeedGreed);
-            party.AddMember(needer);
-            party.AddMember(greeder);
+            var party = CreateParty(PartyLootMode.NeedGreed, leader, needer, greeder);
             var service = new PartyLootPoolService();
             var pool = service.Create(
                 Guid.NewGuid(), Guid.NewGuid(), party,
@@ -75,9 +71,7 @@ namespace MassRPG.Tests
             var leader = Guid.NewGuid();
             var second = Guid.NewGuid();
             var silent = Guid.NewGuid();
-            var party = new PartyState(Guid.NewGuid(), leader, PartyLootMode.NeedGreed);
-            party.AddMember(second);
-            party.AddMember(silent);
+            var party = CreateParty(PartyLootMode.NeedGreed, leader, second, silent);
             var service = new PartyLootPoolService();
             var pool = service.Create(
                 Guid.NewGuid(), Guid.NewGuid(), party,
@@ -99,8 +93,7 @@ namespace MassRPG.Tests
             var leader = Guid.NewGuid();
             var member = Guid.NewGuid();
             var stranger = Guid.NewGuid();
-            var party = new PartyState(Guid.NewGuid(), leader, PartyLootMode.LeaderDistribution);
-            party.AddMember(member);
+            var party = CreateParty(PartyLootMode.LeaderDistribution, leader, member);
             var service = new PartyLootPoolService();
             var pool = service.Create(
                 Guid.NewGuid(), Guid.NewGuid(), party,
@@ -120,8 +113,7 @@ namespace MassRPG.Tests
         {
             var leader = Guid.NewGuid();
             var member = Guid.NewGuid();
-            var party = new PartyState(Guid.NewGuid(), leader, PartyLootMode.FreeForAll);
-            party.AddMember(member);
+            var party = CreateParty(PartyLootMode.FreeForAll, leader, member);
             var service = new PartyLootPoolService();
             var pool = service.Create(
                 Guid.NewGuid(), Guid.NewGuid(), party,
@@ -139,8 +131,7 @@ namespace MassRPG.Tests
         {
             var leader = Guid.NewGuid();
             var member = Guid.NewGuid();
-            var party = new PartyState(Guid.NewGuid(), leader, PartyLootMode.NeedGreed);
-            party.AddMember(member);
+            var party = CreateParty(PartyLootMode.NeedGreed, leader, member);
             var service = new PartyLootPoolService();
             var pool = service.Create(
                 Guid.NewGuid(), Guid.NewGuid(), party,
@@ -156,6 +147,15 @@ namespace MassRPG.Tests
             Assert.IsFalse(result.CharacterId.HasValue);
             Assert.AreEqual(SharedLootEntryState.ResolvedNoWinner, entry.State);
             Assert.AreEqual("entry_closed", service.Claim(pool.PoolId, entry.EntryId, leader).Code);
+        }
+
+        private static PartyState CreateParty(PartyLootMode mode, Guid leader, params Guid[] members)
+        {
+            var registry = new PartyRegistry();
+            var party = registry.Create(Guid.NewGuid(), leader, mode);
+            for (var i = 0; i < members.Length; i++)
+                Assert.IsTrue(registry.AddMember(party.PartyId, members[i]));
+            return party;
         }
     }
 }
