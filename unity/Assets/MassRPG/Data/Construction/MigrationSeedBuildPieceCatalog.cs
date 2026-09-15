@@ -14,7 +14,7 @@ namespace MassRPG.Data.Construction
 
             catalog.Register(Piece("build.floor_wood", "Wooden floor", BuildPieceKind.Floor,
                 BuildPlacementMode.Tile, BuildOccupancyLayer.Surface, 1, 8,
-                BuildSupportRequirement.GroundOrFloor, null, Cost("plank", 2)));
+                BuildSupportRequirement.FloorBelow, null, Cost("plank", 2)));
             catalog.Register(Piece("build.wall_wood", "Wooden wall", BuildPieceKind.Wall,
                 BuildPlacementMode.CardinalEdge, BuildOccupancyLayer.Structure, 1, 8,
                 BuildSupportRequirement.GroundOrFloor, null, Cost("plank", 2), Cost("nails", 2)));
