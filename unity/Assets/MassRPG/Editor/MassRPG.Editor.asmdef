@@ -1,7 +1,7 @@
 {
   "name": "MassRPG.Editor",
   "rootNamespace": "MassRPG.Editor",
-  "references": ["MassRPG.Core", "MassRPG.Data", "MassRPG.Client", "MassRPG.Server"],
+  "references": ["MassRPG.Core", "MassRPG.Data", "MassRPG.Client", "MassRPG.Server", "MassRPG.EditorCore"],
   "includePlatforms": ["Editor"],
   "excludePlatforms": [],
   "allowUnsafeCode": false,
