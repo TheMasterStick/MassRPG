@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "massrpg://schemas/creature.schema.json",
+  "title": "MassRPG Creature Draft",
+  "type": "object",
+  "required": ["schemaVersion", "id", "displayName", "combatLevel", "maxHitpoints", "attackLevel", "strengthLevel", "defenceLevel", "attackBonus", "strengthBonus", "defenceBonus", "combatStyle", "attackIntervalMilliseconds", "attackRangeTiles", "disposition", "footprintWidth", "footprintHeight", "aggroRadiusTiles", "leashRadiusTiles", "persistentNamedInstance"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._/-]{1,79}$" },
+    "displayName": { "type": "string", "minLength": 1, "maxLength": 100 },
+    "combatLevel": { "type": "integer", "minimum": 1 },
+    "maxHitpoints": { "type": "integer", "minimum": 1 },
+    "attackLevel": { "type": "integer", "minimum": 1, "maximum": 300 },
+    "strengthLevel": { "type": "integer", "minimum": 1, "maximum": 300 },
+    "defenceLevel": { "type": "integer", "minimum": 1, "maximum": 300 },
+    "attackBonus": { "type": "integer" },
+    "strengthBonus": { "type": "integer" },
+    "defenceBonus": { "type": "integer" },
+    "combatStyle": { "enum": ["Melee", "Ranged", "Magic"] },
+    "attackIntervalMilliseconds": { "type": "integer", "minimum": 1 },
+    "attackRangeTiles": { "type": "integer", "minimum": 1 },
+    "disposition": { "enum": ["Passive", "Neutral", "Aggressive"] },
+    "footprintWidth": { "type": "integer", "minimum": 1 },
+    "footprintHeight": { "type": "integer", "minimum": 1 },
+    "aggroRadiusTiles": { "type": "integer", "minimum": 0 },
+    "leashRadiusTiles": { "type": "integer", "minimum": 0 },
+    "persistentNamedInstance": { "type": "boolean" },
+    "editorState": { "enum": ["draft", "ready-for-review"] }
+  },
+  "additionalProperties": false
+}
