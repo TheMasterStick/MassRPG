@@ -8,21 +8,37 @@
     :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; background:#17191d; color:#eef1f5; }
     * { box-sizing:border-box; }
     body { margin:0; background:#17191d; }
+    button { font:inherit; cursor:pointer; color:#eef1f5; background:#303641; border:1px solid #48505d; border-radius:6px; padding:8px 11px; }
+    button:hover { background:#3a414e; }
     header { padding:18px 22px; border-bottom:1px solid #343840; background:#202329; display:flex; gap:16px; flex-wrap:wrap; align-items:center; }
     h1 { margin:0; font-size:21px; }
+    h2 { font-size:16px; margin:0; }
     header p { margin:3px 0 0; color:#aab1bc; font-size:13px; }
     .status { margin-left:auto; display:flex; gap:8px; flex-wrap:wrap; }
     .pill { padding:5px 9px; border:1px solid #454b56; border-radius:999px; background:#282c33; font-size:12px; }
     main { max-width:980px; margin:0 auto; padding:24px 18px 40px; }
-    .intro { border:1px solid #343a44; border-radius:9px; background:#20242a; padding:15px; color:#c8ced7; line-height:1.5; }
+    .intro,.audit { border:1px solid #343a44; border-radius:9px; background:#20242a; padding:15px; color:#c8ced7; line-height:1.5; }
     .grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin-top:16px; }
-    a.card { display:block; color:inherit; text-decoration:none; border:1px solid #3b414b; border-radius:9px; background:#20242a; padding:18px; min-height:126px; }
+    a.card { display:block; color:inherit; text-decoration:none; border:1px solid #3b414b; border-radius:9px; background:#20242a; padding:18px; min-height:132px; }
     a.card:hover { border-color:#607896; background:#252b33; }
     a.card strong { display:block; font-size:17px; margin-bottom:7px; }
     a.card span { color:#aeb6c1; line-height:1.45; font-size:13px; }
-    .tag { display:inline-block; margin-top:12px; padding:4px 8px; border-radius:999px; background:#2e3946; color:#bfd1e6; font-size:11px; }
+    .cardmeta { display:flex; gap:7px; flex-wrap:wrap; align-items:center; margin-top:12px; }
+    .tag { display:inline-block; padding:4px 8px; border-radius:999px; background:#2e3946; color:#bfd1e6; font-size:11px; }
+    .audit { margin-top:16px; }
+    .audithead { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    .audithead button { margin-left:auto; }
+    .summary { display:flex; gap:8px; flex-wrap:wrap; margin-top:11px; }
+    .summary .ok { border-color:#416c4c; color:#bce8c3; }
+    .summary .warn { border-color:#806834; color:#ead69c; }
+    .summary .err { border-color:#824a4a; color:#efb1b1; }
+    .issues { margin:12px 0 0; padding:0; list-style:none; display:grid; gap:6px; }
+    .issues li { padding:8px 10px; border-radius:6px; background:#191c20; border-left:3px solid #6d7785; font-size:12px; line-height:1.45; }
+    .issues li.error { border-left-color:#b15b5b; }
+    .issues li.warning { border-left-color:#b49446; }
+    .note { color:#929aa6; font-size:12px; line-height:1.5; margin-top:10px; }
     .foot { margin-top:18px; color:#929aa6; font-size:12px; line-height:1.5; }
-    @media(max-width:650px){ .grid{grid-template-columns:1fr;} .status{margin-left:0;} }
+    @media(max-width:650px){ .grid{grid-template-columns:1fr;} .status{margin-left:0;} .audithead button{margin-left:0;} }
   </style>
 </head>
 <body>
@@ -35,15 +51,62 @@
     Work here when Unity is unavailable. Saving edits repository draft JSON only; live MMO data still requires validation and deliberate publishing. Permanent IDs are save/network references and lock after an existing draft is loaded.
   </div>
   <div class="grid">
-    <a class="card" href="/items"><strong>Items</strong><span>Weapons, armor, tools, consumables, materials, equipment slots, dual wield rules, combat bonuses and timing.</span><div class="tag">Rich editor</div></a>
-    <a class="card" href="/creatures"><strong>Creatures</strong><span>Combat levels, stats, behavior disposition, attack style/range, footprint, aggro and leash rules.</span><div class="tag">Draft editor</div></a>
-    <a class="card" href="/resources"><strong>Resources</strong><span>Mining, woodcutting, fishing and farming definitions, yields, tools, XP, respawns and personal/shared availability.</span><div class="tag">Draft editor</div></a>
-    <a class="card" href="/recipes"><strong>Recipes</strong><span>Production requirements, ingredients, outputs, stations, tools, XP, duration and cooking/failure outputs.</span><div class="tag">Draft editor</div></a>
+    <a class="card" href="/items"><strong>Items</strong><span>Weapons, armor, tools, consumables, materials, equipment slots, dual wield rules, combat bonuses and timing.</span><div class="cardmeta"><div class="tag">Rich editor</div><div class="tag" id="itemsCount">… drafts</div></div></a>
+    <a class="card" href="/creatures"><strong>Creatures</strong><span>Combat levels, stats, behavior disposition, attack style/range, footprint, aggro and leash rules.</span><div class="cardmeta"><div class="tag">Draft editor</div><div class="tag" id="creaturesCount">… drafts</div></div></a>
+    <a class="card" href="/resources"><strong>Resources</strong><span>Mining, woodcutting, fishing and farming definitions, yields, tools, XP, respawns and personal/shared availability.</span><div class="cardmeta"><div class="tag">Draft editor</div><div class="tag" id="resourcesCount">… drafts</div></div></a>
+    <a class="card" href="/recipes"><strong>Recipes</strong><span>Production requirements, ingredients, outputs, stations, tools, XP, duration and cooking/failure outputs.</span><div class="cardmeta"><div class="tag">Draft editor</div><div class="tag" id="recipesCount">… drafts</div></div></a>
   </div>
+
+  <section class="audit">
+    <div class="audithead"><div><h2>Draft preflight</h2><div class="note" style="margin-top:2px">Fast browser-side checks before you commit work from a shift.</div></div><button type="button" id="validate">Validate drafts</button></div>
+    <div class="summary" id="summary"><span class="pill">Not run yet</span></div>
+    <ul class="issues" id="issues"></ul>
+    <div class="note">This preflight can prove malformed draft files and draft-to-draft references. A reference absent from repository drafts is only a warning because it may still resolve to migration/reference content. Unity's <b>Validate Repository Drafts</b> command remains the authoritative cross-catalog check until all seed content has moved into repository data.</div>
+  </section>
+
   <div class="foot">All four categories save beneath <code>ContentData/Drafts/</code>. Commit &amp; Push is available inside each editor and stages only that draft tree.</div>
 </main>
 <script>
-(async()=>{try{const r=await fetch('/api/status');const s=await r.json();document.getElementById('branch').textContent=`Branch: ${s.branch||'(detached)'}`;document.getElementById('changes').textContent=`Draft changes: ${s.changedFiles??'?'}`;}catch{document.getElementById('branch').textContent='Repository status unavailable';}})();
+(()=>{
+  const $=id=>document.getElementById(id);
+  const kinds=['items','creatures','resources','recipes'];
+  let cache=null;
+  async function getJson(url){const r=await fetch(url);const b=await r.json().catch(()=>({}));if(!r.ok)throw new Error(b.error||`Request failed (${r.status}).`);return b;}
+  async function loadAll(){const entries=await Promise.all(kinds.map(async kind=>{const b=await getJson(`/api/${kind}`);const docs=b.documents||b[kind]||[];$(kind+'Count').textContent=`${docs.length} draft${docs.length===1?'':'s'}`;return[kind,docs];}));cache=Object.fromEntries(entries);return cache;}
+  function issue(list,severity,owner,message){list.push({severity,owner,message});}
+  function audit(data){
+    const issues=[];
+    for(const kind of kinds){
+      const seen=new Set();
+      for(const doc of data[kind]){
+        const owner=`${kind.slice(0,-1)} ${doc.id||'(missing id)'}`;
+        if(doc._loadError){issue(issues,'error',owner,`JSON could not be loaded: ${doc._loadError}`);continue;}
+        if(!doc.id||!doc.displayName)issue(issues,'error',owner,'Permanent ID and display name are required.');
+        if(doc.id&&seen.has(doc.id))issue(issues,'error',owner,'Duplicate permanent ID in this category.');
+        if(doc.id)seen.add(doc.id);
+        if(doc.editorState!=='draft'&&doc.editorState!=='ready-for-review')issue(issues,'warning',owner,`Unknown editor state '${doc.editorState}'.`);
+      }
+    }
+    const itemIds=new Set(data.items.filter(x=>!x._loadError&&x.id).map(x=>x.id));
+    const unresolved=(owner,field,id)=>{if(id&&!itemIds.has(id))issue(issues,'warning',owner,`${field} '${id}' is not present in repository item drafts; it may still resolve from migration/reference data.`);};
+    for(const r of data.resources){if(r._loadError)continue;const owner=`resource ${r.id||'(missing id)'}`;unresolved(owner,'Yield item',r.yieldItemId);if(Number(r.maximumYield)<Number(r.minimumYield))issue(issues,'error',owner,'Maximum yield is lower than minimum yield.');}
+    for(const r of data.recipes){if(r._loadError)continue;const owner=`recipe ${r.id||'(missing id)'}`;for(const input of Array.isArray(r.inputs)?r.inputs:[])unresolved(owner,'Input item',input?.itemId);unresolved(owner,'Output item',r.outputItemId);unresolved(owner,'Required tool',r.toolRequiredId);unresolved(owner,'Failure output',r.failureOutputItemId);if(r.canBurn&&!r.failureOutputItemId)issue(issues,'error',owner,'Recipe can burn/fail but has no failure output item.');if(!Array.isArray(r.inputs)||!r.inputs.length)issue(issues,'error',owner,'Recipe has no inputs.');}
+    return issues;
+  }
+  function renderAudit(issues,data){
+    const errors=issues.filter(x=>x.severity==='error').length,warnings=issues.filter(x=>x.severity==='warning').length;
+    const ready=kinds.reduce((n,k)=>n+data[k].filter(x=>x.editorState==='ready-for-review'&&!x._loadError).length,0);
+    const total=kinds.reduce((n,k)=>n+data[k].length,0);
+    $('summary').innerHTML=`<span class="pill ${errors?'err':'ok'}">${errors} blocking error${errors===1?'':'s'}</span><span class="pill ${warnings?'warn':'ok'}">${warnings} reference warning${warnings===1?'':'s'}</span><span class="pill">${ready} / ${total} ready for review</span>`;
+    const list=$('issues');list.replaceChildren();
+    if(!issues.length){const li=document.createElement('li');li.textContent='No browser-preflight issues found.';list.append(li);return;}
+    for(const x of issues.slice(0,100)){const li=document.createElement('li');li.className=x.severity;const strong=document.createElement('strong');strong.textContent=`${x.severity.toUpperCase()} · ${x.owner}: `;li.append(strong,document.createTextNode(x.message));list.append(li);}
+    if(issues.length>100){const li=document.createElement('li');li.textContent=`${issues.length-100} additional issues omitted from this view.`;list.append(li);}
+  }
+  async function refreshStatus(){try{const s=await getJson('/api/status');$('branch').textContent=`Branch: ${s.branch||'(detached)'}`;$('changes').textContent=`Draft changes: ${s.changedFiles??'?'}`;}catch{$('branch').textContent='Repository status unavailable';}}
+  $('validate').addEventListener('click',async()=>{$('validate').disabled=true;$('summary').innerHTML='<span class="pill">Checking…</span>';$('issues').replaceChildren();try{const data=await loadAll();renderAudit(audit(data),data);}catch(e){$('summary').innerHTML='<span class="pill err">Preflight failed</span>';const li=document.createElement('li');li.className='error';li.textContent=e.message;$('issues').append(li);}finally{$('validate').disabled=false;}});
+  Promise.all([refreshStatus(),loadAll()]).catch(()=>{});
+})();
 </script>
 </body>
 </html>
