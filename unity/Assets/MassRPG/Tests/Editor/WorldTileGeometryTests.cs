@@ -29,8 +29,8 @@ namespace MassRPG.Tests
         {
             var cells = WorldTileGeometry.FilledRectangle(new GridCoord(4, 5), new GridCoord(2, 3));
             Assert.AreEqual(9, cells.Count);
-            CollectionAssert.Contains((System.Collections.ICollection)cells, new GridCoord(2, 3));
-            CollectionAssert.Contains((System.Collections.ICollection)cells, new GridCoord(4, 5));
+            Assert.AreEqual(new GridCoord(2, 3), cells[0]);
+            Assert.AreEqual(new GridCoord(4, 5), cells[cells.Count - 1]);
         }
 
         [Test]
