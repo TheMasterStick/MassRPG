@@ -33,6 +33,7 @@
     "canBurn": { "type": "boolean" },
     "failureOutputItemId": { "type": ["string", "null"], "pattern": "^[a-z0-9][a-z0-9._/-]*$" },
     "failureXpFraction": { "type": "number", "minimum": 0, "maximum": 1 },
+    "presentation": { "$ref": "presentation.schema.json" },
     "editorState": { "enum": ["draft", "ready-for-review"] }
   },
   "additionalProperties": false
