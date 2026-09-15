@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using MassRPG.Core.Authority;
 using MassRPG.Core.Characters;
 using MassRPG.Core.Inventory;
+using MassRPG.Core.World;
 
 namespace MassRPG.Server.Authority
 {
@@ -14,10 +15,12 @@ namespace MassRPG.Server.Authority
     {
         private readonly Dictionary<Guid, PlayerState> _players = new Dictionary<Guid, PlayerState>();
         private readonly IItemRuleSource _itemRules;
+        private readonly IGridTraversalMap _movementMap;
 
-        public LocalGameAuthority(IItemRuleSource itemRules)
+        public LocalGameAuthority(IItemRuleSource itemRules, IGridTraversalMap movementMap = null)
         {
             _itemRules = itemRules ?? throw new ArgumentNullException(nameof(itemRules));
+            _movementMap = movementMap;
         }
 
         public void RegisterPlayer(PlayerState player)
@@ -45,7 +48,64 @@ namespace MassRPG.Server.Authority
                 return FromInventoryResult(request.RequestId,
                     InventoryRules.Unequip(player.Inventory, player.Equipment, _itemRules, unequip.Slot));
 
+            if (request is MoveToRequest moveTo)
+                return HandleMoveTo(request.RequestId, player, moveTo.Destination);
+
+            if (request is CancelMovementRequest)
+            {
+                player.Movement.Clear();
+                return AuthorityDecision.Accept(request.RequestId);
+            }
+
             return AuthorityDecision.Reject(request.RequestId, "unsupported_request", "This request type is not implemented by the local authority yet.");
+        }
+
+        /// <summary>
+        /// Advances one authoritative logical movement step. A later fixed-step server simulation
+        /// will call this according to movement speed; the Unity client only interpolates visuals.
+        /// </summary>
+        public bool AdvanceMovementOneStep(Guid characterId)
+        {
+            if (_movementMap == null) return false;
+            if (!_players.TryGetValue(characterId, out var player)) return false;
+            if (!player.Movement.TryPeekNext(out var next)) return false;
+
+            // Revalidate at execution time because a door, wall or other world state may have
+            // changed since the path was originally planned.
+            if (!GridTraversal.CanStep(_movementMap, player.Location, next))
+            {
+                player.Movement.Clear();
+                return false;
+            }
+
+            player.Movement.TryConsumeNext(out next);
+            player.Location = next;
+            return true;
+        }
+
+        public int AdvanceAllMovementOneStep()
+        {
+            var moved = 0;
+            foreach (var player in _players.Values)
+                if (AdvanceMovementOneStep(player.CharacterId)) moved++;
+            return moved;
+        }
+
+        private AuthorityDecision HandleMoveTo(Guid requestId, PlayerState player, GridLocation destination)
+        {
+            if (_movementMap == null)
+                return AuthorityDecision.Reject(requestId, "movement_unavailable", "No authoritative movement map is loaded.");
+            if (!WorldConstants.IsInsideWorld(destination.Tile))
+                return AuthorityDecision.Reject(requestId, "out_of_bounds", "The requested destination is outside the world.");
+            if (!player.Location.SameLayer(destination))
+                return AuthorityDecision.Reject(requestId, "transition_required", "Changing plane or building floor requires an explicit traversal connection.");
+
+            var path = GridPathfinder.FindPath(_movementMap, player.Location, destination);
+            if (!path.Success)
+                return AuthorityDecision.Reject(requestId, path.Code, "No valid local path could be found to that destination.");
+
+            player.Movement.ReplacePath(path.Steps);
+            return AuthorityDecision.Accept(requestId);
         }
 
         private static AuthorityDecision FromInventoryResult(Guid requestId, InventoryOperationResult result)

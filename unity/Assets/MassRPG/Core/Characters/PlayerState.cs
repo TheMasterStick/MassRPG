@@ -34,6 +34,7 @@ namespace MassRPG.Core.Characters
             Skills = new SkillSet();
             Inventory = new InventoryState(inventoryCapacity);
             Equipment = new EquipmentState();
+            Movement = new MovementState();
             CurrentHitpoints = MaxHitpoints;
             CombatStyle = CombatStyle.Melee;
             MeleeTrainingStyle = MeleeTrainingStyle.Aggressive;
@@ -47,12 +48,24 @@ namespace MassRPG.Core.Characters
         public SkillSet Skills { get; }
         public InventoryState Inventory { get; }
         public EquipmentState Equipment { get; }
+        public MovementState Movement { get; }
         public int CurrentHitpoints { get; set; }
         public CombatStyle CombatStyle { get; set; }
         public MeleeTrainingStyle MeleeTrainingStyle { get; set; }
         public GridCoord Tile { get; set; }
         public int Plane { get; set; }
         public int Storey { get; set; }
+
+        public GridLocation Location
+        {
+            get => new GridLocation(Tile, Plane, Storey);
+            set
+            {
+                Tile = value.Tile;
+                Plane = value.Plane;
+                Storey = value.Storey;
+            }
+        }
 
         public int MaxHitpoints => Skills.GetLevel(SkillId.Hitpoints);
         public int CombatLevel => CombatLevelCalculator.Calculate(Skills);
