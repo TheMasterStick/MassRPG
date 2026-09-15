@@ -1,0 +1,51 @@
+name: CSharp core smoke compile
+
+on:
+  push:
+    branches:
+      - chatgpt/unity-csharp-migration
+      - claude/massrpg-procedural-game-sossii
+    paths:
+      - 'unity/Assets/MassRPG/Core/**'
+      - 'unity/Assets/MassRPG/Data/**'
+      - 'unity/Assets/MassRPG/Server/**'
+      - '.github/workflows/csharp-core-smoke.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compile-core-data-server:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Generate engine-independent smoke project
+        shell: bash
+        run: |
+          mkdir -p .ci/csharp-smoke
+          cat > .ci/csharp-smoke/MassRPG.Smoke.csproj <<'EOF'
+          <Project Sdk="Microsoft.NET.Sdk">
+            <PropertyGroup>
+              <TargetFramework>net8.0</TargetFramework>
+              <LangVersion>latest</LangVersion>
+              <Nullable>disable</Nullable>
+              <ImplicitUsings>disable</ImplicitUsings>
+              <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+              <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+            </PropertyGroup>
+            <ItemGroup>
+              <Compile Include="../../unity/Assets/MassRPG/Core/**/*.cs" />
+              <Compile Include="../../unity/Assets/MassRPG/Data/**/*.cs" />
+              <Compile Include="../../unity/Assets/MassRPG/Server/**/*.cs" />
+            </ItemGroup>
+          </Project>
+          EOF
+
+      - name: Compile engine-independent migration assemblies
+        run: dotnet build .ci/csharp-smoke/MassRPG.Smoke.csproj --configuration Release --nologo
