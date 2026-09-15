@@ -12,6 +12,19 @@ namespace MassRPG.Server.Pvp
         public bool IsSkulled(long nowUnixMilliseconds) => SkulledUntilUnixMilliseconds > nowUnixMilliseconds;
     }
 
+    public readonly struct PlayerPvpStatusSnapshot
+    {
+        public PlayerPvpStatusSnapshot(bool optedIn, long skulledUntilUnixMilliseconds)
+        {
+            if (skulledUntilUnixMilliseconds < 0) throw new ArgumentOutOfRangeException(nameof(skulledUntilUnixMilliseconds));
+            OptedIn = optedIn;
+            SkulledUntilUnixMilliseconds = skulledUntilUnixMilliseconds;
+        }
+
+        public bool OptedIn { get; }
+        public long SkulledUntilUnixMilliseconds { get; }
+    }
+
     public sealed class PvpPolicy
     {
         public PvpPolicy(bool requireBothOptedIn = true, long skullDurationMilliseconds = 20 * 60 * 1000L)
@@ -66,6 +79,20 @@ namespace MassRPG.Server.Pvp
                 status = new PlayerPvpStatus();
                 _statuses.Add(characterId, status);
             }
+            return status;
+        }
+
+        public PlayerPvpStatusSnapshot CaptureStatus(Guid characterId)
+        {
+            var status = GetOrCreate(characterId);
+            return new PlayerPvpStatusSnapshot(status.OptedIn, Math.Max(0L, status.SkulledUntilUnixMilliseconds));
+        }
+
+        public PlayerPvpStatus RestoreStatus(Guid characterId, PlayerPvpStatusSnapshot snapshot)
+        {
+            var status = GetOrCreate(characterId);
+            status.OptedIn = snapshot.OptedIn;
+            status.SkulledUntilUnixMilliseconds = snapshot.SkulledUntilUnixMilliseconds;
             return status;
         }
 
