@@ -1,2 +1,0 @@
-MassRPG obsolete-branch cleanup trigger.
-Audited against chatgpt/unity-csharp-migration on 2026-09-16.
