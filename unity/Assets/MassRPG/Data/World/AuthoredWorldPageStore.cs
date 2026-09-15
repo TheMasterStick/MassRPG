@@ -97,6 +97,17 @@ namespace MassRPG.Data.World
             return (cell.Flags & (TileFlags.MovementBlocked | TileFlags.Water | TileFlags.DeepWater)) == 0;
         }
 
+        /// <summary>
+        /// Base terrain buildability. Water is intrinsically non-buildable and therefore does not
+        /// need the editor to duplicate a NoBuild flag merely to enforce construction rules.
+        /// Semantic no-build areas are applied by the authoritative plot-placement adapter.
+        /// </summary>
+        public bool IsBuildable(GridLocation location)
+        {
+            if (!TryGetCell(location, out var cell)) return false;
+            return (cell.Flags & (TileFlags.NoBuild | TileFlags.Water | TileFlags.DeepWater)) == 0;
+        }
+
         public int GetLogicalElevation(GridLocation location)
             => TryGetCell(location, out var cell) ? cell.Elevation : 0;
 
