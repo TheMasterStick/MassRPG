@@ -23,6 +23,7 @@ namespace MassRPG.Tests
         {
             var setup = CreateSetup();
             EquipBowAndAddArrows(setup, 5);
+            setup.Player.CombatStyle = CombatStyle.Ranged;
             var before = setup.Profiles.Resolve(setup.Player).RangedStrengthBonus;
 
             var selected = setup.Ammunition.Select(setup.Player, ArrowId);
@@ -59,7 +60,10 @@ namespace MassRPG.Tests
             var setup = CreateSetup(fallbackRange: 2);
             EquipBowAndAddArrows(setup, 3);
             Assert.IsTrue(setup.Ammunition.Select(setup.Player, ArrowId).Success);
-            var target = Spawn(setup, "cow", Loc(15, 10));
+            // The migrated shortbow carries its own six-tile range, which correctly overrides the
+            // profile fallback. Start outside that authored weapon range so the first tick must
+            // approach before any ammunition can be consumed.
+            var target = Spawn(setup, "cow", Loc(20, 10));
             setup.Player.Location = Loc(10, 10);
             setup.Player.CombatStyle = CombatStyle.Ranged;
             setup.Player.Combat.Begin(target.InstanceId);
