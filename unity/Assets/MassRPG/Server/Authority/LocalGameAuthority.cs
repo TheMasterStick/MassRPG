@@ -9,6 +9,7 @@ using MassRPG.Server.Creatures;
 using MassRPG.Server.Economy;
 using MassRPG.Server.Farming;
 using MassRPG.Server.Firemaking;
+using MassRPG.Server.Items;
 using MassRPG.Server.Production;
 using MassRPG.Server.Resources;
 
@@ -36,6 +37,7 @@ namespace MassRPG.Server.Authority
         private readonly IEconomyAccessSource _economyAccess;
         private readonly FarmingService _farming;
         private readonly FiremakingService _firemaking;
+        private readonly GroundItemService _groundItems;
 
         public LocalGameAuthority(
             IItemRuleSource itemRules,
@@ -52,7 +54,8 @@ namespace MassRPG.Server.Authority
             ShopService shops = null,
             IEconomyAccessSource economyAccess = null,
             FarmingService farming = null,
-            FiremakingService firemaking = null)
+            FiremakingService firemaking = null,
+            GroundItemService groundItems = null)
         {
             _itemRules = itemRules ?? throw new ArgumentNullException(nameof(itemRules));
             _movementMap = movementMap;
@@ -69,6 +72,7 @@ namespace MassRPG.Server.Authority
             _economyAccess = economyAccess;
             _farming = farming;
             _firemaking = firemaking;
+            _groundItems = groundItems;
         }
 
         public void RegisterPlayer(PlayerState player)
@@ -100,6 +104,22 @@ namespace MassRPG.Server.Authority
                     return AuthorityDecision.Reject(request.RequestId, "equipment_locked_in_combat", "Armor and accessories cannot be changed during combat.");
                 return FromInventoryResult(request.RequestId,
                     InventoryRules.Unequip(player.Inventory, player.Equipment, _itemRules, unequip.Slot));
+            }
+
+            if (request is DropInventoryItemRequest drop)
+            {
+                if (_groundItems == null)
+                    return AuthorityDecision.Reject(request.RequestId, "ground_items_unavailable", "Ground items are not initialized.");
+                return FromGroundItemResult(request.RequestId,
+                    _groundItems.DropFromInventory(player, drop.InventorySlot, drop.Quantity, nowUnixMilliseconds));
+            }
+
+            if (request is TakeGroundItemRequest take)
+            {
+                if (_groundItems == null)
+                    return AuthorityDecision.Reject(request.RequestId, "ground_items_unavailable", "Ground items are not initialized.");
+                return FromGroundItemResult(request.RequestId,
+                    _groundItems.Take(player, take.GroundItemId, nowUnixMilliseconds));
             }
 
             if (request is MoveToRequest moveTo)
@@ -408,6 +428,11 @@ namespace MassRPG.Server.Authority
                 : AuthorityDecision.Reject(requestId, result.Code, result.Code);
 
         private static AuthorityDecision FromFiremakingResult(Guid requestId, FiremakingResult result)
+            => result.Success
+                ? AuthorityDecision.Accept(requestId)
+                : AuthorityDecision.Reject(requestId, result.Code, result.Code);
+
+        private static AuthorityDecision FromGroundItemResult(Guid requestId, GroundItemResult result)
             => result.Success
                 ? AuthorityDecision.Accept(requestId)
                 : AuthorityDecision.Reject(requestId, result.Code, result.Code);
