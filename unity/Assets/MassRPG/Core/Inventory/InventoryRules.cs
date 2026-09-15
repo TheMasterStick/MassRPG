@@ -201,6 +201,17 @@ namespace MassRPG.Core.Inventory
             return InventoryOperationResult.Ok();
         }
 
+        /// <summary>
+        /// Removes an equipped item without first routing it through inventory. Server systems use
+        /// this for explicit sinks such as full-loot PvP death; ordinary player unequip still uses
+        /// Unequip so inventory-capacity rules remain enforced.
+        /// </summary>
+        public static bool TryExtractEquippedItem(EquipmentState equipment, EquipmentSlot slot, out ContentId itemId)
+        {
+            if (equipment == null) throw new ArgumentNullException(nameof(equipment));
+            return equipment.Clear(slot, out itemId);
+        }
+
         private static bool InBounds(InventoryState inventory, int index) => index >= 0 && index < inventory.Capacity;
     }
 }
