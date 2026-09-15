@@ -69,7 +69,14 @@ namespace MassRPG.Data.Npcs
         public IEnumerable<DialogueNodeDefinition> Nodes => _nodes.Values;
 
         public bool TryGetNode(string nodeId, out DialogueNodeDefinition node)
-            => nodeId != null && _nodes.TryGetValue(nodeId, out node);
+        {
+            if (nodeId == null)
+            {
+                node = null;
+                return false;
+            }
+            return _nodes.TryGetValue(nodeId, out node);
+        }
 
         private void ValidateLinks()
         {
