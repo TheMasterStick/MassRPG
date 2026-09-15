@@ -5,13 +5,13 @@ on:
     paths:
       - 'ContentData/Drafts/**'
       - 'ContentData/Schemas/**'
-      - 'tools/online-data-editor/validate-drafts.mjs'
+      - 'tools/online-data-editor/**'
       - 'package.json'
   push:
     paths:
       - 'ContentData/Drafts/**'
       - 'ContentData/Schemas/**'
-      - 'tools/online-data-editor/validate-drafts.mjs'
+      - 'tools/online-data-editor/**'
       - 'package.json'
 
 permissions:
@@ -27,5 +27,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Syntax-check Online Data Editor scripts
+        run: |
+          node --check tools/online-data-editor/server.mjs
+          node --check tools/online-data-editor/validate-drafts.mjs
+          node --check tools/online-data-editor/build-candidate.mjs
       - name: Validate repository-backed MassRPG drafts
         run: node tools/online-data-editor/validate-drafts.mjs
