@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "massrpg://schemas/data-candidate.schema.json",
+  "title": "MassRPG Data Review Candidate",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "candidateId",
+    "label",
+    "createdAtUtc",
+    "sourceBranch",
+    "sourceCommit",
+    "documentCounts",
+    "readyCounts",
+    "allDraftsReady",
+    "files"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "candidateId": { "type": "string", "minLength": 1, "maxLength": 120 },
+    "label": { "type": "string", "minLength": 1, "maxLength": 120 },
+    "createdAtUtc": { "type": "string", "format": "date-time" },
+    "sourceBranch": { "type": "string", "minLength": 1 },
+    "sourceCommit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "documentCounts": {
+      "type": "object",
+      "required": ["items", "creatures", "resources", "recipes"],
+      "properties": {
+        "items": { "type": "integer", "minimum": 0 },
+        "creatures": { "type": "integer", "minimum": 0 },
+        "resources": { "type": "integer", "minimum": 0 },
+        "recipes": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "readyCounts": {
+      "type": "object",
+      "required": ["items", "creatures", "resources", "recipes"],
+      "properties": {
+        "items": { "type": "integer", "minimum": 0 },
+        "creatures": { "type": "integer", "minimum": 0 },
+        "resources": { "type": "integer", "minimum": 0 },
+        "recipes": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "allDraftsReady": { "type": "boolean" },
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "sha256", "bytes", "editorState"],
+        "properties": {
+          "path": { "type": "string", "minLength": 1 },
+          "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "bytes": { "type": "integer", "minimum": 0 },
+          "editorState": { "enum": ["draft", "ready-for-review"] }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}
