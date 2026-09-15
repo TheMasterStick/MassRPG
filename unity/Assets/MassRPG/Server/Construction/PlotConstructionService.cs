@@ -34,7 +34,7 @@ namespace MassRPG.Server.Construction
     /// and no floating fixtures/roofs. It is data/policy driven enough to be refined without
     /// changing the persistence model.
     /// </summary>
-    public sealed class PlotConstructionService : IProductionStationSource
+    public sealed partial class PlotConstructionService : IProductionStationSource
     {
         public const int MaximumUsableStorey = 2;
 
