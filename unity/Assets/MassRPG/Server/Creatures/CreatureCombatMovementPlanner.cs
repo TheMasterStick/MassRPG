@@ -182,13 +182,18 @@ namespace MassRPG.Server.Creatures
                 var dx = candidate.X - target.X;
                 var dy = candidate.Y - target.Y;
 
+                if (XSign != 0 && YSign == 0)
+                    return XSign > 0 ? dx > 0 : dx < 0;
+                if (YSign != 0 && XSign == 0)
+                    return YSign > 0 ? dy > 0 : dy < 0;
+
                 if (XSign > 0 && dx < 0) return false;
                 if (XSign < 0 && dx > 0) return false;
                 if (YSign > 0 && dy < 0) return false;
                 if (YSign < 0 && dy > 0) return false;
 
-                // A purely east/west approach may fan into NE/E/SE; north/south behaves the same.
-                // A diagonal approach may use either neighboring cardinal side plus the diagonal.
+                // A diagonal approach may use the diagonal itself or either neighboring cardinal
+                // side (for example NE can settle at N, NE or E), but not the far side of target.
                 return dx != 0 || dy != 0;
             }
         }
