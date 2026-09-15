@@ -9,8 +9,9 @@
     "dev": "vite --open",
     "data-editor": "node tools/online-data-editor/server.mjs",
     "data-validate": "node tools/online-data-editor/validate-drafts.mjs",
+    "asset-links-validate": "node tools/online-data-editor/validate-asset-links.mjs",
     "data-candidate": "node tools/online-data-editor/build-candidate.mjs",
-    "data-editor-check": "node --check tools/online-data-editor/server.mjs && node --check tools/online-data-editor/validate-drafts.mjs && node --check tools/online-data-editor/build-candidate.mjs && node tools/online-data-editor/validate-drafts.mjs",
+    "data-editor-check": "node --check tools/online-data-editor/server.mjs && node --check tools/online-data-editor/validate-drafts.mjs && node --check tools/online-data-editor/validate-asset-links.mjs && node --check tools/online-data-editor/build-candidate.mjs && node tools/online-data-editor/validate-drafts.mjs && node tools/online-data-editor/validate-asset-links.mjs",
     "prebuild": "npm run sync-character-animations",
     "build": "tsc && vite build",
     "preview": "vite preview"
