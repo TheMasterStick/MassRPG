@@ -96,4 +96,26 @@ namespace MassRPG.Core.Authority
         }
         public ContentId LogItemId { get; }
     }
+
+    public sealed class DropInventoryItemRequest : GameRequest
+    {
+        public DropInventoryItemRequest(Guid requestId, Guid characterId, int inventorySlot, int quantity)
+            : base(requestId, characterId)
+        {
+            InventorySlot = inventorySlot;
+            Quantity = quantity;
+        }
+        public int InventorySlot { get; }
+        public int Quantity { get; }
+    }
+
+    public sealed class TakeGroundItemRequest : GameRequest
+    {
+        public TakeGroundItemRequest(Guid requestId, Guid characterId, Guid groundItemId)
+            : base(requestId, characterId)
+        {
+            GroundItemId = groundItemId;
+        }
+        public Guid GroundItemId { get; }
+    }
 }
