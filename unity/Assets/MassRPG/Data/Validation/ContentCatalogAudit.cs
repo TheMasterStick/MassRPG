@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using MassRPG.Core.Content;
+using MassRPG.Core.Skills;
 using MassRPG.Data.Construction;
 using MassRPG.Data.Creatures;
 using MassRPG.Data.Items;
@@ -139,7 +140,7 @@ namespace MassRPG.Data.Validation
         private static void AuditSkills(IReadOnlyList<SkillDefinition> skills, List<ContentAuditIssue> issues)
         {
             var ids = new HashSet<ContentId>();
-            var enumKeys = new HashSet<Core.Skills.SkillId>();
+            var enumKeys = new HashSet<SkillId>();
             for (var i = 0; i < skills.Count; i++)
             {
                 var skill = skills[i];
