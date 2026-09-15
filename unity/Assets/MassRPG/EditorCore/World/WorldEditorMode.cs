@@ -8,6 +8,7 @@ namespace MassRPG.EditorCore.World
         Elevation,
         Water,
         Edges,
+        Selection,
         Roads,
         Objects,
         Doodads,
