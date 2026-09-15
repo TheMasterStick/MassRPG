@@ -1,5 +1,5 @@
 using System;
-using System.Collections.Generic;
+using MassRPG.Client.Actors;
 using MassRPG.Client.Camera;
 using MassRPG.Client.World;
 using MassRPG.Core.Authority;
@@ -14,50 +14,27 @@ namespace MassRPG.Client.Testing
 {
     /// <summary>
     /// Lightweight in-process play session used by the World Editor's Play From Here command.
-    /// It still routes movement through LocalGameAuthority so editor testing exercises the same
-    /// request -> authoritative simulation -> presentation split intended for the real client.
-    /// The visible terrain window follows the authoritative player rather than being a fixed
-    /// spawn-time snapshot, which also gives us an early executable test of chunk streaming.
+    /// Movement still crosses the LocalGameAuthority request boundary, while reusable client actor
+    /// interpolation, authored-page streaming and floating-origin components provide presentation.
+    /// This keeps the editor test harness on the same path as the production Unity client instead of
+    /// maintaining a second bespoke terrain renderer that could silently drift from the real game.
     /// </summary>
     public sealed class LocalPlayTestSession : MonoBehaviour
     {
-        private const int RenderChunkRadius = 2;
-        private const int OriginRebaseThresholdTiles = 128;
         private const float MovementStepSeconds = 0.12f;
-        private const float ViewMoveSpeedTilesPerSecond = 10f;
         private const int MaximumMovementCatchupSteps = 8;
-
-        private sealed class RuntimeTerrainChunk
-        {
-            public RuntimeTerrainChunk(GameObject root, Mesh mesh, int chunkX, int chunkY)
-            {
-                Root = root;
-                Mesh = mesh;
-                ChunkX = chunkX;
-                ChunkY = chunkY;
-            }
-
-            public GameObject Root { get; }
-            public Mesh Mesh { get; }
-            public int ChunkX { get; }
-            public int ChunkY { get; }
-        }
-
-        private readonly Dictionary<Vector2Int, RuntimeTerrainChunk> _terrainChunks =
-            new Dictionary<Vector2Int, RuntimeTerrainChunk>();
-        private readonly List<Vector2Int> _chunkRemovalBuffer = new List<Vector2Int>();
 
         private AuthoredWorldPageStore _world;
         private LocalGameAuthority _authority;
         private PlayerState _player;
         private GridPresentationSpace _presentation;
-        private Transform _playerView;
+        private LogicalActorView _playerView;
+        private LogicalTerrainChunkStreamer _terrainStreamer;
         private Transform _destinationMarker;
         private BoundedObliqueCameraRig _cameraRig;
         private Material _terrainMaterial;
         private Material _playerMaterial;
         private Material _markerMaterial;
-        private Vector2Int _terrainWindowCenter = new Vector2Int(int.MinValue, int.MinValue);
         private float _nextMovementStep;
         private string _lastDecision = "Click authored terrain to move.";
         private bool _legacyInputAvailable = true;
@@ -65,7 +42,7 @@ namespace MassRPG.Client.Testing
         public PlayerState Player => _player;
         public LocalGameAuthority Authority => _authority;
         public AuthoredWorldPageStore World => _world;
-        public int LoadedRenderChunkCount => _terrainChunks.Count;
+        public int LoadedRenderChunkCount => _terrainStreamer != null ? _terrainStreamer.ActiveChunkCount : 0;
 
         public void Initialize(AuthoredWorldPageStore world, GridLocation spawnLocation)
         {
@@ -84,11 +61,12 @@ namespace MassRPG.Client.Testing
             gameObject.name = "MassRPG Play From Here Session";
             CreatePresentationSpace(spawnLocation.Tile);
             CreateMaterials();
-            RefreshTerrainWindow(true);
             CreatePlayerView();
+            CreateTerrainStreamer();
             CreateDestinationMarker();
             CreateCamera();
             SyncPlayerView(true);
+            _terrainStreamer.SyncToFocusNow(true);
             SyncDestinationMarker();
 
             _lastDecision = world.IsWalkable(spawnLocation)
@@ -101,9 +79,8 @@ namespace MassRPG.Client.Testing
             if (_authority == null || _player == null) return;
 
             AdvanceAuthoritativeMovement();
-            RebasePresentationIfNeeded();
-            RefreshTerrainWindow(false);
             SyncPlayerView(false);
+            _terrainStreamer?.SyncToFocusNow(false);
             SyncDestinationMarker();
             HandleLegacyInput();
         }
@@ -128,7 +105,6 @@ namespace MassRPG.Client.Testing
                 _nextMovementStep += MovementStepSeconds;
             }
 
-            // Do not let a long editor pause create a huge movement burst when focus returns.
             if (steps >= MaximumMovementCatchupSteps && now > _nextMovementStep + MovementStepSeconds)
                 _nextMovementStep = now + MovementStepSeconds;
         }
@@ -172,6 +148,7 @@ namespace MassRPG.Client.Testing
             root.transform.SetParent(transform, false);
             _presentation = root.AddComponent<GridPresentationSpace>();
             _presentation.SetOrigin(origin);
+            _presentation.OriginChanged += OnPresentationOriginChanged;
         }
 
         private void CreateMaterials()
@@ -181,126 +158,29 @@ namespace MassRPG.Client.Testing
             _markerMaterial = CreateMaterial(new Color(0.95f, 0.77f, 0.18f));
         }
 
-        private void RefreshTerrainWindow(bool force)
-        {
-            if (_world == null || _presentation == null || _player == null) return;
-            var chunkSize = WorldConstants.DefaultRenderChunkSize;
-            var center = new Vector2Int(_player.Tile.X / chunkSize, _player.Tile.Y / chunkSize);
-            if (!force && center == _terrainWindowCenter) return;
-            _terrainWindowCenter = center;
-
-            _chunkRemovalBuffer.Clear();
-            foreach (var pair in _terrainChunks)
-            {
-                if (Mathf.Abs(pair.Key.x - center.x) <= RenderChunkRadius
-                    && Mathf.Abs(pair.Key.y - center.y) <= RenderChunkRadius)
-                    continue;
-                _chunkRemovalBuffer.Add(pair.Key);
-            }
-
-            for (var i = 0; i < _chunkRemovalBuffer.Count; i++)
-                RemoveTerrainChunk(_chunkRemovalBuffer[i]);
-
-            for (var cy = center.y - RenderChunkRadius; cy <= center.y + RenderChunkRadius; cy++)
-            {
-                if (cy < 0) continue;
-                for (var cx = center.x - RenderChunkRadius; cx <= center.x + RenderChunkRadius; cx++)
-                {
-                    if (cx < 0) continue;
-                    var key = new Vector2Int(cx, cy);
-                    if (_terrainChunks.ContainsKey(key)) continue;
-                    TryCreateTerrainChunk(cx, cy);
-                }
-            }
-        }
-
-        private void TryCreateTerrainChunk(int chunkX, int chunkY)
-        {
-            var chunkSize = WorldConstants.DefaultRenderChunkSize;
-            var start = new GridCoord(chunkX * chunkSize, chunkY * chunkSize);
-            if (!WorldConstants.IsInsideWorld(start)) return;
-
-            var mesh = LogicalTerrainChunkMeshBuilder.Build(
-                _world,
-                chunkX,
-                chunkY,
-                _player.Plane,
-                _player.Storey,
-                _presentation.TileSize,
-                _presentation.ElevationStepHeight,
-                chunkSize);
-            if (mesh.vertexCount == 0)
-            {
-                Destroy(mesh);
-                return;
-            }
-
-            var chunk = new GameObject($"Terrain Chunk {chunkX},{chunkY}");
-            chunk.transform.SetParent(_presentation.transform, false);
-            PositionTerrainChunk(chunk.transform, chunkX, chunkY);
-
-            var filter = chunk.AddComponent<MeshFilter>();
-            filter.sharedMesh = mesh;
-            var renderer = chunk.AddComponent<MeshRenderer>();
-            renderer.sharedMaterial = _terrainMaterial;
-            var collider = chunk.AddComponent<MeshCollider>();
-            collider.sharedMesh = mesh;
-
-            var key = new Vector2Int(chunkX, chunkY);
-            _terrainChunks.Add(key, new RuntimeTerrainChunk(chunk, mesh, chunkX, chunkY));
-        }
-
-        private void PositionTerrainChunk(Transform chunk, int chunkX, int chunkY)
-        {
-            var chunkSize = WorldConstants.DefaultRenderChunkSize;
-            var start = new GridCoord(chunkX * chunkSize, chunkY * chunkSize);
-            chunk.position = _presentation.ToWorldPosition(
-                new GridLocation(start, _player.Plane, _player.Storey),
-                0);
-        }
-
-        private void RemoveTerrainChunk(Vector2Int key)
-        {
-            if (!_terrainChunks.TryGetValue(key, out var runtime)) return;
-            _terrainChunks.Remove(key);
-            if (runtime.Root != null) Destroy(runtime.Root);
-            if (runtime.Mesh != null) Destroy(runtime.Mesh);
-        }
-
-        private void RebasePresentationIfNeeded()
-        {
-            if (_presentation == null || _player == null) return;
-            var origin = _presentation.OriginTile;
-            if (Math.Abs(_player.Tile.X - origin.X) < OriginRebaseThresholdTiles
-                && Math.Abs(_player.Tile.Y - origin.Y) < OriginRebaseThresholdTiles)
-                return;
-
-            var oldPlayerWorld = PlayerWorldPosition();
-            _presentation.SetOrigin(_player.Tile);
-            var newPlayerWorld = PlayerWorldPosition();
-            var worldShift = newPlayerWorld - oldPlayerWorld;
-
-            foreach (var runtime in _terrainChunks.Values)
-                if (runtime.Root != null)
-                    PositionTerrainChunk(runtime.Root.transform, runtime.ChunkX, runtime.ChunkY);
-
-            if (_playerView != null) _playerView.position += worldShift;
-            if (_destinationMarker != null) _destinationMarker.position += worldShift;
-
-            var camera = UnityEngine.Camera.main;
-            if (camera != null) camera.transform.position += worldShift;
-        }
-
         private void CreatePlayerView()
         {
+            var actorRoot = new GameObject("Editor Test Character");
+            actorRoot.transform.SetParent(transform, true);
+            _playerView = actorRoot.AddComponent<LogicalActorView>();
+            _playerView.Configure(_presentation);
+
             var capsule = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-            capsule.name = "Editor Test Character";
-            capsule.transform.SetParent(transform, true);
+            capsule.name = "Temporary Character Visual";
+            capsule.transform.SetParent(actorRoot.transform, false);
+            capsule.transform.localPosition = new Vector3(0f, 1f, 0f);
             var collider = capsule.GetComponent<Collider>();
             if (collider != null) collider.enabled = false;
-            _playerView = capsule.transform;
             var renderer = capsule.GetComponent<Renderer>();
             if (renderer != null) renderer.sharedMaterial = _playerMaterial;
+        }
+
+        private void CreateTerrainStreamer()
+        {
+            var root = new GameObject("Authored Terrain Stream");
+            root.transform.SetParent(transform, true);
+            _terrainStreamer = root.AddComponent<LogicalTerrainChunkStreamer>();
+            _terrainStreamer.Configure(_presentation, _playerView, _world, _terrainMaterial);
         }
 
         private void CreateDestinationMarker()
@@ -334,33 +214,17 @@ namespace MassRPG.Client.Testing
             cameraObject.AddComponent<AudioListener>();
 
             _cameraRig = rig.AddComponent<BoundedObliqueCameraRig>();
-            _cameraRig.FollowTarget = _playerView;
+            _cameraRig.FollowTarget = _playerView.transform;
             _cameraRig.SetNormalizedZoom(0.35f);
-        }
-
-        private Vector3 PlayerWorldPosition()
-        {
-            var elevation = _world.GetLogicalElevation(_player.Location);
-            var position = _presentation.ToWorldPosition(_player.Location, elevation);
-            position.y += 1f;
-            return position;
         }
 
         private void SyncPlayerView(bool snap)
         {
-            if (_playerView == null || _player == null || _presentation == null) return;
-            var target = PlayerWorldPosition();
-            if (snap)
-            {
-                _playerView.position = target;
-                return;
-            }
-
-            var speed = Mathf.Max(0.01f, _presentation.TileSize * ViewMoveSpeedTilesPerSecond);
-            _playerView.position = Vector3.MoveTowards(
-                _playerView.position,
-                target,
-                speed * Time.unscaledDeltaTime);
+            if (_playerView == null || _player == null || _world == null) return;
+            _playerView.ApplyAuthoritativeState(
+                _player.Location,
+                _world.GetLogicalElevation(_player.Location),
+                snap);
         }
 
         private void SyncDestinationMarker()
@@ -380,29 +244,28 @@ namespace MassRPG.Client.Testing
             _destinationMarker.gameObject.SetActive(true);
         }
 
+        private void OnPresentationOriginChanged(GridCoord before, GridCoord after)
+        {
+            SyncDestinationMarker();
+        }
+
         private void OnGUI()
         {
             if (_player == null) return;
             var origin = _presentation != null ? _presentation.OriginTile : _player.Tile;
+            var pageCount = _terrainStreamer != null ? _terrainStreamer.LoadedStoragePageCount : _world.LoadedPageCount;
             var text =
                 $"MassRPG - Play From Here\n" +
                 $"Tile: {_player.Tile.X}, {_player.Tile.Y}   Plane: {_player.Plane}   Floor: {_player.Storey}\n" +
-                $"Render chunks: {_terrainChunks.Count}   Presentation origin: {origin.X}, {origin.Y}\n" +
+                $"Render chunks: {LoadedRenderChunkCount}   Storage pages: {pageCount}   Presentation origin: {origin.X}, {origin.Y}\n" +
                 $"{_lastDecision}\n" +
                 "Left click: move   Mouse wheel: zoom   Stop Play Mode: return to editor";
-            GUI.Box(new Rect(12f, 12f, 560f, 98f), text);
+            GUI.Box(new Rect(12f, 12f, 650f, 98f), text);
         }
 
         private void OnDestroy()
         {
-            _chunkRemovalBuffer.Clear();
-            foreach (var runtime in _terrainChunks.Values)
-            {
-                if (runtime.Root != null) Destroy(runtime.Root);
-                if (runtime.Mesh != null) Destroy(runtime.Mesh);
-            }
-            _terrainChunks.Clear();
-
+            if (_presentation != null) _presentation.OriginChanged -= OnPresentationOriginChanged;
             if (_terrainMaterial != null) Destroy(_terrainMaterial);
             if (_playerMaterial != null) Destroy(_playerMaterial);
             if (_markerMaterial != null) Destroy(_markerMaterial);
