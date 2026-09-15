@@ -2,21 +2,25 @@ using System;
 
 namespace MassRPG.EditorCore.World
 {
+    /// <summary>
+    /// Explicit values keep editor layouts/preferences stable when new authoring modes are added.
+    /// Selection was added after the original modes and therefore intentionally uses value 12.
+    /// </summary>
     public enum WorldEditorMode
     {
-        Terrain,
-        Elevation,
-        Water,
-        Edges,
-        Selection,
-        Roads,
-        Objects,
-        Doodads,
-        Resources,
-        Creatures,
-        Regions,
-        Pathing,
-        PointsOfInterest
+        Terrain = 0,
+        Elevation = 1,
+        Water = 2,
+        Edges = 3,
+        Selection = 12,
+        Roads = 4,
+        Objects = 5,
+        Doodads = 6,
+        Resources = 7,
+        Creatures = 8,
+        Regions = 9,
+        Pathing = 10,
+        PointsOfInterest = 11
     }
 
     [Flags]
@@ -39,7 +43,7 @@ namespace MassRPG.EditorCore.World
 
     public enum BrushShape
     {
-        Square,
-        Circle
+        Square = 0,
+        Circle = 1
     }
 }
