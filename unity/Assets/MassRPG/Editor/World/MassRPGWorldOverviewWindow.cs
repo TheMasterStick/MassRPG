@@ -12,8 +12,8 @@ namespace MassRPG.Editor.World
     /// <summary>
     /// Full Twin Lands overview. One overview pixel corresponds to one 512x512 canonical storage
     /// page, allowing the entire 180km world to be blocked out without instantiating billions of
-    /// tiles. Macro strokes write compact single-run page documents; double-clicking a page opens
-    /// the fine 1x1 tile editor at that location.
+    /// tiles. Macro strokes write compact single-run page documents; right-click selects a page and
+    /// the explicit toolbar action opens the fine 1x1 editor without risking an accidental paint.
     /// </summary>
     public sealed class MassRPGWorldOverviewWindow : EditorWindow
     {
@@ -138,7 +138,7 @@ namespace MassRPG.Editor.World
             DrawToolbar();
             DrawPaintOptions();
             EditorGUILayout.HelpBox(
-                "Macro paint is for the rough whole-world pass. Each painted square replaces one complete 512x512 canonical page with a uniform compressed page. Use the 1x1 World Editor for coastlines, local elevation, ramps and detail. Macro writes are deliberately not local-undoable; Git/history is the safety net.",
+                "Macro paint is for the rough whole-world pass. Each painted square replaces one complete 512x512 canonical page with a uniform compressed page. Left-click/drag paints; right-click selects a page; use 'Open 1x1 Detail Here' to enter fine editing. Macro writes are deliberately not local-undoable; Git/history is the safety net.",
                 MessageType.Info);
 
             var top = GUILayoutUtility.GetLastRect().yMax + 4f;
@@ -244,15 +244,6 @@ namespace MassRPG.Editor.World
                 return;
             }
 
-            if (e.type == EventType.MouseDown && e.button == 0 && e.clickCount >= 2)
-            {
-                _selectedPageX = px;
-                _selectedPageY = py;
-                OpenSelectedDetail();
-                e.Use();
-                return;
-            }
-
             if (e.button != 0 || e.alt) return;
             if (e.type == EventType.MouseDown)
             {
@@ -275,7 +266,7 @@ namespace MassRPG.Editor.World
             else if (_painting && (e.type == EventType.MouseUp || e.rawType == EventType.MouseUp))
             {
                 _painting = false;
-                _status = $"Macro stroke wrote {_paintedThisStroke.Count:N0} page(s). Right-click selects; double-click opens 1x1 detail.";
+                _status = $"Macro stroke wrote {_paintedThisStroke.Count:N0} page(s). Right-click selects; toolbar button opens 1x1 detail.";
                 _paintedThisStroke.Clear();
                 e.Use();
             }
