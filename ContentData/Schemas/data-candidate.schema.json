@@ -12,6 +12,8 @@
     "sourceCommit",
     "documentCounts",
     "readyCounts",
+    "assetStateCounts",
+    "designOnlyDefinitionCount",
     "allDraftsReady",
     "files"
   ],
@@ -24,37 +26,54 @@
     "sourceCommit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
     "documentCounts": {
       "type": "object",
-      "required": ["items", "creatures", "resources", "recipes"],
+      "required": ["items", "creatures", "resources", "recipes", "definitions"],
       "properties": {
         "items": { "type": "integer", "minimum": 0 },
         "creatures": { "type": "integer", "minimum": 0 },
         "resources": { "type": "integer", "minimum": 0 },
-        "recipes": { "type": "integer", "minimum": 0 }
+        "recipes": { "type": "integer", "minimum": 0 },
+        "definitions": { "type": "integer", "minimum": 0 }
       },
       "additionalProperties": false
     },
     "readyCounts": {
       "type": "object",
-      "required": ["items", "creatures", "resources", "recipes"],
+      "required": ["items", "creatures", "resources", "recipes", "definitions"],
       "properties": {
         "items": { "type": "integer", "minimum": 0 },
         "creatures": { "type": "integer", "minimum": 0 },
         "resources": { "type": "integer", "minimum": 0 },
-        "recipes": { "type": "integer", "minimum": 0 }
+        "recipes": { "type": "integer", "minimum": 0 },
+        "definitions": { "type": "integer", "minimum": 0 }
       },
       "additionalProperties": false
     },
+    "assetStateCounts": {
+      "type": "object",
+      "required": ["needs-assets", "placeholder", "linked", "final", "not-required", "unspecified"],
+      "properties": {
+        "needs-assets": { "type": "integer", "minimum": 0 },
+        "placeholder": { "type": "integer", "minimum": 0 },
+        "linked": { "type": "integer", "minimum": 0 },
+        "final": { "type": "integer", "minimum": 0 },
+        "not-required": { "type": "integer", "minimum": 0 },
+        "unspecified": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "designOnlyDefinitionCount": { "type": "integer", "minimum": 0 },
     "allDraftsReady": { "type": "boolean" },
     "files": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["path", "sha256", "bytes", "editorState"],
+        "required": ["path", "sha256", "bytes", "editorState", "assetState"],
         "properties": {
           "path": { "type": "string", "minLength": 1 },
           "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
           "bytes": { "type": "integer", "minimum": 0 },
-          "editorState": { "enum": ["draft", "ready-for-review"] }
+          "editorState": { "enum": ["draft", "ready-for-review"] },
+          "assetState": { "enum": ["needs-assets", "placeholder", "linked", "final", "not-required", "unspecified"] }
         },
         "additionalProperties": false
       }
