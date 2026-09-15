@@ -18,6 +18,7 @@
     "maximumYield": { "type": "integer", "minimum": 1 },
     "requiredToolKind": { "enum": ["None", "Hatchet", "Pickaxe", "FishingNet", "FishingRod", "LobsterPot", "Harpoon"] },
     "minimumToolTier": { "type": "integer", "minimum": 0 },
+    "presentation": { "$ref": "presentation.schema.json" },
     "editorState": { "enum": ["draft", "ready-for-review"] }
   },
   "additionalProperties": false
