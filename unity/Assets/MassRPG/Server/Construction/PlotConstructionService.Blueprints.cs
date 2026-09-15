@@ -160,15 +160,17 @@ namespace MassRPG.Server.Construction
                 catch (OverflowException) { return BlueprintPlacementPreview.Fail("invalid_blueprint"); }
 
                 candidates.Add(new BlueprintCandidate(
-                    i,
                     definition,
                     new BlueprintResolvedPiece(i, definition.Id, anchor, edge, pieceRotation)));
             }
 
-            var currentState = GetOrCreateState(plotId);
+            // Preview must not create even an empty persistent building record. Use a disposable empty
+            // state when this plot has never had construction before.
+            var currentState = _buildings.TryGetValue(plotId, out var existingState)
+                ? existingState
+                : new PlotBuildingState(plotId);
             var simulated = CloneState(currentState);
             var unresolved = new List<BlueprintCandidate>(candidates);
-            var placementOrder = new List<BlueprintCandidate>(candidates.Count);
 
             while (unresolved.Count > 0)
             {
@@ -198,7 +200,6 @@ namespace MassRPG.Server.Construction
                         piece.Anchor,
                         piece.Edge,
                         piece.RotationQuarterTurns));
-                    placementOrder.Add(candidate);
                     unresolved.RemoveAt(i);
                     progress = true;
                 }
@@ -282,14 +283,12 @@ namespace MassRPG.Server.Construction
 
         private sealed class BlueprintCandidate
         {
-            public BlueprintCandidate(int sourceIndex, BuildPieceDefinition definition, BlueprintResolvedPiece resolved)
+            public BlueprintCandidate(BuildPieceDefinition definition, BlueprintResolvedPiece resolved)
             {
-                SourceIndex = sourceIndex;
                 Definition = definition;
                 Resolved = resolved;
             }
 
-            public int SourceIndex { get; }
             public BuildPieceDefinition Definition { get; }
             public BlueprintResolvedPiece Resolved { get; }
         }
