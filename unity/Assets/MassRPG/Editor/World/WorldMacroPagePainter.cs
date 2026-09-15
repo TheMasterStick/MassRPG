@@ -43,10 +43,10 @@ namespace MassRPG.Editor.World
             switch (kind)
             {
                 case MacroPagePaintKind.Water:
-                    flags = TileFlags.Water | TileFlags.MovementBlocked | TileFlags.NoBuild;
+                    flags = TileFlags.Water;
                     break;
                 case MacroPagePaintKind.DeepWater:
-                    flags = TileFlags.DeepWater | TileFlags.MovementBlocked | TileFlags.NoBuild;
+                    flags = TileFlags.DeepWater;
                     break;
                 case MacroPagePaintKind.Unpainted:
                     groundId = new ContentId("ground.unpainted");
