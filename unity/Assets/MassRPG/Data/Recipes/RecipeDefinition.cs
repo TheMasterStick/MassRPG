@@ -40,7 +40,9 @@ namespace MassRPG.Data.Recipes
             string category,
             ContentId? stationId = null,
             ContentId? toolRequiredId = null,
-            bool canBurn = false)
+            bool canBurn = false,
+            ContentId? failureOutputItemId = null,
+            double failureXpFraction = 0.10)
         {
             if (id.IsEmpty) throw new ArgumentException("Recipe id cannot be empty.", nameof(id));
             if (levelRequired < 1) throw new ArgumentOutOfRangeException(nameof(levelRequired));
@@ -49,6 +51,9 @@ namespace MassRPG.Data.Recipes
             if (outputQuantity < 1) throw new ArgumentOutOfRangeException(nameof(outputQuantity));
             if (xp < 0) throw new ArgumentOutOfRangeException(nameof(xp));
             if (durationMilliseconds < 1) throw new ArgumentOutOfRangeException(nameof(durationMilliseconds));
+            if (failureXpFraction < 0.0 || failureXpFraction > 1.0) throw new ArgumentOutOfRangeException(nameof(failureXpFraction));
+            if (canBurn && !failureOutputItemId.HasValue)
+                throw new ArgumentException("Burnable recipes require an explicit failure output item.", nameof(failureOutputItemId));
 
             Id = id;
             DisplayName = displayName ?? string.Empty;
@@ -64,6 +69,8 @@ namespace MassRPG.Data.Recipes
             StationId = stationId;
             ToolRequiredId = toolRequiredId;
             CanBurn = canBurn;
+            FailureOutputItemId = failureOutputItemId;
+            FailureXpFraction = failureXpFraction;
         }
 
         public ContentId Id { get; }
@@ -79,5 +86,7 @@ namespace MassRPG.Data.Recipes
         public ContentId? StationId { get; set; }
         public ContentId? ToolRequiredId { get; set; }
         public bool CanBurn { get; set; }
+        public ContentId? FailureOutputItemId { get; set; }
+        public double FailureXpFraction { get; set; }
     }
 }
