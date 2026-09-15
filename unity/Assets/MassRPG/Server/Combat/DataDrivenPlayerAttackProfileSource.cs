@@ -9,7 +9,8 @@ namespace MassRPG.Server.Combat
     /// <summary>
     /// Development resolver for authoritative player combat range/timing/bonuses. Weapon data may
     /// override the migration fallbacks; exact final speeds/ranges remain content balance rather
-    /// than being baked into combat geometry.
+    /// than being baked into combat geometry. Selected ranged ammunition contributes bonuses while
+    /// remaining an inventory stack rather than an equipment slot.
     /// </summary>
     public sealed class DataDrivenPlayerAttackProfileSource : IPlayerAttackProfileSource
     {
@@ -56,6 +57,16 @@ namespace MassRPG.Server.Combat
                 rangedAttack += definition.Bonuses.RangedAttack;
                 rangedStrength += definition.Bonuses.RangedStrength;
                 magic += definition.Bonuses.Magic;
+            }
+
+            if (player.CombatStyle == CombatStyle.Ranged
+                && player.SelectedAmmunitionItemId.HasValue
+                && player.Inventory.CountItem(player.SelectedAmmunitionItemId.Value) > 0
+                && _items.TryGetDefinition(player.SelectedAmmunitionItemId.Value, out var ammunition)
+                && ammunition.Type == ItemType.Ammunition)
+            {
+                rangedAttack += ammunition.Bonuses.RangedAttack;
+                rangedStrength += ammunition.Bonuses.RangedStrength;
             }
 
             var range = player.CombatStyle == CombatStyle.Melee
