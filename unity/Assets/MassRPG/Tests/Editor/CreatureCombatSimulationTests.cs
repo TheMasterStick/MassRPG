@@ -2,6 +2,7 @@ using System;
 using MassRPG.Core.Characters;
 using MassRPG.Core.Combat;
 using MassRPG.Core.Content;
+using MassRPG.Core.Skills;
 using MassRPG.Core.World;
 using MassRPG.Data.Creatures;
 using MassRPG.Data.Items;
@@ -83,6 +84,8 @@ namespace MassRPG.Tests
         {
             var setup = CreateSetup();
             setup.Player.Location = Loc(10, 10);
+            setup.Player.Skills.SetXp(SkillId.Hitpoints, SkillProgression.XpForLevel(100));
+            setup.Player.CurrentHitpoints = setup.Player.MaxHitpoints;
             var wizard = Spawn(setup, "dark_wizard", Loc(15, 10));
             wizard.TargetCharacterId = setup.Player.CharacterId;
 
