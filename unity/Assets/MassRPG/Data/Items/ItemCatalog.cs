@@ -1,0 +1,40 @@
+using System;
+using System.Collections.Generic;
+using MassRPG.Core.Content;
+using MassRPG.Core.Inventory;
+
+namespace MassRPG.Data.Items
+{
+    /// <summary>
+    /// Runtime-facing catalog contract. The Unity editor will eventually publish versioned data
+    /// into this shape instead of hard-coding content in gameplay assemblies.
+    /// </summary>
+    public sealed class ItemCatalog : IItemRuleSource
+    {
+        private readonly Dictionary<ContentId, ItemDefinition> _items = new Dictionary<ContentId, ItemDefinition>();
+
+        public IEnumerable<ItemDefinition> All => _items.Values;
+
+        public void Register(ItemDefinition definition)
+        {
+            if (definition == null) throw new ArgumentNullException(nameof(definition));
+            if (_items.ContainsKey(definition.Id))
+                throw new InvalidOperationException($"Duplicate item id '{definition.Id}'. Stable content ids must be unique.");
+            _items.Add(definition.Id, definition);
+        }
+
+        public bool TryGetDefinition(ContentId id, out ItemDefinition definition) => _items.TryGetValue(id, out definition);
+
+        public bool TryGetRule(ContentId itemId, out ItemRule rule)
+        {
+            if (_items.TryGetValue(itemId, out var definition))
+            {
+                rule = definition.ToRule();
+                return true;
+            }
+
+            rule = null;
+            return false;
+        }
+    }
+}
