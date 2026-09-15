@@ -1,4 +1,5 @@
 using System;
+using MassRPG.Core.Authority;
 using MassRPG.Core.Characters;
 using MassRPG.Core.Combat;
 using MassRPG.Core.Content;
@@ -23,7 +24,7 @@ namespace MassRPG.Tests
             var setup = CreateSetup(CombatStyle.Melee, 1, 2400);
             setup.Player.Location = Loc(10, 10);
             var target = Spawn(setup, "cow", Loc(11, 10));
-            Assert.IsTrue(setup.Authority.Submit(new Core.Authority.AttackCreatureRequest(
+            Assert.IsTrue(setup.Authority.Submit(new AttackCreatureRequest(
                 Guid.NewGuid(), setup.Player.CharacterId, target.InstanceId)).Accepted);
 
             var rng = Sequence(0.0, 0.999);
@@ -47,7 +48,7 @@ namespace MassRPG.Tests
             var setup = CreateSetup(CombatStyle.Melee, 1, 2400);
             setup.Player.Location = Loc(10, 10);
             var target = Spawn(setup, "chicken", Loc(11, 10));
-            Assert.IsTrue(setup.Authority.Submit(new Core.Authority.AttackCreatureRequest(
+            Assert.IsTrue(setup.Authority.Submit(new AttackCreatureRequest(
                 Guid.NewGuid(), setup.Player.CharacterId, target.InstanceId)).Accepted);
 
             var result = setup.Authority.AdvanceCombat(setup.Player.CharacterId, 1000, Sequence(0.0, 0.999));
@@ -62,7 +63,7 @@ namespace MassRPG.Tests
             var setup = CreateSetup(CombatStyle.Melee, 1, 2400);
             setup.Player.Location = Loc(10, 10);
             var target = Spawn(setup, "goblin", Loc(11, 10));
-            Assert.IsTrue(setup.Authority.Submit(new Core.Authority.AttackCreatureRequest(
+            Assert.IsTrue(setup.Authority.Submit(new AttackCreatureRequest(
                 Guid.NewGuid(), setup.Player.CharacterId, target.InstanceId)).Accepted);
             Assert.IsFalse(setup.Player.Movement.IsMoving);
 
