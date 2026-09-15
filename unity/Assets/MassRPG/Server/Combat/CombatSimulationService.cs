@@ -25,6 +25,7 @@ namespace MassRPG.Server.Combat
         private readonly IGridTraversalMap _movementMap;
         private readonly ICombatContributionSink _contributions;
         private readonly RangedAmmunitionService _ammunition;
+        private readonly IEffectiveSkillLevelSource _skillLevels;
 
         public CombatSimulationService(
             CreatureRegistry creatures,
@@ -33,7 +34,8 @@ namespace MassRPG.Server.Combat
             CombatApproachPlanner approach,
             IGridTraversalMap movementMap,
             ICombatContributionSink contributions = null,
-            RangedAmmunitionService ammunition = null)
+            RangedAmmunitionService ammunition = null,
+            IEffectiveSkillLevelSource skillLevels = null)
         {
             _creatures = creatures ?? throw new ArgumentNullException(nameof(creatures));
             _definitions = definitions ?? throw new ArgumentNullException(nameof(definitions));
@@ -42,6 +44,7 @@ namespace MassRPG.Server.Combat
             _movementMap = movementMap ?? throw new ArgumentNullException(nameof(movementMap));
             _contributions = contributions;
             _ammunition = ammunition;
+            _skillLevels = skillLevels ?? BaseEffectiveSkillLevelSource.Instance;
         }
 
         public CombatAdvanceResult AdvancePlayerAttack(PlayerState player, long nowUnixMilliseconds, Func<double> random01)
@@ -99,9 +102,9 @@ namespace MassRPG.Server.Combat
                 }
             }
 
-            var attackLevel = ResolvePlayerAttackLevel(player);
+            var attackLevel = ResolvePlayerAttackLevel(player, nowUnixMilliseconds);
             var attackBonus = ResolvePlayerAttackBonus(profile);
-            var maxHit = ResolvePlayerMaxHit(player, profile);
+            var maxHit = ResolvePlayerMaxHit(player, profile, nowUnixMilliseconds);
             var attackRoll = CombatMath.AttackRoll(attackLevel, attackBonus);
             var defenceRoll = CombatMath.DefenceRoll(definition.DefenceLevel, definition.DefenceBonus);
             var hitChance = CombatMath.HitChance(attackRoll, defenceRoll);
@@ -145,16 +148,16 @@ namespace MassRPG.Server.Combat
             return CombatAdvanceResult.Attack(damage, hitChance, hit, false);
         }
 
-        private static int ResolvePlayerAttackLevel(PlayerState player)
+        private int ResolvePlayerAttackLevel(PlayerState player, long nowUnixMilliseconds)
         {
             switch (player.CombatStyle)
             {
                 case CombatStyle.Ranged:
-                    return player.Skills.GetLevel(SkillId.Ranged);
+                    return _skillLevels.GetEffectiveLevel(player, SkillId.Ranged, nowUnixMilliseconds);
                 case CombatStyle.Magic:
-                    return player.Skills.GetLevel(SkillId.Magic);
+                    return _skillLevels.GetEffectiveLevel(player, SkillId.Magic, nowUnixMilliseconds);
                 default:
-                    return player.Skills.GetLevel(SkillId.Attack);
+                    return _skillLevels.GetEffectiveLevel(player, SkillId.Attack, nowUnixMilliseconds);
             }
         }
 
@@ -171,16 +174,21 @@ namespace MassRPG.Server.Combat
             }
         }
 
-        private static int ResolvePlayerMaxHit(PlayerState player, PlayerAttackProfile profile)
+        private int ResolvePlayerMaxHit(PlayerState player, PlayerAttackProfile profile, long nowUnixMilliseconds)
         {
             switch (profile.Style)
             {
                 case CombatStyle.Ranged:
-                    return CombatMath.MaxHitRanged(player.Skills.GetLevel(SkillId.Ranged), profile.RangedStrengthBonus);
+                    return CombatMath.MaxHitRanged(
+                        _skillLevels.GetEffectiveLevel(player, SkillId.Ranged, nowUnixMilliseconds),
+                        profile.RangedStrengthBonus);
                 case CombatStyle.Magic:
-                    return CombatMath.MaxHitMagic(player.Skills.GetLevel(SkillId.Magic));
+                    return CombatMath.MaxHitMagic(
+                        _skillLevels.GetEffectiveLevel(player, SkillId.Magic, nowUnixMilliseconds));
                 default:
-                    return CombatMath.MaxHitMelee(player.Skills.GetLevel(SkillId.Strength), profile.StrengthBonus);
+                    return CombatMath.MaxHitMelee(
+                        _skillLevels.GetEffectiveLevel(player, SkillId.Strength, nowUnixMilliseconds),
+                        profile.StrengthBonus);
             }
         }
     }
