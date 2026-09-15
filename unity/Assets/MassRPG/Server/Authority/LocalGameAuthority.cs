@@ -6,6 +6,7 @@ using MassRPG.Core.Inventory;
 using MassRPG.Core.World;
 using MassRPG.Server.Combat;
 using MassRPG.Server.Creatures;
+using MassRPG.Server.Death;
 using MassRPG.Server.Economy;
 using MassRPG.Server.Farming;
 using MassRPG.Server.Firemaking;
@@ -39,6 +40,7 @@ namespace MassRPG.Server.Authority
         private readonly FiremakingService _firemaking;
         private readonly GroundItemService _groundItems;
         private readonly FoodConsumptionService _food;
+        private readonly PlayerDeathService _death;
 
         public LocalGameAuthority(
             IItemRuleSource itemRules,
@@ -57,7 +59,8 @@ namespace MassRPG.Server.Authority
             FarmingService farming = null,
             FiremakingService firemaking = null,
             GroundItemService groundItems = null,
-            FoodConsumptionService food = null)
+            FoodConsumptionService food = null,
+            PlayerDeathService death = null)
         {
             _itemRules = itemRules ?? throw new ArgumentNullException(nameof(itemRules));
             _movementMap = movementMap;
@@ -76,6 +79,7 @@ namespace MassRPG.Server.Authority
             _firemaking = firemaking;
             _groundItems = groundItems;
             _food = food;
+            _death = death;
         }
 
         public void RegisterPlayer(PlayerState player)
@@ -325,7 +329,10 @@ namespace MassRPG.Server.Authority
                 return new CreatureAdvanceResult(CreatureAdvanceKind.GaveUp, "target_unavailable");
             }
 
-            return _creatureCombat.Advance(creature, target, nowUnixMilliseconds, random01);
+            var result = _creatureCombat.Advance(creature, target, nowUnixMilliseconds, random01);
+            if (result.Kind == CreatureAdvanceKind.TargetKilled)
+                _death?.ResolvePveDeath(target, nowUnixMilliseconds);
+            return result;
         }
 
         public int AdvanceAllCreatureCombat(long nowUnixMilliseconds, Func<double> random01)
