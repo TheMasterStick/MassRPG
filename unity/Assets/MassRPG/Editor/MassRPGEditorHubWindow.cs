@@ -15,7 +15,7 @@ namespace MassRPG.Editor
         {
             var window = GetWindow<MassRPGEditorHubWindow>();
             window.titleContent = new GUIContent("MassRPG Editor");
-            window.minSize = new Vector2(470, 520);
+            window.minSize = new Vector2(470, 570);
             window.Show();
         }
 
@@ -33,15 +33,16 @@ namespace MassRPG.Editor
 
             Section("World semantics");
             Button("Road Editor", "Draw semantic roads with width, surface and routing/spawn guidance.", MassRPGRoadEditorWindow.Open);
-            Button("Area Editor", "Draw overlapping regions, biomes, level bands, faction/spawn/resource/no-build/PvP areas.", MassRPGAreaEditorWindow.Open);
+            Button("Area Editor", "Draw overlapping regions, biomes, level bands, faction/resource/no-build/PvP areas.", MassRPGAreaEditorWindow.Open);
             Button("POI Editor", "Place public/hidden POIs with independent visible and protection footprints.", MassRPGPointOfInterestEditorWindow.Open);
 
-            Section("Objects & resources");
+            Section("Actors, objects & resources");
+            Button("Creature Spawns", "Author fixed-cap creature populations, roam areas and optional patrol routes.", MassRPGCreatureSpawnEditorWindow.Open);
             Button("Placement Editor", "Place anchored objects, deliberate resources, NPC anchors, transport nodes and manual doodads.", MassRPGPlacementEditorWindow.Open);
 
             GUILayout.FlexibleSpace();
             EditorGUILayout.HelpBox(
-                "Still in progress: searchable content palettes, deterministic biome-dressing controls, creature-population authoring, selection/stamps in the main 1x1 UI, recovery restore UI and Play From Here.",
+                "Still in progress: searchable content palettes, deterministic biome-dressing controls, selection/stamps in the main 1x1 UI, recovery restore UI and Play From Here.",
                 MessageType.None);
             GUILayout.Label("Unity 6.3 LTS · MassRPG authored-world tools", EditorStyles.centeredGreyMiniLabel);
         }
