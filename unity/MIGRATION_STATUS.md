@@ -9,7 +9,7 @@ This file tracks source-system disposition so the browser version stays useful a
 | `src/data/skills.ts` | Core/Data skill definitions | Initial port complete | 1-99 parity retained; MassRPG ceiling is 300. XP above 99 remains balanceable. |
 | `src/data/items.ts` | `MassRPG.Data/Items` | Schema + migration seed catalog | Stable `ContentId` is canonical; bulk content migration remains. |
 | `src/systems/Inventory.ts` | `MassRPG.Core/Inventory` | Core rules ported + tests | Settled slots, dual rings, 2H/shield exclusion, requirements and combat gear-lock rules are represented. |
-| `src/systems/Combat.ts` | Core + Server | Authoritative foundation active | Player auto-attacks plus creature aggro/chase/leash/attack resolution are server-owned. Range/LOS, cooldowns, elevation accuracy and side-preserving crowd movement are represented. Contribution/loot/XP distribution remain. |
+| `src/systems/Combat.ts` | Core + Server | Authoritative foundation active | Player auto-attacks plus creature aggro/chase/leash/attack resolution are server-owned. Range/LOS, cooldowns, elevation accuracy, side-preserving crowd movement and authoritative damage contribution tracking are represented. Final XP/loot distribution remains. |
 | `src/systems/Gathering.ts` | Core + Server | Authoritative foundation active | Resource definitions, personal/shared depletion ledgers, deterministic node keys and gathering authority are present. |
 | `src/systems/Production.ts` / `src/data/recipes.ts` | Data + Core state + Server | Authoritative foundation active | Published recipe IDs, timed production state, station validation, material consumption, outputs, XP and authority requests are present. Seed smelting recipes include the settled 2 Dragonite ore + 2 coal rule. Cooking burn/failure outputs and broader recipe migration remain. |
 | `src/systems/Construction.ts` | Core + Server | Persistent plot foundation active | Shared-world plots now reserve future Large-tier space, expose configurable named access rules and enforce owner blocklists. Piece placement/support/upkeep/blueprints remain. |
@@ -39,6 +39,10 @@ Materialized population creatures now register with the soft-occupancy index and
 
 Creature combat movement uses a side-preserving planner on top of soft creature occupancy. Aggressive creatures acquire nearby players, chase within their home leash and attack on server-owned cooldowns. Neutral creatures do not initiate but can retaliate; passive creatures never attack. Mobs approaching from one side prefer that side's attack arc instead of tactically circling to the opposite side simply because nearby creature tiles are occupied. A filled one-tile approach therefore naturally creates queues/conga-lines.
 
+## Combat contribution foundation
+
+Authoritative player damage now emits contribution events into an optional server ledger. The ledger records total damage, per-character damage, first engager and timing without deciding final rewards. A separate configurable eligibility policy can impose minimum damage and/or minimum contribution fraction. This intentionally avoids baking arbitrary anti-power-leveling percentages into combat before group/XP/loot balancing is finalized.
+
 ## Player plot foundation
 
 Persistent player plots keep current claimed tiles separate from an immutable maximum future reservation. New plot placement checks the entire reserved envelope, so another plot cannot later prevent an existing Small plot from growing toward Medium/Large. Exact tier sizes and final upgrade-shape policy remain data/configurable.
@@ -47,13 +51,13 @@ Plots support unlimited reusable named access rulesets. The owner blocklist over
 
 ## Automated test coverage authored so far
 
-Editor test assemblies cover XP/skills, combat math, inventory/equipment, requirements and gear locks, local authority validation, diagonal movement/corner blocking, exact ramps/barriers, ranged LOS rules, world page serialization, semantic areas/POIs, editor sessions, published-data versions, resource depletion/gathering, creature footprints/occupancy, combat targeting, authoritative player auto-attacks, aggressive/neutral/passive creature combat behavior, leash/cooldowns, sleeping creature populations, combat-death-to-respawn integration, approach-direction crowding, timed production/smelting, and persistent plot reservation/access behavior.
+Editor test assemblies cover XP/skills, combat math, inventory/equipment, requirements and gear locks, local authority validation, diagonal movement/corner blocking, exact ramps/barriers, ranged LOS rules, world page serialization, semantic areas/POIs, editor sessions, published-data versions, resource depletion/gathering, creature footprints/occupancy, combat targeting, authoritative player auto-attacks, aggressive/neutral/passive creature combat behavior, leash/cooldowns, sleeping creature populations, combat-death-to-respawn integration, approach-direction crowding, configurable combat contribution eligibility, timed production/smelting, and persistent plot reservation/access behavior.
 
 These tests are committed but still need their first actual Unity Test Runner pass after the project is opened with the chosen Unity 6 revision.
 
 ## Next implementation batch
 
-1. Add combat contribution tracking and a configurable eligibility foundation for XP/loot without prematurely hard-coding final anti-power-leveling percentages.
+1. Build reward settlement on top of contribution facts: party-aware XP sharing, first-engager context and one shared loot pool, while keeping exact anti-power-level thresholds configurable.
 2. Expand published item/recipe catalogs into cooking, fletching, crafting, Herblore and smithing equipment.
 3. Extend construction with modular pieces, three-storey support validation, plot upgrades, upkeep/abandonment and reusable building blueprints.
 4. Continue the World Editor toward the full tactile authoring UI: palette/tool/brush workflow, overlays, deterministic biome dressing overrides, autosave/recovery, search, minimap and Play From Here.
