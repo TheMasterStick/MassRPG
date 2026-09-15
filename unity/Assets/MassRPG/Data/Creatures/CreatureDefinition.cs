@@ -29,7 +29,8 @@ namespace MassRPG.Data.Creatures
             CreatureFootprint footprint,
             int aggroRadiusTiles = 4,
             int leashRadiusTiles = 8,
-            bool persistentNamedInstance = false)
+            bool persistentNamedInstance = false,
+            ContentId? lootTableId = null)
         {
             if (id.IsEmpty) throw new ArgumentException("Creature id cannot be empty.", nameof(id));
             if (combatLevel < 1) throw new ArgumentOutOfRangeException(nameof(combatLevel));
@@ -41,6 +42,8 @@ namespace MassRPG.Data.Creatures
             if (attackRangeTiles < 1) throw new ArgumentOutOfRangeException(nameof(attackRangeTiles));
             if (aggroRadiusTiles < 0) throw new ArgumentOutOfRangeException(nameof(aggroRadiusTiles));
             if (leashRadiusTiles < 0) throw new ArgumentOutOfRangeException(nameof(leashRadiusTiles));
+            if (lootTableId.HasValue && lootTableId.Value.IsEmpty)
+                throw new ArgumentException("Loot table id cannot be empty when supplied.", nameof(lootTableId));
 
             Id = id;
             DisplayName = displayName ?? string.Empty;
@@ -60,6 +63,7 @@ namespace MassRPG.Data.Creatures
             AggroRadiusTiles = aggroRadiusTiles;
             LeashRadiusTiles = leashRadiusTiles;
             PersistentNamedInstance = persistentNamedInstance;
+            LootTableId = lootTableId;
         }
 
         public ContentId Id { get; }
@@ -80,5 +84,6 @@ namespace MassRPG.Data.Creatures
         public int AggroRadiusTiles { get; set; }
         public int LeashRadiusTiles { get; set; }
         public bool PersistentNamedInstance { get; set; }
+        public ContentId? LootTableId { get; set; }
     }
 }
