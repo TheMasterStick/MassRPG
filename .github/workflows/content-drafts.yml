@@ -1,16 +1,18 @@
-name: Validate MassRPG content drafts
+name: Validate MassRPG content data
 
 on:
   pull_request:
     paths:
       - 'ContentData/Drafts/**'
       - 'ContentData/Schemas/**'
+      - 'ContentData/AssetLinks/**'
       - 'tools/online-data-editor/**'
       - 'package.json'
   push:
     paths:
       - 'ContentData/Drafts/**'
       - 'ContentData/Schemas/**'
+      - 'ContentData/AssetLinks/**'
       - 'tools/online-data-editor/**'
       - 'package.json'
 
@@ -18,7 +20,7 @@ permissions:
   contents: read
 
 jobs:
-  validate-drafts:
+  validate-content-data:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -31,6 +33,9 @@ jobs:
         run: |
           node --check tools/online-data-editor/server.mjs
           node --check tools/online-data-editor/validate-drafts.mjs
+          node --check tools/online-data-editor/validate-asset-links.mjs
           node --check tools/online-data-editor/build-candidate.mjs
       - name: Validate repository-backed MassRPG drafts
         run: node tools/online-data-editor/validate-drafts.mjs
+      - name: Validate Unity presentation asset links
+        run: node tools/online-data-editor/validate-asset-links.mjs
