@@ -23,11 +23,22 @@ Drafts are deliberately separate from live-published data. Unity reads the same 
 4. Open forwarded port **4175** if it did not open automatically. Keep the port visibility **Private**.
 5. Choose Items, Creatures, Resources or Recipes from the dashboard.
 6. **Save draft file** writes JSON into the Codespace working tree.
-7. **Commit & Push** explicitly commits `ContentData/Drafts` and pushes the current branch to GitHub.
+7. Use the dashboard **Draft preflight** before committing. It catches malformed drafts and highlights repository-only reference gaps.
+8. **Commit & Push** explicitly commits `ContentData/Drafts` and pushes the current branch to GitHub.
 
 You can still start it manually with `npm run data-editor`.
 
 No GitHub personal access token is placed in the browser UI. The server relies on the Git credentials already supplied to the Codespace.
+
+## Validation layers
+
+There are now three deliberately separate validation layers:
+
+1. **Editor form/server validation** prevents obviously invalid values from being saved by the web UI.
+2. **Browser preflight / `npm run data-validate`** scans every repository draft, validates filenames/IDs/basic invariants, and warns about item references that do not exist in repository drafts.
+3. **Unity `MassRPG → Validate Repository Drafts`** reconstructs the C# definitions and runs the authoritative cross-catalog audit against repository drafts plus temporary migration seed catalogs.
+
+GitHub Actions runs the command-line draft validator automatically when draft/schema validation files change. Structural errors fail the check. Missing repository-only references are warnings for now because they may still resolve from migration seed content; that distinction disappears once all canonical content has moved into repository data.
 
 ## Safety boundaries
 
