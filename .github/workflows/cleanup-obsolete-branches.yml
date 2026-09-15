@@ -1,0 +1,83 @@
+name: Clean obsolete MassRPG branches
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - claude/massrpg-procedural-game-sossii
+    paths:
+      - .github/branch-cleanup-trigger.txt
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out full repository history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Delete audited merged/obsolete branches
+        shell: bash
+        run: |
+          set -euo pipefail
+          canonical='chatgpt/unity-csharp-migration'
+          current_default='claude/massrpg-procedural-game-sossii'
+
+          safe_branches=(
+            'DO_NOT_USE'
+            'chatgpt/editor-storage-perf'
+            'chatgpt/unity-csharp-migration-batch'
+            'chatgpt/unity-csharp-migration-batch2'
+            'chatgpt/unity-csharp-migration-foundations'
+            'chatgpt/unity-csharp-migration-temp'
+            'chatgpt/unity-csharp-migration-work'
+            'chatgpt/unity-csharp-migration-work-2'
+            'chatgpt/unity-csharp-migration-work-3'
+            'claude/massrpg-character-assets-stage'
+            'claude/massrpg-character-assets-stage2'
+            'claude/massrpg-character-assets-stage3'
+            'claude/massrpg-character-assets-stage4'
+            'claude/massrpg-character-assets-stage5'
+            'claude/massrpg-character-assets-stage6'
+            'ignore-me'
+            'junction-builder-20260912b'
+            'junction-builder-20260912'
+            'junction-builder-final'
+            'junction-builder-run'
+            'junction-builder-x'
+            'temp-junction-work'
+            'test-bad'
+            'tmp'
+            'ugh'
+            'zzz'
+          )
+
+          git fetch origin '+refs/heads/*:refs/remotes/origin/*' --prune
+          git show-ref --verify --quiet "refs/remotes/origin/$canonical"
+
+          for branch in "${safe_branches[@]}"; do
+            if [[ "$branch" == "$canonical" || "$branch" == "$current_default" ]]; then
+              echo "KEEP protected working branch: $branch"
+              continue
+            fi
+
+            if ! git show-ref --verify --quiet "refs/remotes/origin/$branch"; then
+              echo "Already gone: $branch"
+              continue
+            fi
+
+            if git merge-base --is-ancestor "origin/$branch" "origin/$canonical"; then
+              echo "Deleting audited ancestor branch: $branch"
+              git push origin --delete "$branch"
+            else
+              echo "REFUSING to delete $branch because it now contains unique history" >&2
+              exit 1
+            fi
+          done
+
+          echo 'Intentionally retained junction-builder-work because it has unique legacy commits.'
+          echo 'Intentionally retained the current GitHub default branch until the repository default is changed.'
