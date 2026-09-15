@@ -4,17 +4,31 @@ using MassRPG.Core.Skills;
 
 namespace MassRPG.Server.Combat
 {
+    public readonly struct CombatExperienceAward
+    {
+        public CombatExperienceAward(int combatXp, int hitpointsXp)
+        {
+            if (combatXp < 0) throw new ArgumentOutOfRangeException(nameof(combatXp));
+            if (hitpointsXp < 0) throw new ArgumentOutOfRangeException(nameof(hitpointsXp));
+            CombatXp = combatXp;
+            HitpointsXp = hitpointsXp;
+        }
+
+        public int CombatXp { get; }
+        public int HitpointsXp { get; }
+    }
+
     public interface ICombatExperiencePolicy
     {
-        void AwardDamageExperience(PlayerState player, int damage);
+        CombatExperienceAward CalculateForDamage(int damage);
+        void Apply(PlayerState player, CombatExperienceAward award);
     }
 
     /// <summary>
     /// Browser-parity combat XP policy. The legacy prototype awarded 1.33 combat-skill XP and
-    /// 0.33 Hitpoints XP per point of damage, rounded to whole XP at the award boundary. Keeping
-    /// those multipliers configurable lets live balance change without rewriting combat resolution.
-    /// Controlled is the Unity-era fourth melee style and shares its combat XP across the three
-    /// melee skills rather than silently training only one of them.
+    /// 0.33 Hitpoints XP per point of damage, rounded to whole XP at the award boundary. The
+    /// calculation is kept separate from application so MassRPG can split a group's conserved XP
+    /// among nearby formal party members before mutating any character state.
     /// </summary>
     public sealed class BrowserCombatExperiencePolicy : ICombatExperiencePolicy
     {
@@ -29,30 +43,37 @@ namespace MassRPG.Server.Combat
         public double CombatXpPerDamage { get; }
         public double HitpointsXpPerDamage { get; }
 
-        public void AwardDamageExperience(PlayerState player, int damage)
+        public CombatExperienceAward CalculateForDamage(int damage)
+        {
+            if (damage <= 0) return new CombatExperienceAward(0, 0);
+            return new CombatExperienceAward(
+                RoundLikeBrowser(damage * CombatXpPerDamage),
+                RoundLikeBrowser(damage * HitpointsXpPerDamage));
+        }
+
+        public void Apply(PlayerState player, CombatExperienceAward award)
         {
             if (player == null) throw new ArgumentNullException(nameof(player));
-            if (damage <= 0) return;
 
-            var combatXp = RoundLikeBrowser(damage * CombatXpPerDamage);
-            switch (player.CombatStyle)
+            if (award.CombatXp > 0)
             {
-                case CombatStyle.Ranged:
-                    player.Skills.AddXp(SkillId.Ranged, combatXp);
-                    break;
-                case CombatStyle.Magic:
-                    player.Skills.AddXp(SkillId.Magic, combatXp);
-                    break;
-                default:
-                    AwardMelee(player, combatXp);
-                    break;
+                switch (player.CombatStyle)
+                {
+                    case CombatStyle.Ranged:
+                        player.Skills.AddXp(SkillId.Ranged, award.CombatXp);
+                        break;
+                    case CombatStyle.Magic:
+                        player.Skills.AddXp(SkillId.Magic, award.CombatXp);
+                        break;
+                    default:
+                        AwardMelee(player, award.CombatXp);
+                        break;
+                }
             }
 
-            var hitpointsXp = RoundLikeBrowser(damage * HitpointsXpPerDamage);
-            if (hitpointsXp <= 0) return;
-
+            if (award.HitpointsXp <= 0) return;
             var beforeLevel = player.Skills.GetLevel(SkillId.Hitpoints);
-            player.Skills.AddXp(SkillId.Hitpoints, hitpointsXp);
+            player.Skills.AddXp(SkillId.Hitpoints, award.HitpointsXp);
             var afterLevel = player.Skills.GetLevel(SkillId.Hitpoints);
             if (afterLevel > beforeLevel)
                 player.CurrentHitpoints = Math.Min(player.MaxHitpoints, player.CurrentHitpoints + (afterLevel - beforeLevel));
@@ -60,7 +81,6 @@ namespace MassRPG.Server.Combat
 
         private static void AwardMelee(PlayerState player, int combatXp)
         {
-            if (combatXp <= 0) return;
             switch (player.MeleeTrainingStyle)
             {
                 case MeleeTrainingStyle.Accurate:
