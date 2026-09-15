@@ -1,6 +1,7 @@
 using System;
 using MassRPG.Core.Characters;
 using MassRPG.Core.Combat;
+using MassRPG.Core.Creatures;
 using MassRPG.Core.Skills;
 using MassRPG.Core.World;
 using MassRPG.Data.Creatures;
@@ -113,7 +114,7 @@ namespace MassRPG.Server.Combat
 
             // Neutral creatures retaliate only after being attacked; aggressive creatures may have
             // already selected the player through their own AI. Passive creatures do not retaliate.
-            if (definition.Disposition != Core.Creatures.CreatureDisposition.Passive)
+            if (definition.Disposition != CreatureDisposition.Passive)
                 creature.TargetCharacterId = player.CharacterId;
 
             return CombatAdvanceResult.Attack(damage, hitChance, hit, false);
