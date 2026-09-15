@@ -1,6 +1,7 @@
 using System;
 using System.Reflection;
 using MassRPG.Client.Testing;
+using MassRPG.Client.World;
 using MassRPG.Core.Content;
 using MassRPG.Core.World;
 using MassRPG.Data.World;
@@ -158,7 +159,7 @@ namespace MassRPG.Editor.World
             var root = new GameObject("MassRPG Play From Here");
             var session = root.AddComponent<LocalPlayTestSession>();
             session.Initialize(store, spawn);
-            Debug.Log($"MassRPG Play From Here started at {spawn.Tile.X}, {spawn.Tile.Y}, plane {spawn.Plane}, floor {spawn.Storey}. Loaded {store.LoadedPageCount} authored page(s).");
+            Debug.Log($"MassRPG Play From Here started at {spawn.Tile.X}, {spawn.Tile.Y}, plane {spawn.Plane}, floor {spawn.Storey}. Loaded {store.LoadedPageCount} authored page(s); runtime streamer will continue page loading as the player moves.");
         }
 
         private static AuthoredWorldPageStore LoadNearbyPages(GridLocation spawn)
@@ -170,15 +171,21 @@ namespace MassRPG.Editor.World
             var maxPageX = (WorldConstants.WorldWidthTiles - 1) / pageSize;
             var maxPageY = (WorldConstants.WorldHeightTiles - 1) / pageSize;
 
-            // One storage-page margin gives the 5x5 render-chunk inspection window and nearby
-            // click-to-move pathfinder data enough room even when the launch tile hugs a page edge.
+            // Seed a margin before LocalGameAuthority is constructed so the first click can pathfind
+            // immediately. Once Play Mode is alive, LogicalTerrainChunkStreamer loads/unloads the same
+            // shared store through RepositoryWorldPageSource as the authoritative player moves.
             for (var py = Math.Max(0, centerPageY - 1); py <= Math.Min(maxPageY, centerPageY + 1); py++)
             {
                 for (var px = Math.Max(0, centerPageX - 1); px <= Math.Min(maxPageX, centerPageX + 1); px++)
                 {
                     var key = new WorldPageKey(new WorldPageCoord(px, py), spawn.Plane, spawn.Storey);
-                    if (!WorldPageJsonPersistence.TryLoad(key, out var document)) continue;
-                    store.ImportPage(WorldPageCodec.Decode(document));
+                    if (!RepositoryWorldPageSource.TryLoad(key, pageSize, out var page, out var error))
+                    {
+                        if (!string.IsNullOrWhiteSpace(error))
+                            Debug.LogWarning("MassRPG Play From Here skipped invalid world page " + key + ": " + error);
+                        continue;
+                    }
+                    store.ImportPage(page);
                 }
             }
             return store;
