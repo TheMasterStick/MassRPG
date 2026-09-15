@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using MassRPG.Core.Content;
 using MassRPG.Core.Inventory;
+using MassRPG.Core.Resources;
 
 namespace MassRPG.Data.Items
 {
@@ -9,7 +10,7 @@ namespace MassRPG.Data.Items
     /// Runtime-facing catalog contract. The Unity editor will eventually publish versioned data
     /// into this shape instead of hard-coding content in gameplay assemblies.
     /// </summary>
-    public sealed class ItemCatalog : IItemRuleSource
+    public sealed class ItemCatalog : IItemRuleSource, IGatheringToolSource
     {
         private readonly Dictionary<ContentId, ItemDefinition> _items = new Dictionary<ContentId, ItemDefinition>();
 
@@ -35,6 +36,18 @@ namespace MassRPG.Data.Items
             }
 
             rule = null;
+            return false;
+        }
+
+        public bool TryGetGatheringTool(ContentId itemId, out GatheringToolRule tool)
+        {
+            if (_items.TryGetValue(itemId, out var definition) && definition.GatheringToolKind != GatheringToolKind.None)
+            {
+                tool = new GatheringToolRule(itemId, definition.GatheringToolKind, definition.ToolTier);
+                return true;
+            }
+
+            tool = default;
             return false;
         }
     }

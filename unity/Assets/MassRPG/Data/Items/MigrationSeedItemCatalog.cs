@@ -1,5 +1,6 @@
 using MassRPG.Core.Content;
 using MassRPG.Core.Inventory;
+using MassRPG.Core.Resources;
 using MassRPG.Core.Skills;
 
 namespace MassRPG.Data.Items
@@ -41,14 +42,14 @@ namespace MassRPG.Data.Items
             RegisterStack(catalog, "yew_logs", "Yew logs", ItemType.Resource, 90, "Logs cut from a yew tree.");
             RegisterStack(catalog, "magic_logs", "Magic logs", ItemType.Resource, 250, "Logs cut from a magic tree.");
 
-            RegisterTool(catalog, "bronze_hatchet", "Bronze hatchet", 1, 20, 2, 1);
-            RegisterTool(catalog, "iron_hatchet", "Iron hatchet", 2, 50, 5, 3);
-            RegisterTool(catalog, "steel_hatchet", "Steel hatchet", 3, 120, 10, 6);
-            RegisterTool(catalog, "mithril_hatchet", "Mithril hatchet", 4, 300, 16, 10);
-            RegisterTool(catalog, "bronze_pickaxe", "Bronze pickaxe", 1, 20, 2, 1);
-            RegisterTool(catalog, "iron_pickaxe", "Iron pickaxe", 2, 50, 5, 3);
-            RegisterTool(catalog, "steel_pickaxe", "Steel pickaxe", 3, 120, 10, 6);
-            RegisterTool(catalog, "mithril_pickaxe", "Mithril pickaxe", 4, 300, 16, 10);
+            RegisterTool(catalog, "bronze_hatchet", "Bronze hatchet", GatheringToolKind.Hatchet, 1, 20, 2, 1);
+            RegisterTool(catalog, "iron_hatchet", "Iron hatchet", GatheringToolKind.Hatchet, 2, 50, 5, 3);
+            RegisterTool(catalog, "steel_hatchet", "Steel hatchet", GatheringToolKind.Hatchet, 3, 120, 10, 6);
+            RegisterTool(catalog, "mithril_hatchet", "Mithril hatchet", GatheringToolKind.Hatchet, 4, 300, 16, 10);
+            RegisterTool(catalog, "bronze_pickaxe", "Bronze pickaxe", GatheringToolKind.Pickaxe, 1, 20, 2, 1);
+            RegisterTool(catalog, "iron_pickaxe", "Iron pickaxe", GatheringToolKind.Pickaxe, 2, 50, 5, 3);
+            RegisterTool(catalog, "steel_pickaxe", "Steel pickaxe", GatheringToolKind.Pickaxe, 3, 120, 10, 6);
+            RegisterTool(catalog, "mithril_pickaxe", "Mithril pickaxe", GatheringToolKind.Pickaxe, 4, 300, 16, 10);
 
             catalog.Register(new ItemDefinition(
                 new ContentId("iron_sword"), "Iron sword", ItemType.Weapon, false, 96,
@@ -69,10 +70,18 @@ namespace MassRPG.Data.Items
         private static void RegisterStack(ItemCatalog catalog, string id, string name, ItemType type, int value, string description)
             => catalog.Register(new ItemDefinition(new ContentId(id), name, type, true, value, description));
 
-        private static void RegisterTool(ItemCatalog catalog, string id, string name, int tier, int value, int attack, int strength)
+        private static void RegisterTool(
+            ItemCatalog catalog,
+            string id,
+            string name,
+            GatheringToolKind kind,
+            int tier,
+            int value,
+            int attack,
+            int strength)
             => catalog.Register(new ItemDefinition(
                 new ContentId(id), name, ItemType.Tool, false, value, "A gathering tool.",
                 new[] { EquipmentSlot.Weapon }, false,
-                new CombatBonuses { Attack = attack, Strength = strength }, null, 1, 0, tier));
+                new CombatBonuses { Attack = attack, Strength = strength }, null, 1, 0, tier, kind));
     }
 }

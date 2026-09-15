@@ -4,6 +4,7 @@ using MassRPG.Core.Authority;
 using MassRPG.Core.Characters;
 using MassRPG.Core.Inventory;
 using MassRPG.Core.World;
+using MassRPG.Server.Resources;
 
 namespace MassRPG.Server.Authority
 {
@@ -16,11 +17,16 @@ namespace MassRPG.Server.Authority
         private readonly Dictionary<Guid, PlayerState> _players = new Dictionary<Guid, PlayerState>();
         private readonly IItemRuleSource _itemRules;
         private readonly IGridTraversalMap _movementMap;
+        private readonly GatheringService _gathering;
 
-        public LocalGameAuthority(IItemRuleSource itemRules, IGridTraversalMap movementMap = null)
+        public LocalGameAuthority(
+            IItemRuleSource itemRules,
+            IGridTraversalMap movementMap = null,
+            GatheringService gathering = null)
         {
             _itemRules = itemRules ?? throw new ArgumentNullException(nameof(itemRules));
             _movementMap = movementMap;
+            _gathering = gathering;
         }
 
         public void RegisterPlayer(PlayerState player)
@@ -32,6 +38,9 @@ namespace MassRPG.Server.Authority
         public bool TryGetPlayer(Guid characterId, out PlayerState player) => _players.TryGetValue(characterId, out player);
 
         public AuthorityDecision Submit(GameRequest request)
+            => Submit(request, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+
+        public AuthorityDecision Submit(GameRequest request, long nowUnixMilliseconds)
         {
             if (request == null) throw new ArgumentNullException(nameof(request));
             if (!_players.TryGetValue(request.CharacterId, out var player))
@@ -55,6 +64,13 @@ namespace MassRPG.Server.Authority
             {
                 player.Movement.Clear();
                 return AuthorityDecision.Accept(request.RequestId);
+            }
+
+            if (request is GatherResourceRequest gather)
+            {
+                if (_gathering == null)
+                    return AuthorityDecision.Reject(request.RequestId, "gathering_unavailable", "Gathering is not initialized.");
+                return FromGatheringResult(request.RequestId, _gathering.TryGather(player, gather.Node, nowUnixMilliseconds));
             }
 
             return AuthorityDecision.Reject(request.RequestId, "unsupported_request", "This request type is not implemented by the local authority yet.");
@@ -103,6 +119,13 @@ namespace MassRPG.Server.Authority
         }
 
         private static AuthorityDecision FromInventoryResult(Guid requestId, InventoryOperationResult result)
+        {
+            return result.Success
+                ? AuthorityDecision.Accept(requestId)
+                : AuthorityDecision.Reject(requestId, result.Code, result.Message);
+        }
+
+        private static AuthorityDecision FromGatheringResult(Guid requestId, GatheringResult result)
         {
             return result.Success
                 ? AuthorityDecision.Accept(requestId)

@@ -1,10 +1,11 @@
 using System;
 using System.Collections.Generic;
 using MassRPG.Core.Content;
+using MassRPG.Core.Resources;
 
 namespace MassRPG.Data.Resources
 {
-    public sealed class ResourceCatalog
+    public sealed class ResourceCatalog : IResourceRuleSource
     {
         private readonly Dictionary<ContentId, ResourceDefinition> _definitions = new Dictionary<ContentId, ResourceDefinition>();
 
@@ -20,5 +21,17 @@ namespace MassRPG.Data.Resources
         }
 
         public bool TryGet(ContentId id, out ResourceDefinition definition) => _definitions.TryGetValue(id, out definition);
+
+        public bool TryGetRule(ContentId resourceId, out ResourceGatheringRule rule)
+        {
+            if (_definitions.TryGetValue(resourceId, out var definition))
+            {
+                rule = definition.ToRule();
+                return true;
+            }
+
+            rule = null;
+            return false;
+        }
     }
 }

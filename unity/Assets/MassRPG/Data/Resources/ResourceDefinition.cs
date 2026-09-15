@@ -21,7 +21,9 @@ namespace MassRPG.Data.Resources
             int respawnSeconds,
             ResourceAvailabilityMode availabilityMode = ResourceAvailabilityMode.Personal,
             int minimumYield = 1,
-            int maximumYield = 1)
+            int maximumYield = 1,
+            GatheringToolKind requiredToolKind = GatheringToolKind.None,
+            int minimumToolTier = 0)
         {
             if (id.IsEmpty) throw new ArgumentException("Resource id cannot be empty.", nameof(id));
             if (yieldItemId.IsEmpty) throw new ArgumentException("Yield item id cannot be empty.", nameof(yieldItemId));
@@ -29,6 +31,7 @@ namespace MassRPG.Data.Resources
             if (experience < 0) throw new ArgumentOutOfRangeException(nameof(experience));
             if (respawnSeconds < 0) throw new ArgumentOutOfRangeException(nameof(respawnSeconds));
             if (minimumYield <= 0 || maximumYield < minimumYield) throw new ArgumentOutOfRangeException(nameof(maximumYield));
+            if (minimumToolTier < 0) throw new ArgumentOutOfRangeException(nameof(minimumToolTier));
 
             Id = id;
             DisplayName = displayName ?? string.Empty;
@@ -40,6 +43,8 @@ namespace MassRPG.Data.Resources
             AvailabilityMode = availabilityMode;
             MinimumYield = minimumYield;
             MaximumYield = maximumYield;
+            RequiredToolKind = requiredToolKind;
+            MinimumToolTier = minimumToolTier;
         }
 
         public ContentId Id { get; }
@@ -52,5 +57,20 @@ namespace MassRPG.Data.Resources
         public ResourceAvailabilityMode AvailabilityMode { get; set; }
         public int MinimumYield { get; set; }
         public int MaximumYield { get; set; }
+        public GatheringToolKind RequiredToolKind { get; set; }
+        public int MinimumToolTier { get; set; }
+
+        public ResourceGatheringRule ToRule() => new ResourceGatheringRule(
+            Id,
+            GatheringSkill,
+            RequiredLevel,
+            Experience,
+            YieldItemId,
+            RespawnSeconds,
+            AvailabilityMode,
+            RequiredToolKind,
+            MinimumToolTier,
+            MinimumYield,
+            MaximumYield);
     }
 }

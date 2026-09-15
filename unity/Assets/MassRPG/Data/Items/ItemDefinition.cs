@@ -1,6 +1,7 @@
 using System;
 using MassRPG.Core.Content;
 using MassRPG.Core.Inventory;
+using MassRPG.Core.Resources;
 using MassRPG.Core.Skills;
 
 namespace MassRPG.Data.Items
@@ -45,7 +46,8 @@ namespace MassRPG.Data.Items
             SkillId? equipRequirementSkill = null,
             int equipRequirementLevel = 1,
             int healAmount = 0,
-            int toolTier = 0)
+            int toolTier = 0,
+            GatheringToolKind gatheringToolKind = GatheringToolKind.None)
         {
             if (id.IsEmpty) throw new ArgumentException("Item id cannot be empty.", nameof(id));
             if (equipRequirementLevel < 1 || equipRequirementLevel > 300) throw new ArgumentOutOfRangeException(nameof(equipRequirementLevel));
@@ -65,6 +67,7 @@ namespace MassRPG.Data.Items
             EquipRequirementLevel = equipRequirementLevel;
             HealAmount = healAmount;
             ToolTier = toolTier;
+            GatheringToolKind = gatheringToolKind;
         }
 
         public ContentId Id { get; }
@@ -80,6 +83,7 @@ namespace MassRPG.Data.Items
         public int EquipRequirementLevel { get; set; }
         public int HealAmount { get; set; }
         public int ToolTier { get; set; }
+        public GatheringToolKind GatheringToolKind { get; set; }
 
         public ItemRule ToRule() => new ItemRule(
             Id,

@@ -9,6 +9,7 @@ namespace MassRPG.Core.Inventory
 
         public bool TryGet(EquipmentSlot slot, out ContentId itemId) => _items.TryGetValue(slot, out itemId);
         public bool IsOccupied(EquipmentSlot slot) => _items.ContainsKey(slot);
+        public ContentId? GetOrNull(EquipmentSlot slot) => _items.TryGetValue(slot, out var itemId) ? itemId : (ContentId?)null;
 
         internal void Set(EquipmentSlot slot, ContentId itemId)
         {
