@@ -14,6 +14,7 @@ namespace MassRPG.Data.World.Semantics
         ResourceDistributionZone,
         NoBuild,
         ForcedPvP,
+        PvpProtected,
         DungeonArea,
         Custom
     }
