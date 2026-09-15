@@ -21,19 +21,22 @@ namespace MassRPG.Server.Combat
         private readonly IPlayerAttackProfileSource _profiles;
         private readonly CombatApproachPlanner _approach;
         private readonly IGridTraversalMap _movementMap;
+        private readonly ICombatContributionSink _contributions;
 
         public CombatSimulationService(
             CreatureRegistry creatures,
             ICreatureDefinitionSource definitions,
             IPlayerAttackProfileSource profiles,
             CombatApproachPlanner approach,
-            IGridTraversalMap movementMap)
+            IGridTraversalMap movementMap,
+            ICombatContributionSink contributions = null)
         {
             _creatures = creatures ?? throw new ArgumentNullException(nameof(creatures));
             _definitions = definitions ?? throw new ArgumentNullException(nameof(definitions));
             _profiles = profiles ?? throw new ArgumentNullException(nameof(profiles));
             _approach = approach ?? throw new ArgumentNullException(nameof(approach));
             _movementMap = movementMap ?? throw new ArgumentNullException(nameof(movementMap));
+            _contributions = contributions;
         }
 
         public CombatAdvanceResult AdvancePlayerAttack(PlayerState player, long nowUnixMilliseconds, Func<double> random01)
@@ -103,6 +106,9 @@ namespace MassRPG.Server.Combat
             if (damage > creature.CurrentHitpoints) damage = creature.CurrentHitpoints;
             creature.CurrentHitpoints -= damage;
             player.Combat.ScheduleNextAttack(nowUnixMilliseconds, profile.AttackIntervalMilliseconds);
+
+            if (damage > 0)
+                _contributions?.Record(new CombatContribution(creature.InstanceId, player.CharacterId, damage, nowUnixMilliseconds));
 
             if (!creature.IsAlive)
             {
