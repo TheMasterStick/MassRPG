@@ -56,6 +56,27 @@ namespace MassRPG.Server.Effects
             return expiresAt;
         }
 
+        /// <summary>
+        /// Restores a previously-authoritative absolute expiry time without restarting the effect's
+        /// full duration. Already-expired entries are ignored. Persistence code should validate all
+        /// effect ids first and clear old runtime state before calling this for a complete snapshot.
+        /// </summary>
+        public bool RestoreAbsolute(
+            PlayerState player,
+            PotionEffectDefinition definition,
+            long expiresAtUnixMilliseconds,
+            long nowUnixMilliseconds)
+        {
+            if (player == null) throw new ArgumentNullException(nameof(player));
+            if (definition == null) throw new ArgumentNullException(nameof(definition));
+            if (expiresAtUnixMilliseconds < 0) throw new ArgumentOutOfRangeException(nameof(expiresAtUnixMilliseconds));
+            if (expiresAtUnixMilliseconds <= nowUnixMilliseconds) return false;
+
+            GetOrCreate(player.CharacterId)[definition.EffectId] =
+                new ActiveEffect(definition, expiresAtUnixMilliseconds);
+            return true;
+        }
+
         public int GetEffectiveLevel(PlayerState player, SkillId skill, long nowUnixMilliseconds)
         {
             if (player == null) throw new ArgumentNullException(nameof(player));
