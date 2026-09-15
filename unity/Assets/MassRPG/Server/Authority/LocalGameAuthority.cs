@@ -5,6 +5,7 @@ using MassRPG.Core.Characters;
 using MassRPG.Core.Inventory;
 using MassRPG.Core.World;
 using MassRPG.Server.Combat;
+using MassRPG.Server.Production;
 using MassRPG.Server.Resources;
 
 namespace MassRPG.Server.Authority
@@ -21,19 +22,22 @@ namespace MassRPG.Server.Authority
         private readonly GatheringService _gathering;
         private readonly CombatTargetingService _combatTargeting;
         private readonly CombatSimulationService _combatSimulation;
+        private readonly ProductionService _production;
 
         public LocalGameAuthority(
             IItemRuleSource itemRules,
             IGridTraversalMap movementMap = null,
             GatheringService gathering = null,
             CombatTargetingService combatTargeting = null,
-            CombatSimulationService combatSimulation = null)
+            CombatSimulationService combatSimulation = null,
+            ProductionService production = null)
         {
             _itemRules = itemRules ?? throw new ArgumentNullException(nameof(itemRules));
             _movementMap = movementMap;
             _gathering = gathering;
             _combatTargeting = combatTargeting;
             _combatSimulation = combatSimulation;
+            _production = production;
         }
 
         public void RegisterPlayer(PlayerState player)
@@ -83,10 +87,30 @@ namespace MassRPG.Server.Authority
                 return FromGatheringResult(request.RequestId, _gathering.TryGather(player, gather.Node, nowUnixMilliseconds));
             }
 
+            if (request is StartProductionRequest startProduction)
+            {
+                if (_production == null)
+                    return AuthorityDecision.Reject(request.RequestId, "production_unavailable", "Production is not initialized.");
+                return FromProductionResult(request.RequestId, _production.TryStart(
+                    player,
+                    startProduction.RecipeId,
+                    startProduction.Quantity,
+                    startProduction.StationLocation,
+                    nowUnixMilliseconds));
+            }
+
+            if (request is CancelProductionRequest)
+            {
+                if (_production != null) _production.Cancel(player);
+                else player.Production.Clear();
+                return AuthorityDecision.Accept(request.RequestId);
+            }
+
             if (request is AttackCreatureRequest attack)
             {
                 if (_combatTargeting == null)
                     return AuthorityDecision.Reject(request.RequestId, "combat_unavailable", "Combat targeting is not initialized.");
+                player.Production.Clear();
                 return FromCombatTargetingResult(request.RequestId, _combatTargeting.BeginAttack(player, attack.CreatureInstanceId));
             }
 
@@ -152,6 +176,25 @@ namespace MassRPG.Server.Authority
             return attacksResolved;
         }
 
+        public ProductionResult AdvanceProduction(Guid characterId, long nowUnixMilliseconds)
+        {
+            if (_production == null) return ProductionResult.Fail("production_unavailable");
+            if (!_players.TryGetValue(characterId, out var player)) return ProductionResult.Fail("unknown_character");
+            return _production.Advance(player, nowUnixMilliseconds);
+        }
+
+        public int AdvanceAllProduction(long nowUnixMilliseconds)
+        {
+            if (_production == null) return 0;
+            var completed = 0;
+            foreach (var player in _players.Values)
+            {
+                var result = _production.Advance(player, nowUnixMilliseconds);
+                completed += result.CompletedQuantity;
+            }
+            return completed;
+        }
+
         private AuthorityDecision HandleEquipRequest(Guid requestId, PlayerState player, EquipInventoryItemRequest equip)
         {
             if (player.Combat.IsActive)
@@ -182,8 +225,9 @@ namespace MassRPG.Server.Authority
             if (!path.Success)
                 return AuthorityDecision.Reject(requestId, path.Code, "No valid local path could be found to that destination.");
 
-            // A deliberate movement command disengages the current auto-attack attempt. Combat AI
-            // may still chase according to its own leash rules, but the player's attack is stopped.
+            // A deliberate movement command interrupts skilling/production and disengages the
+            // player's current auto-attack attempt. Hostile AI may still chase independently.
+            player.Production.Clear();
             player.Combat.End();
             player.Movement.ReplacePath(path.Steps);
             return AuthorityDecision.Accept(requestId);
@@ -211,6 +255,13 @@ namespace MassRPG.Server.Authority
             return result.Success
                 ? AuthorityDecision.Accept(requestId)
                 : AuthorityDecision.Reject(requestId, result.Code, result.Message);
+        }
+
+        private static AuthorityDecision FromProductionResult(Guid requestId, ProductionResult result)
+        {
+            return result.Success
+                ? AuthorityDecision.Accept(requestId)
+                : AuthorityDecision.Reject(requestId, result.Code, result.Code);
         }
     }
 }
