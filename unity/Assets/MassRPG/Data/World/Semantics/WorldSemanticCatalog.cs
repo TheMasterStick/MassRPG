@@ -36,6 +36,10 @@ namespace MassRPG.Data.World.Semantics
             _roads.Add(road.Id, road);
         }
 
+        /// <summary>
+        /// X/Y-only query retained for editor/global inspection. Runtime gameplay should normally
+        /// use the GridLocation overload so underground/surface layers stay distinct.
+        /// </summary>
         public IReadOnlyList<WorldAreaDefinition> AreasContaining(GridCoord tile)
         {
             var result = new List<WorldAreaDefinition>();
@@ -44,7 +48,17 @@ namespace MassRPG.Data.World.Semantics
             return result;
         }
 
+        public IReadOnlyList<WorldAreaDefinition> AreasContaining(GridLocation location)
+        {
+            var result = new List<WorldAreaDefinition>();
+            foreach (var area in _areas.Values)
+                if (area.Plane == location.Plane && area.Shape.Contains(location.Tile)) result.Add(area);
+            return result;
+        }
+
+        public bool TryGetArea(ContentId id, out WorldAreaDefinition area) => _areas.TryGetValue(id, out area);
         public bool TryGetPointOfInterest(ContentId id, out PointOfInterestDefinition poi) => _pois.TryGetValue(id, out poi);
+        public bool TryGetRoad(ContentId id, out RoadDefinition road) => _roads.TryGetValue(id, out road);
 
         private void EnsureUnique(ContentId id)
         {
