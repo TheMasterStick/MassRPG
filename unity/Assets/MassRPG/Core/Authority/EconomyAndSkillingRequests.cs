@@ -97,6 +97,16 @@ namespace MassRPG.Core.Authority
         public ContentId LogItemId { get; }
     }
 
+    public sealed class EatFoodRequest : GameRequest
+    {
+        public EatFoodRequest(Guid requestId, Guid characterId, int inventorySlot)
+            : base(requestId, characterId)
+        {
+            InventorySlot = inventorySlot;
+        }
+        public int InventorySlot { get; }
+    }
+
     public sealed class DropInventoryItemRequest : GameRequest
     {
         public DropInventoryItemRequest(Guid requestId, Guid characterId, int inventorySlot, int quantity)
