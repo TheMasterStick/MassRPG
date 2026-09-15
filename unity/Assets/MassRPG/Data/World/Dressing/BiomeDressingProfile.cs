@@ -13,13 +13,11 @@ namespace MassRPG.Data.World.Dressing
         GroundDetail
     }
 
-    /// <summary>
-    /// One deterministic scenery/resource rule within a biome dressing profile. Density is a
-    /// probability per logical tile before minimum-spacing arbitration. Large real trees normally
-    /// use Resource/Major; shrubs, saplings and fallen branches can use Doodad/Minor/GroundDetail.
-    /// </summary>
     public sealed class BiomeDressingEntry
     {
+        private double _densityPerTile;
+        private int _minimumSpacingTiles;
+
         public BiomeDressingEntry(
             ContentId id,
             ContentId definitionId,
@@ -32,8 +30,6 @@ namespace MassRPG.Data.World.Dressing
         {
             if (id.IsEmpty) throw new ArgumentException("Dressing entry id cannot be empty.", nameof(id));
             if (definitionId.IsEmpty) throw new ArgumentException("Dressing definition id cannot be empty.", nameof(definitionId));
-            if (densityPerTile < 0.0 || densityPerTile > 1.0) throw new ArgumentOutOfRangeException(nameof(densityPerTile));
-            if (minimumSpacingTiles < 0 || minimumSpacingTiles > 64) throw new ArgumentOutOfRangeException(nameof(minimumSpacingTiles));
             Id = id;
             DefinitionId = definitionId;
             PlacementKind = placementKind;
@@ -47,8 +43,26 @@ namespace MassRPG.Data.World.Dressing
         public ContentId Id { get; }
         public ContentId DefinitionId { get; set; }
         public WorldPlacementKind PlacementKind { get; set; }
-        public double DensityPerTile { get; set; }
-        public int MinimumSpacingTiles { get; set; }
+        public double DensityPerTile
+        {
+            get => _densityPerTile;
+            set
+            {
+                if (value < 0.0 || value > 1.0) throw new ArgumentOutOfRangeException(nameof(value));
+                _densityPerTile = value;
+            }
+        }
+
+        public int MinimumSpacingTiles
+        {
+            get => _minimumSpacingTiles;
+            set
+            {
+                if (value < 0 || value > 64) throw new ArgumentOutOfRangeException(nameof(value));
+                _minimumSpacingTiles = value;
+            }
+        }
+
         public DressingOccupancyChannel Channel { get; set; }
         public int Priority { get; set; }
         public uint SeedSalt { get; set; }
@@ -61,6 +75,7 @@ namespace MassRPG.Data.World.Dressing
     public sealed class BiomeDressingProfile
     {
         private readonly List<BiomeDressingEntry> _entries = new List<BiomeDressingEntry>();
+        private readonly List<BiomeDressingDensityOverride> _densityOverrides = new List<BiomeDressingDensityOverride>();
 
         public BiomeDressingProfile(ContentId id, ContentId biomeAreaId, uint seed)
         {
@@ -75,6 +90,7 @@ namespace MassRPG.Data.World.Dressing
         public ContentId BiomeAreaId { get; }
         public uint Seed { get; set; }
         public IReadOnlyList<BiomeDressingEntry> Entries => _entries;
+        public IReadOnlyList<BiomeDressingDensityOverride> DensityOverrides => _densityOverrides;
 
         public void AddEntry(BiomeDressingEntry entry)
         {
@@ -82,16 +98,63 @@ namespace MassRPG.Data.World.Dressing
             for (var i = 0; i < _entries.Count; i++)
                 if (_entries[i].Id == entry.Id) throw new InvalidOperationException($"Duplicate dressing entry id '{entry.Id}'.");
             _entries.Add(entry);
-            _entries.Sort((a, b) => b.Priority.CompareTo(a.Priority));
+            _entries.Sort(CompareEntries);
+        }
+
+        public bool RemoveEntry(ContentId entryId)
+        {
+            for (var i = 0; i < _entries.Count; i++)
+            {
+                if (_entries[i].Id != entryId) continue;
+                _entries.RemoveAt(i);
+                for (var j = _densityOverrides.Count - 1; j >= 0; j--)
+                    if (_densityOverrides[j].TargetEntryId.HasValue && _densityOverrides[j].TargetEntryId.Value == entryId)
+                        _densityOverrides.RemoveAt(j);
+                return true;
+            }
+            return false;
+        }
+
+        public void AddDensityOverride(BiomeDressingDensityOverride densityOverride)
+        {
+            if (densityOverride == null) throw new ArgumentNullException(nameof(densityOverride));
+            for (var i = 0; i < _densityOverrides.Count; i++)
+                if (_densityOverrides[i].Id == densityOverride.Id)
+                    throw new InvalidOperationException($"Duplicate dressing override id '{densityOverride.Id}'.");
+            if (densityOverride.TargetEntryId.HasValue && !ContainsEntry(densityOverride.TargetEntryId.Value))
+                throw new InvalidOperationException($"Dressing override targets unknown entry '{densityOverride.TargetEntryId.Value}'.");
+            _densityOverrides.Add(densityOverride);
+        }
+
+        public bool RemoveDensityOverride(ContentId overrideId)
+        {
+            for (var i = 0; i < _densityOverrides.Count; i++)
+            {
+                if (_densityOverrides[i].Id != overrideId) continue;
+                _densityOverrides.RemoveAt(i);
+                return true;
+            }
+            return false;
+        }
+
+        public bool ContainsEntry(ContentId entryId)
+        {
+            for (var i = 0; i < _entries.Count; i++)
+                if (_entries[i].Id == entryId) return true;
+            return false;
+        }
+
+        private static int CompareEntries(BiomeDressingEntry a, BiomeDressingEntry b)
+        {
+            var priority = b.Priority.CompareTo(a.Priority);
+            return priority != 0 ? priority : a.Id.CompareTo(b.Id);
         }
     }
 
-    /// <summary>
-    /// Local deterministic-density override. Multiplier 0 is an exclusion area; values above/below
-    /// one locally increase/decrease dressing. Optional entry id targets one rule only.
-    /// </summary>
     public sealed class BiomeDressingDensityOverride
     {
+        private double _densityMultiplier;
+
         public BiomeDressingDensityOverride(
             ContentId id,
             WorldAreaShape shape,
@@ -100,7 +163,6 @@ namespace MassRPG.Data.World.Dressing
         {
             if (id.IsEmpty) throw new ArgumentException("Override id cannot be empty.", nameof(id));
             if (shape == null) throw new ArgumentNullException(nameof(shape));
-            if (densityMultiplier < 0.0 || densityMultiplier > 8.0) throw new ArgumentOutOfRangeException(nameof(densityMultiplier));
             Id = id;
             Shape = shape;
             DensityMultiplier = densityMultiplier;
@@ -108,8 +170,16 @@ namespace MassRPG.Data.World.Dressing
         }
 
         public ContentId Id { get; }
-        public WorldAreaShape Shape { get; }
-        public double DensityMultiplier { get; set; }
+        public WorldAreaShape Shape { get; set; }
+        public double DensityMultiplier
+        {
+            get => _densityMultiplier;
+            set
+            {
+                if (value < 0.0 || value > 8.0) throw new ArgumentOutOfRangeException(nameof(value));
+                _densityMultiplier = value;
+            }
+        }
         public ContentId? TargetEntryId { get; set; }
     }
 }
