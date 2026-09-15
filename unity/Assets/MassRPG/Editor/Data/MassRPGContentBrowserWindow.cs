@@ -6,6 +6,7 @@ using MassRPG.Data.Creatures;
 using MassRPG.Data.Items;
 using MassRPG.Data.Recipes;
 using MassRPG.Data.Skills;
+using MassRPG.Data.Validation;
 using UnityEditor;
 using UnityEngine;
 
@@ -39,6 +40,7 @@ namespace MassRPG.Editor.Data
 
         private readonly Dictionary<ContentKind, List<BrowserRow>> _rows =
             new Dictionary<ContentKind, List<BrowserRow>>();
+        private List<ContentAuditIssue> _auditIssues = new List<ContentAuditIssue>();
 
         private ContentKind _kind = ContentKind.Items;
         private string _search = string.Empty;
@@ -68,6 +70,7 @@ namespace MassRPG.Editor.Data
             DrawHeader();
             DrawCategoryTabs();
             DrawSearchBar();
+            DrawAuditStatus();
 
             var contentRect = GUILayoutUtility.GetRect(
                 GUIContent.none,
@@ -129,6 +132,36 @@ namespace MassRPG.Editor.Data
                     GUI.FocusControl(null);
                 }
                 GUI.enabled = true;
+
+                if (GUILayout.Button("Refresh", GUILayout.Width(58f))) RebuildRows();
+            }
+        }
+
+        private void DrawAuditStatus()
+        {
+            var errors = _auditIssues.Count(issue => issue.Severity == ContentAuditSeverity.Error);
+            var warnings = _auditIssues.Count(issue => issue.Severity == ContentAuditSeverity.Warning);
+            var infos = _auditIssues.Count(issue => issue.Severity == ContentAuditSeverity.Info);
+
+            using (new EditorGUILayout.HorizontalScope(EditorStyles.helpBox))
+            {
+                var text = errors == 0 && warnings == 0
+                    ? $"Reference audit: no errors or warnings{(infos > 0 ? $" · {infos} info" : string.Empty)}"
+                    : $"Reference audit: {errors} error(s) · {warnings} warning(s) · {infos} info";
+                GUILayout.Label(text, EditorStyles.miniLabel);
+                GUILayout.FlexibleSpace();
+                GUI.enabled = _auditIssues.Count > 0;
+                if (GUILayout.Button("Log issues", GUILayout.Width(74f)))
+                {
+                    for (var i = 0; i < _auditIssues.Count; i++)
+                    {
+                        var issue = _auditIssues[i];
+                        if (issue.Severity == ContentAuditSeverity.Error) Debug.LogError(issue.ToString());
+                        else if (issue.Severity == ContentAuditSeverity.Warning) Debug.LogWarning(issue.ToString());
+                        else Debug.Log(issue.ToString());
+                    }
+                }
+                GUI.enabled = true;
             }
         }
 
@@ -173,8 +206,8 @@ namespace MassRPG.Editor.Data
         {
             var selected = ReferenceEquals(row, _selected);
             var style = new GUIStyle(EditorStyles.helpBox);
-            if (selected)
-                style.normal.background = Texture2D.grayTexture;
+            if (selected) style.normal.background = Texture2D.grayTexture;
+            var issueCount = _auditIssues.Count(issue => issue.OwnerId.Value == row.Id);
 
             using (new EditorGUILayout.VerticalScope(style))
             {
@@ -189,7 +222,7 @@ namespace MassRPG.Editor.Data
 
                 var titleRect = new Rect(rect.x + 5f, rect.y + 2f, rect.width - 10f, 17f);
                 var subtitleRect = new Rect(rect.x + 5f, rect.y + 19f, rect.width - 10f, 16f);
-                GUI.Label(titleRect, row.Name, EditorStyles.boldLabel);
+                GUI.Label(titleRect, issueCount > 0 ? $"{row.Name}  [{issueCount} issue(s)]" : row.Name, EditorStyles.boldLabel);
                 GUI.Label(subtitleRect, $"{row.Id}  ·  {row.Category}", EditorStyles.miniLabel);
             }
         }
@@ -208,12 +241,26 @@ namespace MassRPG.Editor.Data
             {
                 GUILayout.Space(6f);
                 DrawIdentity(_selected);
+                DrawSelectedIssues(_selected);
                 GUILayout.Space(8f);
                 DrawTypedDetails(_selected.Value);
             }
 
             EditorGUILayout.EndScrollView();
             GUILayout.EndArea();
+        }
+
+        private void DrawSelectedIssues(BrowserRow row)
+        {
+            var issues = _auditIssues.Where(issue => issue.OwnerId.Value == row.Id).ToList();
+            for (var i = 0; i < issues.Count; i++)
+            {
+                var issue = issues[i];
+                var type = issue.Severity == ContentAuditSeverity.Error ? MessageType.Error
+                    : issue.Severity == ContentAuditSeverity.Warning ? MessageType.Warning
+                    : MessageType.Info;
+                EditorGUILayout.HelpBox($"{issue.Field}: {issue.Message}", type);
+            }
         }
 
         private static void DrawIdentity(BrowserRow row)
@@ -394,11 +441,19 @@ namespace MassRPG.Editor.Data
                     piece.PlacementMode.ToString(), piece.OccupancyLayer.ToString(), piece.SupportRequirement.ToString());
             }
 
+            _auditIssues = ContentCatalogAudit.Audit(
+                items,
+                creatures,
+                recipes,
+                SkillCatalog.All,
+                buildPieces).ToList();
+
             // ResourceDefinition/ResourceCatalog already exist, but this branch deliberately has no
             // MigrationSeedResourceCatalog. Keep the category visible and honest instead of creating
             // fake data that could accidentally become canonical.
             _loaded = true;
             if (_selected != null && !RowsFor(_kind).Contains(_selected)) _selected = null;
+            Repaint();
         }
 
         private void Add(ContentKind kind, string id, string name, string category, object value, params string[] extraSearch)
