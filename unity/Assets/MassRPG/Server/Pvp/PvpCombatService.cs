@@ -84,10 +84,9 @@ namespace MassRPG.Server.Pvp
             if (attack.Style == CombatStyle.Ranged)
             {
                 if (_ammunition == null) return new PvpAttackResult(PvpAttackKind.Failed, "ammunition_unavailable");
-                if (!attacker.Equipment.TryGet(EquipmentSlot.MainHand, out _))
-                    return new PvpAttackResult(PvpAttackKind.Failed, "ranged_weapon_missing");
-                if (!attacker.SelectedAmmunitionItemId.HasValue || attacker.Inventory.CountItem(attacker.SelectedAmmunitionItemId.Value) <= 0)
-                    return new PvpAttackResult(PvpAttackKind.Failed, "ranged_ammunition_missing");
+                var ammoValidation = _ammunition.ValidateForAttack(attacker);
+                if (!ammoValidation.Success)
+                    return new PvpAttackResult(PvpAttackKind.Failed, ammoValidation.Code);
             }
 
             var attackLevel = ResolveAttackLevel(attacker, attack.Style);
@@ -107,7 +106,7 @@ namespace MassRPG.Server.Pvp
 
             if (attack.Style == CombatStyle.Ranged)
             {
-                var ammoResult = _ammunition.ConsumeOneForAttack(attacker);
+                var ammoResult = _ammunition.ConsumeForAttack(attacker);
                 if (!ammoResult.Success) return new PvpAttackResult(PvpAttackKind.Failed, ammoResult.Code);
             }
 
