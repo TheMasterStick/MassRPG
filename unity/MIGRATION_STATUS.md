@@ -8,7 +8,7 @@ This file tracks the browser-to-Unity migration. The TypeScript/browser game rem
 
 - **MassRPG.Core** — engine-independent rules, IDs, character state, inventory, combat math, movement/pathing, construction blueprint data.
 - **MassRPG.Data** — item/creature/resource/recipe/build-piece definitions, authored-world documents and migration seed catalogs.
-- **MassRPG.Server** — authoritative movement, gathering, production, combat, creature population, construction, upkeep and publishing foundations.
+- **MassRPG.Server** — authoritative movement, gathering, production, combat, parties/reward grouping, creature population, construction, upkeep/reclamation and publishing foundations.
 - **MassRPG.Client** — Unity presentation: camera, logical actor interpolation, terrain meshes/streaming, presentation-asset catalog and equipment visuals.
 - **MassRPG.EditorCore** — engine-light world-authoring/session logic.
 - **MassRPG.Editor** — tactile Unity authoring windows, repository content bridge, Play From Here and asset-link tooling.
@@ -23,11 +23,11 @@ The authority rule remains unchanged: the client requests actions and renders re
 | Items / equipment | Broad migration catalog, requirements, dual-hand semantics, two-handed exclusion, combat bonuses, tools and consumables represented. |
 | Inventory | Core rules ported and authority-facing operations tested. |
 | Movement / pathfinding | Eight-direction exact 1x1 movement, no corner cutting, explicit elevation transitions and LOS foundations ported. |
-| Combat | Authoritative player auto-attacks, creature aggro/retaliation/chase/leash, range/LOS/elevation rules, cooldowns and damage contribution facts active. |
+| Combat | Authoritative player auto-attacks, creature aggro/retaliation/chase/leash, range/LOS/elevation rules, cooldowns and damage contribution facts active. Party-aware reward planning now groups qualifying contributors, nearby party recipients and first-engager claim context without hard-coding final XP/loot balance. |
 | Gathering | Resource definitions, personal/shared depletion, node keys and authoritative gathering active. |
 | Production | Smelting, smithing, cooking, crafting, fletching, Herblore and related timed production represented; failures/burns are data/server owned. |
 | Creature populations | Fixed authored caps, sleeping/materialization, ordinary-vs-persistent identities, respawn timing and combat-death integration active. |
-| Construction | Shared-world plots, future-Large reservation, permissions/blocklists, modular pieces, three storeys, support, stations, upkeep and reusable blueprints active. Atomic whole-blueprint preview/placement now validates the complete arrangement and aggregate materials before committing anything. |
+| Construction | Shared-world plots, future-Large reservation, permissions/blocklists, modular pieces, three storeys, support, stations, upkeep and reusable blueprints active. Atomic whole-blueprint preview/placement validates the complete arrangement before committing. Abandoned plots now require an explicit authoritative reclamation command that snapshots the build, removes live stations/structures and releases the reserved land. |
 | Publishing | Version/manifest/rollback and review-candidate foundations exist; live-server promotion remains deliberately separate from ordinary editing. |
 
 ## Repository-backed game data editor
@@ -93,6 +93,14 @@ The first reusable client streaming path is active in source:
 
 The repository/StreamingAssets loader is a development/build-packaging source. A future MMO page-delivery layer can replace it without changing `AuthoredWorldPage`, `WorldPageCodec` or the logical world contract.
 
+## Combat parties and reward settlement
+
+Server-owned `PartyRegistry`/`PartyState` now enforce one-party-per-character membership, leader-controlled loot mode and the four settled party loot modes: **Round Robin, Need/Greed, Leader Distribution and Free For All**. Round-robin selection skips currently ineligible/out-of-range members without silently removing them from the party.
+
+`CombatRewardPlanner` consumes the existing authoritative damage ledger instead of trusting client reward claims. A contributor must pass the configurable contribution threshold and be in reward range before creating a reward group. Qualifying party contribution is combined into one group, while other nearby party members become shared recipients; non-party contributors remain individual groups. The first engager/group is recorded separately as the initial claim context even if that first tap later fails the contribution threshold. This deliberately leaves exact XP multipliers, final claim-steal rules, boss/event exceptions and item-drop resolution as later policy/data work rather than hiding arbitrary balance numbers in the combat engine.
+
+Money splitting already exposes the settled equal-party-share result as an integer per-recipient amount plus any indivisible remainder. Item distribution can therefore layer Round Robin / Need-Greed / Leader Distribution / FFA onto one shared party loot pool without duplicating combat eligibility logic.
+
 ## Construction / housing
 
 Persistent player plots keep claimed land separate from the immutable maximum future reservation. Access rules/blocklists, modular tile/edge pieces, simple support validity, three usable storeys, player-built production stations and configurable prepaid upkeep are represented.
@@ -108,11 +116,19 @@ Whole-building blueprint work has advanced from storage-only to authoritative pl
 - failure leaves inventory/XP/building state unchanged;
 - successful placement commits all pieces as one server operation.
 
-Trading/market representation of blueprint items and final abandoned-plot reclamation policy remain later work.
+Plot lifecycle now has a deliberate destruction boundary. Upkeep only advances **Active -> Delinquent -> Abandoned**; it never destroys a house by itself. `PlotReclamationService` must be invoked explicitly after abandonment. It captures an audit snapshot, removes the live modular-building state so reclaimed furnaces/anvils/etc. stop functioning, releases the complete future-Large reservation, and keeps the abandoned upkeep row as a tombstone for persistence/audit policy. This preserves the settled idea that housing should not disappear because an ordinary timer tick happened to run.
+
+Blueprint trading/market representation and final live upkeep prices/grace tuning remain later balance/economy work.
+
+## Repository branch hygiene
+
+`chatgpt/unity-csharp-migration` is the canonical migration branch. The former default branch has been fast-forwarded to the same migration history so the current work is not stranded behind an obsolete default ref.
+
+`tools/cleanup-migration-branches.ps1` contains a guarded cleanup list. Every branch in its normal deletion set was verified to be an ancestor of the canonical branch or identical to it before being listed. The script re-checks ancestry at execution time and refuses to delete a branch that has gained unique commits. `junction-builder-work` is treated separately because it has four unique pre-Unity browser-renderer/editor commits; deleting that abandoned experiment requires the explicit script flag and verifies its audited head SHA first.
 
 ## Verification state
 
-A substantial Editor test suite exists for skills/XP, combat math, inventory/equipment, movement/pathing, LOS/elevation, world pages, semantic areas/POIs, gathering/resources, creature behavior/populations, production, construction/plots/upkeep and publishing. New tests also cover stable presentation IDs/safe JSON patching and atomic blueprint placement/rotation.
+A substantial Editor test suite exists for skills/XP, combat math, inventory/equipment, movement/pathing, LOS/elevation, world pages, semantic areas/POIs, gathering/resources, creature behavior/populations, production, construction/plots/upkeep and publishing. New tests also cover stable presentation IDs/safe JSON patching, atomic blueprint placement/rotation, explicit abandoned-plot reclamation, party membership/loot-mode authority, round-robin selection and party-aware contribution grouping.
 
 **Important:** the C# additions are committed source but have still not had their first real Unity compile/Test Runner pass. That requires opening the project in Unity `6000.3.24f1` on the home PC. Until then, do not treat remote static review as a substitute for Unity compilation.
 
@@ -122,7 +138,7 @@ The repository's Node/content-data GitHub Actions validation is separate and is 
 
 1. Continue the client shell: click-selection/interaction-stack adapters, creature/object presentation and production-quality terrain material/ground-ID binding.
 2. Extend presentation binding from socket equipment to skinned body armour after the canonical character bases/rig are imported.
-3. Continue party-aware XP/loot settlement on top of the existing contribution facts and one shared loot-pool design.
+3. Connect reward plans to real XP award values, creature loot tables and the shared party loot-pool resolver while keeping contribution/anti-power-level thresholds configurable.
 4. Expand typed repository authoring for additional runtime categories (NPCs, shops, build pieces, loot tables, spells/abilities, quests) while retaining Other Definitions as the forward-compatible fallback.
 5. Continue world-editor QoL and semantic integration rather than rebuilding already-working terrain/road/area/POI/spawn/placement tools.
 6. On first home-PC Unity open: resolve real packages/render pipeline, run full compile/Test Runner, fix any compile/parity failures, then visually inspect ramp terrain, chunk boundaries, camera and character/equipment binding before art production accelerates.
