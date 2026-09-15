@@ -7,6 +7,7 @@
     "sync-character-animations": "node scripts/sync-character-animations.mjs",
     "predev": "npm run sync-character-animations",
     "dev": "vite --open",
+    "data-editor": "node tools/online-data-editor/server.mjs",
     "prebuild": "npm run sync-character-animations",
     "build": "tsc && vite build",
     "preview": "vite preview"
