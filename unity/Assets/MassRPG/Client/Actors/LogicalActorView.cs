@@ -21,6 +21,16 @@ namespace MassRPG.Client.Actors
 
         public GridLocation LogicalLocation { get; private set; }
         public int LogicalElevation { get; private set; }
+        public bool HasAuthoritativeState => _hasState;
+
+        public void Configure(GridPresentationSpace space)
+        {
+            if (presentationSpace == space) return;
+            Unsubscribe();
+            presentationSpace = space;
+            Subscribe();
+            RefreshAfterOriginShift(true);
+        }
 
         public void ApplyAuthoritativeState(GridLocation location, int logicalElevation, bool forceSnap = false)
         {
@@ -40,6 +50,22 @@ namespace MassRPG.Client.Actors
             _targetWorldPosition = presentationSpace.ToWorldPosition(LogicalLocation, LogicalElevation);
             if (snap) transform.position = _targetWorldPosition;
         }
+
+        private void OnEnable() => Subscribe();
+        private void OnDisable() => Unsubscribe();
+
+        private void Subscribe()
+        {
+            if (presentationSpace != null) presentationSpace.OriginChanged += OnPresentationOriginChanged;
+        }
+
+        private void Unsubscribe()
+        {
+            if (presentationSpace != null) presentationSpace.OriginChanged -= OnPresentationOriginChanged;
+        }
+
+        private void OnPresentationOriginChanged(GridCoord before, GridCoord after)
+            => RefreshAfterOriginShift(true);
 
         private void Update()
         {
