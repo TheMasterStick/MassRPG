@@ -1,0 +1,14 @@
+{
+  "name": "MassRPG Browser Data Authoring",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:1-22-bookworm",
+  "postCreateCommand": "npm ci",
+  "postStartCommand": "npm run data-editor > /tmp/massrpg-data-editor.log 2>&1 &",
+  "forwardPorts": [4175],
+  "portsAttributes": {
+    "4175": {
+      "label": "MassRPG Online Data Editor",
+      "onAutoForward": "openBrowser",
+      "visibility": "private"
+    }
+  }
+}
