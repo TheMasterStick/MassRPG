@@ -49,7 +49,8 @@ namespace MassRPG.Data.Items
             int healAmount = 0,
             int toolTier = 0,
             GatheringToolKind gatheringToolKind = GatheringToolKind.None,
-            bool? canDualWield = null)
+            bool? canDualWield = null,
+            bool? canConsume = null)
         {
             if (id.IsEmpty) throw new ArgumentException("Item id cannot be empty.", nameof(id));
             if (equipRequirementLevel < 1 || equipRequirementLevel > 300) throw new ArgumentOutOfRangeException(nameof(equipRequirementLevel));
@@ -74,6 +75,7 @@ namespace MassRPG.Data.Items
             // MassRPG's default weapon rule: a normal one-handed weapon can be used in either hand.
             // Individual specialist weapons can opt out later without changing inventory rules.
             CanDualWield = canDualWield ?? (type == ItemType.Weapon && !twoHanded && ContainsMainHand(AllowedEquipmentSlots));
+            CanConsume = canConsume ?? (type == ItemType.Food && healAmount > 0);
         }
 
         public ContentId Id { get; }
@@ -85,6 +87,7 @@ namespace MassRPG.Data.Items
         public EquipmentSlot[] AllowedEquipmentSlots { get; set; }
         public bool TwoHanded { get; set; }
         public bool CanDualWield { get; set; }
+        public bool CanConsume { get; set; }
         public CombatBonuses Bonuses { get; set; }
         public SkillId? EquipRequirementSkill { get; set; }
         public int EquipRequirementLevel { get; set; }
