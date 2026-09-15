@@ -25,6 +25,7 @@
     "aggroRadiusTiles": { "type": "integer", "minimum": 0 },
     "leashRadiusTiles": { "type": "integer", "minimum": 0 },
     "persistentNamedInstance": { "type": "boolean" },
+    "presentation": { "$ref": "presentation.schema.json" },
     "editorState": { "enum": ["draft", "ready-for-review"] }
   },
   "additionalProperties": false
