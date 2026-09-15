@@ -44,6 +44,8 @@ namespace MassRPG.Data.Publishing
     /// Immutable review/local-test snapshot of repository-backed draft data. A candidate points at
     /// an exact Git commit and hashes every included draft file. It is intentionally one stage below
     /// PublishedDataManifest: a candidate can be reviewed/tested but cannot itself activate live data.
+    /// Generic "Other Game Definition" records are design-authoring documents until promoted to a
+    /// dedicated typed runtime schema, and are therefore an explicit publishing gate.
     /// </summary>
     public sealed class DataReviewCandidate
     {
@@ -59,7 +61,8 @@ namespace MassRPG.Data.Publishing
             string sourceCommit,
             IEnumerable<ReviewCandidateFile> files,
             IReadOnlyDictionary<string, int> documentCounts = null,
-            IReadOnlyDictionary<string, int> readyCounts = null)
+            IReadOnlyDictionary<string, int> readyCounts = null,
+            int designOnlyDefinitionCount = 0)
         {
             if (string.IsNullOrWhiteSpace(candidateId)) throw new ArgumentException("Candidate id is required.", nameof(candidateId));
             if (string.IsNullOrWhiteSpace(label)) throw new ArgumentException("Candidate label is required.", nameof(label));
@@ -67,12 +70,14 @@ namespace MassRPG.Data.Publishing
             if (string.IsNullOrWhiteSpace(sourceBranch)) throw new ArgumentException("Source branch is required.", nameof(sourceBranch));
             if (!ReviewCandidateFile.IsLowerHex(sourceCommit, 40)) throw new ArgumentException("Source commit must be a full 40-character lowercase Git SHA-1.", nameof(sourceCommit));
             if (files == null) throw new ArgumentNullException(nameof(files));
+            if (designOnlyDefinitionCount < 0) throw new ArgumentOutOfRangeException(nameof(designOnlyDefinitionCount));
 
             CandidateId = candidateId;
             Label = label;
             CreatedUnixMilliseconds = createdUnixMilliseconds;
             SourceBranch = sourceBranch;
             SourceCommit = sourceCommit;
+            DesignOnlyDefinitionCount = designOnlyDefinitionCount;
             _files = new List<ReviewCandidateFile>(files);
             if (_files.Count == 0) throw new ArgumentException("A review candidate must contain at least one draft file.", nameof(files));
 
@@ -95,7 +100,9 @@ namespace MassRPG.Data.Publishing
         public IReadOnlyList<ReviewCandidateFile> Files => _files;
         public IReadOnlyDictionary<string, int> DocumentCounts => _documentCounts;
         public IReadOnlyDictionary<string, int> ReadyCounts => _readyCounts;
+        public int DesignOnlyDefinitionCount { get; }
         public int FileCount => _files.Count;
+        public bool ContainsDesignOnlyDefinitions => DesignOnlyDefinitionCount > 0;
 
         public bool AllDraftsReady
         {
@@ -110,8 +117,10 @@ namespace MassRPG.Data.Publishing
         /// <summary>
         /// This only means the candidate has reached the human-review readiness gate. Actual live
         /// promotion must still pass authoritative content validation/package hashing/versioning.
+        /// Generic design-only definitions deliberately make the candidate ineligible until those
+        /// records have been promoted into dedicated typed content.
         /// </summary>
-        public bool IsEligibleForPublishReview => AllDraftsReady;
+        public bool IsEligibleForPublishReview => AllDraftsReady && !ContainsDesignOnlyDefinitions;
 
         public PublishedDataManifest BeginPublishedManifest(
             PublishedDataVersion version,
@@ -120,8 +129,10 @@ namespace MassRPG.Data.Publishing
             PublishedDataVersion? parentVersion = null,
             int schemaVersion = 1)
         {
-            if (!IsEligibleForPublishReview)
+            if (!AllDraftsReady)
                 throw new InvalidOperationException("Every candidate document must be ReadyForReview before a published manifest can be started.");
+            if (ContainsDesignOnlyDefinitions)
+                throw new InvalidOperationException("Review candidates containing generic design-only definitions cannot begin live publication. Promote those definitions to dedicated typed content first.");
             return new PublishedDataManifest(version, createdUnixMilliseconds, label, parentVersion, schemaVersion);
         }
 
