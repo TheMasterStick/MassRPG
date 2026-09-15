@@ -11,6 +11,6 @@ Layout is role-first and mirrors the content ID namespace:
 - `portrait/...` — portrait/UI art links
 - `animation/...` — animation-set/controller links
 
-These files are created by **MassRPG → Presentation Asset Linker**. They are repository data and should be committed together with the imported Unity assets and the draft presentation update.
+These files are created by **MassRPG → Presentation Asset Linker**. They are repository data and should be committed together with the imported Unity assets and the draft presentation update. `npm run asset-links-validate` (also run by GitHub Actions) checks the ID/role/path/GUID contract before these links are reviewed.
 
-The browser/work editor does not need these files in order to author gameplay. Content may remain in `needs-assets` or `placeholder` state until home/Unity work supplies the presentation assets.
+The browser/work editor does not need these files in order to author gameplay. Content may remain in `needs-assets` or `placeholder` state until home/Unity work supplies the presentation assets. The intended workflow is therefore **author gameplay anywhere → leave presentation requirements in the backlog → import/create art at home → link it to the same permanent content ID**; no duplicate item/monster/resource definition is created merely because its art arrived later.
