@@ -93,6 +93,21 @@ namespace MassRPG.Server.Quests
             return state;
         }
 
+        /// <summary>
+        /// Replaces one character's runtime quest state from a versioned persistence snapshot.
+        /// Definition validation happens before the live state is replaced, so malformed or stale
+        /// objective ids cannot partially corrupt the active server state.
+        /// </summary>
+        public CharacterQuestState RestoreState(Guid characterId, CharacterQuestSnapshot snapshot)
+        {
+            if (characterId == Guid.Empty) throw new ArgumentException("Character id cannot be empty.", nameof(characterId));
+            var restored = QuestPersistenceSnapshotCodec.Restore(
+                snapshot ?? throw new ArgumentNullException(nameof(snapshot)),
+                _definitions);
+            _state[characterId] = restored;
+            return restored;
+        }
+
         public QuestOperationResult TryStart(PlayerState player, ContentId questId)
         {
             if (player == null) return new QuestOperationResult(false, "player_missing");
