@@ -20,17 +20,20 @@ namespace MassRPG.Server.Authority
         private readonly IGridTraversalMap _movementMap;
         private readonly GatheringService _gathering;
         private readonly CombatTargetingService _combatTargeting;
+        private readonly CombatSimulationService _combatSimulation;
 
         public LocalGameAuthority(
             IItemRuleSource itemRules,
             IGridTraversalMap movementMap = null,
             GatheringService gathering = null,
-            CombatTargetingService combatTargeting = null)
+            CombatTargetingService combatTargeting = null,
+            CombatSimulationService combatSimulation = null)
         {
             _itemRules = itemRules ?? throw new ArgumentNullException(nameof(itemRules));
             _movementMap = movementMap;
             _gathering = gathering;
             _combatTargeting = combatTargeting;
+            _combatSimulation = combatSimulation;
         }
 
         public void RegisterPlayer(PlayerState player)
@@ -124,6 +127,29 @@ namespace MassRPG.Server.Authority
             foreach (var player in _players.Values)
                 if (AdvanceMovementOneStep(player.CharacterId)) moved++;
             return moved;
+        }
+
+        public CombatAdvanceResult AdvanceCombat(Guid characterId, long nowUnixMilliseconds, Func<double> random01)
+        {
+            if (_combatSimulation == null)
+                return CombatAdvanceResult.State(CombatAdvanceKind.Failed, "combat_simulation_unavailable");
+            if (!_players.TryGetValue(characterId, out var player))
+                return CombatAdvanceResult.State(CombatAdvanceKind.Failed, "unknown_character");
+            return _combatSimulation.AdvancePlayerAttack(player, nowUnixMilliseconds, random01);
+        }
+
+        public int AdvanceAllCombat(long nowUnixMilliseconds, Func<double> random01)
+        {
+            if (_combatSimulation == null) return 0;
+            if (random01 == null) throw new ArgumentNullException(nameof(random01));
+
+            var attacksResolved = 0;
+            foreach (var player in _players.Values)
+            {
+                var result = _combatSimulation.AdvancePlayerAttack(player, nowUnixMilliseconds, random01);
+                if (result.DidAttack) attacksResolved++;
+            }
+            return attacksResolved;
         }
 
         private AuthorityDecision HandleEquipRequest(Guid requestId, PlayerState player, EquipInventoryItemRequest equip)
