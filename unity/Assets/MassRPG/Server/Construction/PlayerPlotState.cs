@@ -31,7 +31,7 @@ namespace MassRPG.Server.Construction
         public Guid PlotId { get; }
         public Guid OwnerCharacterId { get; }
         public int Plane { get; }
-        public PlotTier Tier { get; internal set; }
+        public PlotTier Tier { get; private set; }
         public IReadOnlyCollection<GridCoord> ClaimedTiles => _claimedTiles;
         public IReadOnlyCollection<GridCoord> ReservedTiles => _reservedTiles;
         public IReadOnlyCollection<Guid> BlockedPlayers => _blockedPlayers;
@@ -59,6 +59,12 @@ namespace MassRPG.Server.Construction
             if (_reservedTiles.Count != 0) throw new InvalidOperationException("The reserved plot envelope is immutable after placement.");
             foreach (var tile in tiles) _reservedTiles.Add(tile);
             if (_reservedTiles.Count == 0) throw new InvalidOperationException("A plot must reserve at least one tile.");
+        }
+
+        internal void ApplyUpgrade(PlotTier tier, IEnumerable<GridCoord> claimedTiles)
+        {
+            SetClaimedTiles(claimedTiles);
+            Tier = tier;
         }
 
         public void UpsertRuleSet(PlotAccessRuleSet ruleSet)
