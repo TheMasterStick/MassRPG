@@ -13,6 +13,8 @@ namespace MassRPG.Server.Combat
     /// Resolves authoritative player auto-attacks against creature instances. The client owns
     /// neither attack cadence, stopping position, hit chance nor damage. If a target moves out of
     /// range this service replans the approach rather than trusting a client-supplied combat tile.
+    /// Damage contribution is recorded here; XP is settled from the contribution plan on death so
+    /// nearby formal party members can share conserved combat XP without duplicating rewards.
     /// </summary>
     public sealed class CombatSimulationService
     {
@@ -22,7 +24,6 @@ namespace MassRPG.Server.Combat
         private readonly CombatApproachPlanner _approach;
         private readonly IGridTraversalMap _movementMap;
         private readonly ICombatContributionSink _contributions;
-        private readonly ICombatExperiencePolicy _experience;
 
         public CombatSimulationService(
             CreatureRegistry creatures,
@@ -30,8 +31,7 @@ namespace MassRPG.Server.Combat
             IPlayerAttackProfileSource profiles,
             CombatApproachPlanner approach,
             IGridTraversalMap movementMap,
-            ICombatContributionSink contributions = null,
-            ICombatExperiencePolicy experience = null)
+            ICombatContributionSink contributions = null)
         {
             _creatures = creatures ?? throw new ArgumentNullException(nameof(creatures));
             _definitions = definitions ?? throw new ArgumentNullException(nameof(definitions));
@@ -39,7 +39,6 @@ namespace MassRPG.Server.Combat
             _approach = approach ?? throw new ArgumentNullException(nameof(approach));
             _movementMap = movementMap ?? throw new ArgumentNullException(nameof(movementMap));
             _contributions = contributions;
-            _experience = experience ?? new BrowserCombatExperiencePolicy();
         }
 
         public CombatAdvanceResult AdvancePlayerAttack(PlayerState player, long nowUnixMilliseconds, Func<double> random01)
@@ -111,10 +110,7 @@ namespace MassRPG.Server.Combat
             player.Combat.ScheduleNextAttack(nowUnixMilliseconds, profile.AttackIntervalMilliseconds);
 
             if (damage > 0)
-            {
                 _contributions?.Record(new CombatContribution(creature.InstanceId, player.CharacterId, damage, nowUnixMilliseconds));
-                _experience.AwardDamageExperience(player, damage);
-            }
 
             if (!creature.IsAlive)
             {
