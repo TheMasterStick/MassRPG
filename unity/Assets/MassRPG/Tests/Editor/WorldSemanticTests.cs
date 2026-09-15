@@ -2,6 +2,7 @@ using System.Linq;
 using MassRPG.Core.Content;
 using MassRPG.Core.World;
 using MassRPG.Data.World.Semantics;
+using MassRPG.EditorCore.World;
 using NUnit.Framework;
 
 namespace MassRPG.Tests
@@ -81,6 +82,23 @@ namespace MassRPG.Tests
             Assert.AreEqual(0.85, copy.RoutePreferenceWeight, 0.0001);
             Assert.AreEqual(3, copy.Points.Count);
             Assert.AreEqual(new GridCoord(180, 115), copy.Points[2]);
+        }
+
+        [Test]
+        public void RoadDraft_BuildsPolylineAndRasterizesConfiguredWidth()
+        {
+            var draft = new RoadAuthoringDraft(new ContentId("road.test"), "Test Road");
+            draft.WidthTiles = 3;
+            draft.AddPoint(new GridCoord(20, 20));
+            draft.AddPoint(new GridCoord(24, 20));
+            var road = draft.Build();
+
+            var tiles = RoadRasterizer.Rasterize(road);
+
+            Assert.IsTrue(tiles.Contains(new GridCoord(22, 20)));
+            Assert.IsTrue(tiles.Contains(new GridCoord(22, 19)));
+            Assert.IsTrue(tiles.Contains(new GridCoord(22, 21)));
+            Assert.IsFalse(tiles.Contains(new GridCoord(22, 23)));
         }
     }
 }
