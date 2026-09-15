@@ -15,7 +15,7 @@ namespace MassRPG.Editor
         {
             var window = GetWindow<MassRPGEditorHubWindow>();
             window.titleContent = new GUIContent("MassRPG Editor");
-            window.minSize = new Vector2(470, 620);
+            window.minSize = new Vector2(470, 660);
             window.Show();
         }
 
@@ -30,6 +30,7 @@ namespace MassRPG.Editor
             Section("Terrain & geography");
             Button("World Overview", "Block the entire 180,000 x 180,000 world at 512x512 storage-page scale.", MassRPGWorldOverviewWindow.Open);
             Button("1x1 World Editor", "Hand-paint exact terrain, elevation, water, pathing, ramps and wall/fence edges.", MassRPGWorldEditorWindow.Open);
+            Button("World Recovery", "Inspect autosaved crash-recovery pages; restore only newer unsaved work or discard stale copies.", MassRPGWorldRecoveryWindow.Open);
 
             Section("World semantics");
             Button("Road Editor", "Draw semantic roads with width, surface and routing/spawn guidance.", MassRPGRoadEditorWindow.Open);
@@ -43,7 +44,7 @@ namespace MassRPG.Editor
 
             GUILayout.FlexibleSpace();
             EditorGUILayout.HelpBox(
-                "Still in progress: searchable content palettes, richer polygon dressing overrides, selection/stamps in the main 1x1 UI, recovery restore UI and Play From Here.",
+                "Still in progress: searchable content palettes, richer polygon dressing overrides, selection/stamps in the main 1x1 UI and Play From Here.",
                 MessageType.None);
             GUILayout.Label("Unity 6.3 LTS · MassRPG authored-world tools", EditorStyles.centeredGreyMiniLabel);
         }
