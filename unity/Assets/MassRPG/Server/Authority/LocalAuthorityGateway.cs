@@ -1,6 +1,7 @@
 using System;
 using MassRPG.Core.Authority;
 using MassRPG.Server.Combat;
+using MassRPG.Server.Items;
 using MassRPG.Server.Travel;
 
 namespace MassRPG.Server.Authority
@@ -8,9 +9,9 @@ namespace MassRPG.Server.Authority
     /// <summary>
     /// Composition layer for migrated systems that were added after the original LocalGameAuthority
     /// request switch. Unity should bind its gameplay input to this IGameAuthority gateway rather
-    /// than mutating travel/ammunition state directly. The inner authority remains the simulation
-    /// host for movement, combat, skilling, inventory and economy while this gateway intercepts the
-    /// newer request families. The same split can later become network command routing.
+    /// than mutating travel/ammunition/potion state directly. The inner authority remains the
+    /// simulation host for movement, combat, skilling, inventory and economy while this gateway
+    /// intercepts newer request families. The same split can later become network command routing.
     /// </summary>
     public sealed class LocalAuthorityGateway : IGameAuthority
     {
@@ -18,17 +19,20 @@ namespace MassRPG.Server.Authority
         private readonly FastTravelService _fastTravel;
         private readonly FastTravelStateRegistry _travelStates;
         private readonly RangedAmmunitionService _ammunition;
+        private readonly PotionConsumptionService _potions;
 
         public LocalAuthorityGateway(
             LocalGameAuthority inner,
             FastTravelService fastTravel = null,
             FastTravelStateRegistry travelStates = null,
-            RangedAmmunitionService ammunition = null)
+            RangedAmmunitionService ammunition = null,
+            PotionConsumptionService potions = null)
         {
             _inner = inner ?? throw new ArgumentNullException(nameof(inner));
             _fastTravel = fastTravel;
             _travelStates = travelStates;
             _ammunition = ammunition;
+            _potions = potions;
         }
 
         public LocalGameAuthority Inner => _inner;
@@ -60,6 +64,18 @@ namespace MassRPG.Server.Authority
                 return AuthorityDecision.Accept(request.RequestId);
             }
 
+            if (request is DrinkPotionRequest drinkPotion)
+            {
+                if (_potions == null)
+                    return AuthorityDecision.Reject(request.RequestId, "potions_unavailable", "Potion consumption is not initialized.");
+                var result = _potions.Drink(player, drinkPotion.InventorySlot, nowUnixMilliseconds);
+                if (!result.Success)
+                    return AuthorityDecision.Reject(request.RequestId, result.Code, "The requested potion could not be consumed.");
+
+                EndArrivalProtectionIfNeeded(request);
+                return AuthorityDecision.Accept(request.RequestId);
+            }
+
             if (request is ActivateFastTravelNodeRequest activate)
             {
                 if (_fastTravel == null)
@@ -82,9 +98,14 @@ namespace MassRPG.Server.Authority
             }
 
             var decision = _inner.Submit(request, nowUnixMilliseconds);
-            if (decision.Accepted && EndsArrivalProtection(request) && _travelStates != null)
-                _travelStates.GetOrCreate(request.CharacterId).ClearArrivalProtection();
+            if (decision.Accepted) EndArrivalProtectionIfNeeded(request);
             return decision;
+        }
+
+        private void EndArrivalProtectionIfNeeded(GameRequest request)
+        {
+            if (_travelStates != null && EndsArrivalProtection(request))
+                _travelStates.GetOrCreate(request.CharacterId).ClearArrivalProtection();
         }
 
         private static AuthorityDecision FromTravel(Guid requestId, FastTravelResult result)
@@ -102,6 +123,7 @@ namespace MassRPG.Server.Authority
                 || request is HarvestCropRequest
                 || request is LightFireRequest
                 || request is EatFoodRequest
+                || request is DrinkPotionRequest
                 || request is DropInventoryItemRequest
                 || request is TakeGroundItemRequest
                 || request is DepositBankItemRequest
