@@ -16,7 +16,7 @@ namespace MassRPG.Editor
         {
             var window = GetWindow<MassRPGEditorHubWindow>();
             window.titleContent = new GUIContent("MassRPG Editor");
-            window.minSize = new Vector2(470, 850);
+            window.minSize = new Vector2(470, 900);
             window.Show();
         }
 
@@ -57,6 +57,10 @@ namespace MassRPG.Editor
                 "See every browser-authored item, monster, resource or other definition still waiting for models, icons, portraits or animation assets.",
                 MassRPGAssetBacklogWindow.Open);
             Button(
+                "Asset Linker",
+                "Attach imported Unity models/icons/portraits/animation assets to work-authored content without rewriting gameplay data.",
+                MassRPGPresentationAssetLinkerWindow.Open);
+            Button(
                 "Materialize Seeds",
                 "One-time migration helper: create missing repository drafts from old C# item/creature/recipe seed catalogs without overwriting browser edits.",
                 MigrationSeedDraftExporter.MaterializeMigrationSeedDrafts);
@@ -69,7 +73,7 @@ namespace MassRPG.Editor
 
             GUILayout.FlexibleSpace();
             EditorGUILayout.HelpBox(
-                "The Online Data Editor can author items/equipment, creatures, resources, recipes and flexible future game definitions without local art files. Unfinished presentation work is carried into the Asset Backlog for home/Unity linking instead of blocking gameplay design.",
+                "The Online Data Editor can author items/equipment, creatures, resources, recipes and flexible future game definitions without local art files. At home, Asset Backlog + Asset Linker connect imported Unity art to those same permanent IDs through repository-backed AssetLink documents.",
                 MessageType.None);
             GUILayout.Label("Unity 6.3 LTS · MassRPG authored-world tools", EditorStyles.centeredGreyMiniLabel);
         }
