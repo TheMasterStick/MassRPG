@@ -46,22 +46,26 @@ namespace MassRPG.Server.Production
 
     /// <summary>
     /// Server-owned recipe execution. Recipe definitions, station IDs and item IDs are published
-    /// data; timing, material consumption, outputs and XP are validated by authority.
+    /// data; timing, material consumption, outputs, failure rolls and XP are validated by authority.
     /// </summary>
     public sealed class ProductionService
     {
         private readonly IRecipeDefinitionSource _recipes;
         private readonly IItemRuleSource _items;
         private readonly IProductionStationSource _stations;
+        private readonly Random _fallbackRandom = new Random();
+        private readonly Func<double> _random01;
 
         public ProductionService(
             IRecipeDefinitionSource recipes,
             IItemRuleSource items,
-            IProductionStationSource stations = null)
+            IProductionStationSource stations = null,
+            Func<double> random01 = null)
         {
             _recipes = recipes ?? throw new ArgumentNullException(nameof(recipes));
             _items = items ?? throw new ArgumentNullException(nameof(items));
             _stations = stations;
+            _random01 = random01 ?? _fallbackRandom.NextDouble;
         }
 
         public ProductionResult TryStart(
@@ -80,7 +84,7 @@ namespace MassRPG.Server.Production
             if (!HasInputs(player, recipe)) return ProductionResult.Fail("missing_ingredients");
             if (!HasRequiredTool(player, recipe)) return ProductionResult.Fail("missing_tool");
             if (!ValidateStation(player, recipe, stationLocation)) return ProductionResult.Fail("invalid_station");
-            if (!CanReceiveOutput(player, recipe)) return ProductionResult.Fail("inventory_full");
+            if (!CanReceiveOutput(player, recipe.OutputItemId, recipe.OutputQuantity)) return ProductionResult.Fail("inventory_full");
 
             player.Movement.Clear();
             player.Production.Begin(
@@ -128,7 +132,20 @@ namespace MassRPG.Server.Production
                 return ProductionResult.Fail("missing_tool", ProductionAdvanceKind.Cancelled);
             }
 
-            if (!CanReceiveOutput(player, recipe))
+            var outputItemId = recipe.OutputItemId;
+            var experience = recipe.Xp;
+            if (recipe.CanBurn && _random01() < CalculateBurnChance(player.Skills.GetLevel(recipe.Skill), recipe.LevelRequired))
+            {
+                if (!recipe.FailureOutputItemId.HasValue)
+                {
+                    player.Production.Clear();
+                    return ProductionResult.Fail("missing_failure_output", ProductionAdvanceKind.Cancelled);
+                }
+                outputItemId = recipe.FailureOutputItemId.Value;
+                experience = Math.Max(1L, (long)Math.Floor(recipe.Xp * recipe.FailureXpFraction));
+            }
+
+            if (!CanReceiveOutput(player, outputItemId, recipe.OutputQuantity))
             {
                 player.Production.Clear();
                 return ProductionResult.Fail("inventory_full", ProductionAdvanceKind.Cancelled);
@@ -141,11 +158,11 @@ namespace MassRPG.Server.Production
                     throw new InvalidOperationException("Production input validation changed during atomic recipe execution.");
             }
 
-            var added = InventoryRules.AddItem(player.Inventory, _items, recipe.OutputItemId, recipe.OutputQuantity);
+            var added = InventoryRules.AddItem(player.Inventory, _items, outputItemId, recipe.OutputQuantity);
             if (added != recipe.OutputQuantity)
                 throw new InvalidOperationException("Production output capacity validation changed during atomic recipe execution.");
 
-            player.Skills.AddXp(recipe.Skill, recipe.Xp);
+            player.Skills.AddXp(recipe.Skill, experience);
             var finishing = player.Production.RemainingQuantity <= 1;
             player.Production.CompleteOne(checked(nowUnixMilliseconds + recipe.DurationMilliseconds));
             return ProductionResult.Ok(
@@ -157,6 +174,14 @@ namespace MassRPG.Server.Production
         {
             if (player == null) throw new ArgumentNullException(nameof(player));
             player.Production.Clear();
+        }
+
+        public static double CalculateBurnChance(int playerLevel, int recipeLevel)
+        {
+            var stopBurn = Math.Min(99, recipeLevel + 30);
+            if (playerLevel >= stopBurn) return 0.03;
+            var burnChance = 0.08 + ((double)(stopBurn - playerLevel) / stopBurn) * 0.50;
+            return Math.Min(0.75, burnChance);
         }
 
         private bool ValidateStation(PlayerState player, RecipeDefinition recipe, GridLocation? location)
@@ -188,15 +213,15 @@ namespace MassRPG.Server.Production
             return false;
         }
 
-        private bool CanReceiveOutput(PlayerState player, RecipeDefinition recipe)
+        private bool CanReceiveOutput(PlayerState player, ContentId outputItemId, int outputQuantity)
         {
-            if (!_items.TryGetRule(recipe.OutputItemId, out var outputRule)) return false;
+            if (!_items.TryGetRule(outputItemId, out var outputRule)) return false;
             if (outputRule.Stackable)
             {
-                if (player.Inventory.CountItem(recipe.OutputItemId) > 0) return true;
+                if (player.Inventory.CountItem(outputItemId) > 0) return true;
                 return player.Inventory.EmptySlotCount > 0;
             }
-            return player.Inventory.EmptySlotCount >= recipe.OutputQuantity;
+            return player.Inventory.EmptySlotCount >= outputQuantity;
         }
     }
 }
