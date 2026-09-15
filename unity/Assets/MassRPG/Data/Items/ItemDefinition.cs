@@ -85,6 +85,11 @@ namespace MassRPG.Data.Items
         public int ToolTier { get; set; }
         public GatheringToolKind GatheringToolKind { get; set; }
 
+        /// <summary>Optional weapon timing override. Zero means use the combat-style fallback.</summary>
+        public int AttackIntervalMilliseconds { get; set; }
+        /// <summary>Optional weapon range override. Zero means use the combat-style fallback.</summary>
+        public int AttackRangeTiles { get; set; }
+
         public ItemRule ToRule() => new ItemRule(
             Id,
             Stackable,

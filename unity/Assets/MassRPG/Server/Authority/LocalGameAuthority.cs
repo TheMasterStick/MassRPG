@@ -4,6 +4,7 @@ using MassRPG.Core.Authority;
 using MassRPG.Core.Characters;
 using MassRPG.Core.Inventory;
 using MassRPG.Core.World;
+using MassRPG.Server.Combat;
 using MassRPG.Server.Resources;
 
 namespace MassRPG.Server.Authority
@@ -18,15 +19,18 @@ namespace MassRPG.Server.Authority
         private readonly IItemRuleSource _itemRules;
         private readonly IGridTraversalMap _movementMap;
         private readonly GatheringService _gathering;
+        private readonly CombatTargetingService _combatTargeting;
 
         public LocalGameAuthority(
             IItemRuleSource itemRules,
             IGridTraversalMap movementMap = null,
-            GatheringService gathering = null)
+            GatheringService gathering = null,
+            CombatTargetingService combatTargeting = null)
         {
             _itemRules = itemRules ?? throw new ArgumentNullException(nameof(itemRules));
             _movementMap = movementMap;
             _gathering = gathering;
+            _combatTargeting = combatTargeting;
         }
 
         public void RegisterPlayer(PlayerState player)
@@ -74,6 +78,24 @@ namespace MassRPG.Server.Authority
                 if (_gathering == null)
                     return AuthorityDecision.Reject(request.RequestId, "gathering_unavailable", "Gathering is not initialized.");
                 return FromGatheringResult(request.RequestId, _gathering.TryGather(player, gather.Node, nowUnixMilliseconds));
+            }
+
+            if (request is AttackCreatureRequest attack)
+            {
+                if (_combatTargeting == null)
+                    return AuthorityDecision.Reject(request.RequestId, "combat_unavailable", "Combat targeting is not initialized.");
+                return FromCombatTargetingResult(request.RequestId, _combatTargeting.BeginAttack(player, attack.CreatureInstanceId));
+            }
+
+            if (request is StopCombatRequest)
+            {
+                if (_combatTargeting != null) _combatTargeting.Stop(player);
+                else
+                {
+                    player.Combat.End();
+                    player.Movement.Clear();
+                }
+                return AuthorityDecision.Accept(request.RequestId);
             }
 
             return AuthorityDecision.Reject(request.RequestId, "unsupported_request", "This request type is not implemented by the local authority yet.");
@@ -134,6 +156,9 @@ namespace MassRPG.Server.Authority
             if (!path.Success)
                 return AuthorityDecision.Reject(requestId, path.Code, "No valid local path could be found to that destination.");
 
+            // A deliberate movement command disengages the current auto-attack attempt. Combat AI
+            // may still chase according to its own leash rules, but the player's attack is stopped.
+            player.Combat.End();
             player.Movement.ReplacePath(path.Steps);
             return AuthorityDecision.Accept(requestId);
         }
@@ -149,6 +174,13 @@ namespace MassRPG.Server.Authority
         }
 
         private static AuthorityDecision FromGatheringResult(Guid requestId, GatheringResult result)
+        {
+            return result.Success
+                ? AuthorityDecision.Accept(requestId)
+                : AuthorityDecision.Reject(requestId, result.Code, result.Message);
+        }
+
+        private static AuthorityDecision FromCombatTargetingResult(Guid requestId, CombatTargetingResult result)
         {
             return result.Success
                 ? AuthorityDecision.Accept(requestId)

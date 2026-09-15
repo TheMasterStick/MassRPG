@@ -26,9 +26,9 @@ namespace MassRPG.Core.World
     }
 
     /// <summary>
-    /// Local eight-direction A* pathfinder for the canonical 1x1 grid. This is for nearby actor
-    /// movement, not the eventual whole-world route planner. Each logical tile step has equal
-    /// base cost, matching the RuneScape-like grid behavior; animation speed can remain separate.
+    /// Local eight-direction pathfinding for the canonical 1x1 grid. Whole-world route planning is
+    /// a separate higher-level system. Logical diagonal and straight steps have equal base cost,
+    /// matching the RuneScape-like grid; presentation speed is independent.
     /// </summary>
     public static class GridPathfinder
     {
@@ -70,9 +70,7 @@ namespace MassRPG.Core.World
 
                 for (var i = 0; i < Directions.Length; i++)
                 {
-                    var direction = Directions[i];
-                    var nextTile = new GridCoord(current.Tile.X + direction.X, current.Tile.Y + direction.Y);
-                    var next = new GridLocation(nextTile, current.Plane, current.Storey);
+                    var next = Next(current, Directions[i]);
                     if (closed.Contains(next)) continue;
                     if (!GridTraversal.CanStep(map, current, next)) continue;
 
@@ -87,6 +85,54 @@ namespace MassRPG.Core.World
 
             return GridPathResult.Failed("unreachable", visited);
         }
+
+        /// <summary>
+        /// Breadth-first local search to the nearest reachable tile satisfying an authority-owned
+        /// predicate. Useful for interactions such as approaching a multi-tile combat target where
+        /// the client must not choose the authoritative stopping tile itself.
+        /// </summary>
+        public static GridPathResult FindNearestMatching(
+            IGridTraversalMap map,
+            GridLocation start,
+            Func<GridLocation, bool> isGoal,
+            int maxVisitedNodes = 25000)
+        {
+            if (map == null) throw new ArgumentNullException(nameof(map));
+            if (isGoal == null) throw new ArgumentNullException(nameof(isGoal));
+            if (maxVisitedNodes <= 0) throw new ArgumentOutOfRangeException(nameof(maxVisitedNodes));
+            if (isGoal(start)) return GridPathResult.Found(Array.Empty<GridLocation>(), 0);
+
+            var queue = new Queue<GridLocation>();
+            var visitedSet = new HashSet<GridLocation> { start };
+            var cameFrom = new Dictionary<GridLocation, GridLocation>();
+            queue.Enqueue(start);
+            var visited = 0;
+
+            while (queue.Count > 0)
+            {
+                var current = queue.Dequeue();
+                visited++;
+                if (visited > maxVisitedNodes) return GridPathResult.Failed("search_limit", visited);
+
+                for (var i = 0; i < Directions.Length; i++)
+                {
+                    var next = Next(current, Directions[i]);
+                    if (!visitedSet.Add(next)) continue;
+                    if (!GridTraversal.CanStep(map, current, next)) continue;
+                    cameFrom[next] = current;
+                    if (isGoal(next)) return GridPathResult.Found(Reconstruct(cameFrom, start, next), visited);
+                    queue.Enqueue(next);
+                }
+            }
+
+            return GridPathResult.Failed("unreachable", visited);
+        }
+
+        private static GridLocation Next(GridLocation current, GridCoord direction)
+            => new GridLocation(
+                new GridCoord(current.Tile.X + direction.X, current.Tile.Y + direction.Y),
+                current.Plane,
+                current.Storey);
 
         private static int FindBestOpenIndex(List<GridLocation> open, Dictionary<GridLocation, int> gScore, GridLocation goal)
         {
