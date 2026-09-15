@@ -16,7 +16,7 @@ namespace MassRPG.Editor
         {
             var window = GetWindow<MassRPGEditorHubWindow>();
             window.titleContent = new GUIContent("MassRPG Editor");
-            window.minSize = new Vector2(470, 900);
+            window.minSize = new Vector2(470, 940);
             window.Show();
         }
 
@@ -61,6 +61,10 @@ namespace MassRPG.Editor
                 "Attach imported Unity models/icons/portraits/animation assets to work-authored content without rewriting gameplay data.",
                 MassRPGPresentationAssetLinkerWindow.Open);
             Button(
+                "Build Asset Catalog",
+                "Package repository AssetLinks into the compact runtime lookup used by character/equipment presentation.",
+                () => PresentationAssetCatalogBuilder.Rebuild(true));
+            Button(
                 "Materialize Seeds",
                 "One-time migration helper: create missing repository drafts from old C# item/creature/recipe seed catalogs without overwriting browser edits.",
                 MigrationSeedDraftExporter.MaterializeMigrationSeedDrafts);
@@ -73,7 +77,7 @@ namespace MassRPG.Editor
 
             GUILayout.FlexibleSpace();
             EditorGUILayout.HelpBox(
-                "The Online Data Editor can author items/equipment, creatures, resources, recipes and flexible future game definitions without local art files. At home, Asset Backlog + Asset Linker connect imported Unity art to those same permanent IDs through repository-backed AssetLink documents.",
+                "The Online Data Editor can author items/equipment, creatures, resources, recipes and flexible future game definitions without local art files. At home, Asset Backlog + Asset Linker connect imported Unity art to those same permanent IDs; Build Asset Catalog converts those source links into the runtime lookup packaged with the client.",
                 MessageType.None);
             GUILayout.Label("Unity 6.3 LTS · MassRPG authored-world tools", EditorStyles.centeredGreyMiniLabel);
         }
