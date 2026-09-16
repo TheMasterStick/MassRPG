@@ -53,7 +53,11 @@ namespace MassRPG.Data.Quests
     {
         public QuestSkillRequirement(SkillId skill, int level)
         {
-            if (level < 1) throw new ArgumentOutOfRangeException(nameof(level));
+            var maximumLevel = SkillProgression.MaxLevelFor(skill);
+            if (level < 1 || level > maximumLevel)
+                throw new ArgumentOutOfRangeException(
+                    nameof(level),
+                    $"{skill} quest requirements must be between 1 and {maximumLevel}.");
             Skill = skill;
             Level = level;
         }
