@@ -56,4 +56,24 @@ namespace MassRPG.Core.Authority
         public Guid PlotId { get; }
         public Guid PieceInstanceId { get; }
     }
+
+    /// <summary>
+    /// Offers gold toward prepaid upkeep for an owned player plot. The server decides the daily
+    /// rate, whole-day conversion, paid-through time and whether the plot is eligible for payment.
+    /// </summary>
+    public sealed class PayPlotUpkeepRequest : GameRequest
+    {
+        public PayPlotUpkeepRequest(Guid requestId, Guid characterId, Guid plotId, int offeredGold)
+            : base(requestId, characterId)
+        {
+            if (plotId == Guid.Empty) throw new ArgumentException("Plot id cannot be empty.", nameof(plotId));
+            if (offeredGold < 1) throw new ArgumentOutOfRangeException(nameof(offeredGold));
+
+            PlotId = plotId;
+            OfferedGold = offeredGold;
+        }
+
+        public Guid PlotId { get; }
+        public int OfferedGold { get; }
+    }
 }
