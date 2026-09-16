@@ -27,31 +27,84 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
-      - name: Generate engine-independent smoke project
+      - name: Generate Unity-shaped engine-independent projects
         shell: bash
         run: |
-          mkdir -p .ci/csharp-smoke
-          cat > .ci/csharp-smoke/MassRPG.Smoke.csproj <<'EOF'
-          <Project Sdk="Microsoft.NET.Sdk">
-            <PropertyGroup>
-              <TargetFramework>net8.0</TargetFramework>
-              <LangVersion>9.0</LangVersion>
-              <Nullable>disable</Nullable>
-              <ImplicitUsings>disable</ImplicitUsings>
-              <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
-              <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
-            </PropertyGroup>
-            <ItemGroup>
-              <Compile Include="../../unity/Assets/MassRPG/Core/**/*.cs" />
-              <Compile Include="../../unity/Assets/MassRPG/Data/**/*.cs" />
-              <Compile Include="../../unity/Assets/MassRPG/Server/**/*.cs" />
-              <Compile Include="../../unity/Assets/MassRPG/EditorCore/**/*.cs" />
-            </ItemGroup>
-          </Project>
-          EOF
+          mkdir -p .ci/csharp-assemblies
 
-      - name: Compile engine-independent migration assemblies as C# 9
-        run: dotnet build .ci/csharp-smoke/MassRPG.Smoke.csproj --configuration Release --nologo
+          write_common_properties() {
+            cat <<'EOF'
+              <PropertyGroup>
+                <TargetFramework>net8.0</TargetFramework>
+                <LangVersion>9.0</LangVersion>
+                <Nullable>disable</Nullable>
+                <ImplicitUsings>disable</ImplicitUsings>
+                <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+                <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+              </PropertyGroup>
+          EOF
+          }
+
+          {
+            echo '<Project Sdk="Microsoft.NET.Sdk">'
+            write_common_properties
+            cat <<'EOF'
+              <ItemGroup>
+                <Compile Include="../../unity/Assets/MassRPG/Core/**/*.cs" />
+              </ItemGroup>
+            </Project>
+          EOF
+          } > .ci/csharp-assemblies/MassRPG.Core.csproj
+
+          {
+            echo '<Project Sdk="Microsoft.NET.Sdk">'
+            write_common_properties
+            cat <<'EOF'
+              <ItemGroup>
+                <Compile Include="../../unity/Assets/MassRPG/Data/**/*.cs" />
+              </ItemGroup>
+              <ItemGroup>
+                <ProjectReference Include="MassRPG.Core.csproj" />
+              </ItemGroup>
+            </Project>
+          EOF
+          } > .ci/csharp-assemblies/MassRPG.Data.csproj
+
+          {
+            echo '<Project Sdk="Microsoft.NET.Sdk">'
+            write_common_properties
+            cat <<'EOF'
+              <ItemGroup>
+                <Compile Include="../../unity/Assets/MassRPG/Server/**/*.cs" />
+              </ItemGroup>
+              <ItemGroup>
+                <ProjectReference Include="MassRPG.Core.csproj" />
+                <ProjectReference Include="MassRPG.Data.csproj" />
+              </ItemGroup>
+            </Project>
+          EOF
+          } > .ci/csharp-assemblies/MassRPG.Server.csproj
+
+          {
+            echo '<Project Sdk="Microsoft.NET.Sdk">'
+            write_common_properties
+            cat <<'EOF'
+              <ItemGroup>
+                <Compile Include="../../unity/Assets/MassRPG/EditorCore/**/*.cs" />
+              </ItemGroup>
+              <ItemGroup>
+                <ProjectReference Include="MassRPG.Core.csproj" />
+                <ProjectReference Include="MassRPG.Data.csproj" />
+              </ItemGroup>
+            </Project>
+          EOF
+          } > .ci/csharp-assemblies/MassRPG.EditorCore.csproj
+
+      - name: Compile engine-independent migration assemblies separately as C# 9
+        shell: bash
+        run: |
+          dotnet build .ci/csharp-assemblies/MassRPG.Server.csproj --configuration Release --nologo
+          dotnet build .ci/csharp-assemblies/MassRPG.EditorCore.csproj --configuration Release --nologo
 
   test-engine-independent-rules:
     runs-on: ubuntu-latest
@@ -62,10 +115,78 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
-      - name: Generate engine-independent NUnit project
+      - name: Generate Unity-shaped engine-independent projects and NUnit project
         shell: bash
         run: |
           mkdir -p .ci/csharp-tests
+
+          write_common_properties() {
+            cat <<'EOF'
+              <PropertyGroup>
+                <TargetFramework>net8.0</TargetFramework>
+                <LangVersion>9.0</LangVersion>
+                <Nullable>disable</Nullable>
+                <ImplicitUsings>disable</ImplicitUsings>
+                <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+              </PropertyGroup>
+          EOF
+          }
+
+          {
+            echo '<Project Sdk="Microsoft.NET.Sdk">'
+            write_common_properties
+            cat <<'EOF'
+              <ItemGroup>
+                <Compile Include="../../unity/Assets/MassRPG/Core/**/*.cs" />
+              </ItemGroup>
+            </Project>
+          EOF
+          } > .ci/csharp-tests/MassRPG.Core.csproj
+
+          {
+            echo '<Project Sdk="Microsoft.NET.Sdk">'
+            write_common_properties
+            cat <<'EOF'
+              <ItemGroup>
+                <Compile Include="../../unity/Assets/MassRPG/Data/**/*.cs" />
+              </ItemGroup>
+              <ItemGroup>
+                <ProjectReference Include="MassRPG.Core.csproj" />
+              </ItemGroup>
+            </Project>
+          EOF
+          } > .ci/csharp-tests/MassRPG.Data.csproj
+
+          {
+            echo '<Project Sdk="Microsoft.NET.Sdk">'
+            write_common_properties
+            cat <<'EOF'
+              <ItemGroup>
+                <Compile Include="../../unity/Assets/MassRPG/Server/**/*.cs" />
+              </ItemGroup>
+              <ItemGroup>
+                <ProjectReference Include="MassRPG.Core.csproj" />
+                <ProjectReference Include="MassRPG.Data.csproj" />
+              </ItemGroup>
+            </Project>
+          EOF
+          } > .ci/csharp-tests/MassRPG.Server.csproj
+
+          {
+            echo '<Project Sdk="Microsoft.NET.Sdk">'
+            write_common_properties
+            cat <<'EOF'
+              <ItemGroup>
+                <Compile Include="../../unity/Assets/MassRPG/EditorCore/**/*.cs" />
+              </ItemGroup>
+              <ItemGroup>
+                <ProjectReference Include="MassRPG.Core.csproj" />
+                <ProjectReference Include="MassRPG.Data.csproj" />
+              </ItemGroup>
+            </Project>
+          EOF
+          } > .ci/csharp-tests/MassRPG.EditorCore.csproj
+
           cat > .ci/csharp-tests/MassRPG.EngineTests.csproj <<'EOF'
           <Project Sdk="Microsoft.NET.Sdk">
             <PropertyGroup>
@@ -78,10 +199,6 @@ jobs:
               <IsPackable>false</IsPackable>
             </PropertyGroup>
             <ItemGroup>
-              <Compile Include="../../unity/Assets/MassRPG/Core/**/*.cs" />
-              <Compile Include="../../unity/Assets/MassRPG/Data/**/*.cs" />
-              <Compile Include="../../unity/Assets/MassRPG/Server/**/*.cs" />
-              <Compile Include="../../unity/Assets/MassRPG/EditorCore/**/*.cs" />
           EOF
 
           count=0
@@ -97,6 +214,12 @@ jobs:
           cat >> .ci/csharp-tests/MassRPG.EngineTests.csproj <<'EOF'
             </ItemGroup>
             <ItemGroup>
+              <ProjectReference Include="MassRPG.Core.csproj" />
+              <ProjectReference Include="MassRPG.Data.csproj" />
+              <ProjectReference Include="MassRPG.Server.csproj" />
+              <ProjectReference Include="MassRPG.EditorCore.csproj" />
+            </ItemGroup>
+            <ItemGroup>
               <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.10.0" />
               <PackageReference Include="NUnit" Version="3.14.0" />
               <PackageReference Include="NUnit3TestAdapter" Version="4.5.0" />
@@ -105,5 +228,5 @@ jobs:
           EOF
           echo "Selected $count engine-independent test source files."
 
-      - name: Run engine-independent migration tests as C# 9
+      - name: Run engine-independent migration tests against separate assemblies as C# 9
         run: dotnet test .ci/csharp-tests/MassRPG.EngineTests.csproj --configuration Release --nologo --verbosity normal
