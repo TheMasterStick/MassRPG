@@ -45,7 +45,9 @@ namespace MassRPG.Data.Recipes
             double failureXpFraction = 0.10)
         {
             if (id.IsEmpty) throw new ArgumentException("Recipe id cannot be empty.", nameof(id));
-            if (levelRequired < 1) throw new ArgumentOutOfRangeException(nameof(levelRequired));
+            var maximumLevel = SkillProgression.MaxLevelFor(skill);
+            if (levelRequired < 1 || levelRequired > maximumLevel)
+                throw new ArgumentOutOfRangeException(nameof(levelRequired), $"{skill} recipe requirements cannot exceed level {maximumLevel}.");
             if (inputs == null) throw new ArgumentNullException(nameof(inputs));
             if (outputItemId.IsEmpty) throw new ArgumentException("Output item id cannot be empty.", nameof(outputItemId));
             if (outputQuantity < 1) throw new ArgumentOutOfRangeException(nameof(outputQuantity));
