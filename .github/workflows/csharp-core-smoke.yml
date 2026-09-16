@@ -195,6 +195,7 @@ jobs:
               <Nullable>disable</Nullable>
               <ImplicitUsings>disable</ImplicitUsings>
               <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+              <AssemblyName>MassRPG.Tests</AssemblyName>
               <IsTestProject>true</IsTestProject>
               <IsPackable>false</IsPackable>
             </PropertyGroup>
