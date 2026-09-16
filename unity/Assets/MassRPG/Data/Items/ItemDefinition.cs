@@ -53,7 +53,15 @@ namespace MassRPG.Data.Items
             bool? canConsume = null)
         {
             if (id.IsEmpty) throw new ArgumentException("Item id cannot be empty.", nameof(id));
-            if (equipRequirementLevel < 1 || equipRequirementLevel > 300) throw new ArgumentOutOfRangeException(nameof(equipRequirementLevel));
+            var maximumRequirementLevel = equipRequirementSkill.HasValue
+                ? SkillProgression.MaxLevelFor(equipRequirementSkill.Value)
+                : SkillProgression.MaxLevel;
+            if (equipRequirementLevel < 1 || equipRequirementLevel > maximumRequirementLevel)
+                throw new ArgumentOutOfRangeException(
+                    nameof(equipRequirementLevel),
+                    equipRequirementSkill.HasValue
+                        ? $"{equipRequirementSkill.Value} equipment requirements cannot exceed level {maximumRequirementLevel}."
+                        : $"Equipment requirements cannot exceed level {maximumRequirementLevel}.");
             if (healAmount < 0) throw new ArgumentOutOfRangeException(nameof(healAmount));
             if (toolTier < 0) throw new ArgumentOutOfRangeException(nameof(toolTier));
 
