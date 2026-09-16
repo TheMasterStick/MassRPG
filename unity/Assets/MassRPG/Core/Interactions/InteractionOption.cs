@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using MassRPG.Core.Resources;
 using MassRPG.Core.World;
 
 namespace MassRPG.Core.Interactions
@@ -44,9 +45,16 @@ namespace MassRPG.Core.Interactions
             string displayName,
             bool hostile = false,
             bool inCombat = false,
-            bool currentCombatTarget = false)
+            bool currentCombatTarget = false,
+            Guid? instanceId = null,
+            ResourceNodeKey? resourceNode = null)
         {
             if (string.IsNullOrWhiteSpace(targetId)) throw new ArgumentException("Interaction target id cannot be empty.", nameof(targetId));
+            if (instanceId.HasValue && instanceId.Value == Guid.Empty)
+                throw new ArgumentException("Interaction instance id cannot be empty when supplied.", nameof(instanceId));
+            if (resourceNode.HasValue && resourceNode.Value.Location != location)
+                throw new ArgumentException("Resource-node identity must match the interaction target location.", nameof(resourceNode));
+
             TargetId = targetId;
             Kind = kind;
             Location = location;
@@ -54,6 +62,8 @@ namespace MassRPG.Core.Interactions
             Hostile = hostile;
             InCombat = inCombat;
             CurrentCombatTarget = currentCombatTarget;
+            InstanceId = instanceId;
+            ResourceNode = resourceNode;
         }
 
         public string TargetId { get; }
@@ -63,6 +73,8 @@ namespace MassRPG.Core.Interactions
         public bool Hostile { get; }
         public bool InCombat { get; }
         public bool CurrentCombatTarget { get; }
+        public Guid? InstanceId { get; }
+        public ResourceNodeKey? ResourceNode { get; }
     }
 
     public readonly struct InteractionOption
