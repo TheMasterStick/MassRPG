@@ -1,0 +1,30 @@
+name: Unity structure preflight
+
+on:
+  push:
+    branches:
+      - chatgpt/unity-csharp-migration
+    paths:
+      - 'unity/Assets/MassRPG/**'
+      - 'unity/ProjectSettings/ProjectVersion.txt'
+      - 'scripts/audit-unity-assemblies.py'
+      - '.github/workflows/unity-structure-preflight.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit-assembly-boundaries:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Confirm pinned Unity editor version
+        shell: bash
+        run: |
+          grep -Fx 'm_EditorVersion: 6000.3.24f1' unity/ProjectSettings/ProjectVersion.txt
+          grep -Fx 'm_EditorVersionWithRevision: 6000.3.24f1 (4e7b9b5b6244)' unity/ProjectSettings/ProjectVersion.txt
+
+      - name: Audit MassRPG asmdefs and engine boundaries
+        run: python3 scripts/audit-unity-assemblies.py
