@@ -7,7 +7,7 @@ namespace MassRPG.Client.Construction
 {
     /// <summary>
     /// Thin Unity-facing bridge for modular construction intent. Placement validation, material
-    /// consumption, permissions, support checks, persistence and XP remain authoritative.
+    /// consumption, permissions, support checks, persistence, XP and upkeep remain authoritative.
     /// </summary>
     public sealed class ConstructionActionController
     {
@@ -43,5 +43,12 @@ namespace MassRPG.Client.Construction
                 _characterId,
                 plotId,
                 pieceInstanceId));
+
+        public AuthorityDecision PayUpkeep(Guid plotId, int offeredGold)
+            => _authority.Submit(new PayPlotUpkeepRequest(
+                Guid.NewGuid(),
+                _characterId,
+                plotId,
+                offeredGold));
     }
 }
