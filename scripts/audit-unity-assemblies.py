@@ -4,7 +4,8 @@
 This intentionally does not try to replace Unity's compiler. It catches repository-level
 assembly mistakes that can be checked before the first real Unity Editor open:
 - malformed/duplicate asmdefs;
-- missing MassRPG assembly references;
+- missing or unnecessary-to-resolve MassRPG assembly references;
+- source imports that require an asmdef reference which is not declared;
 - cycles in the MassRPG assembly graph;
 - runtime assemblies referencing Editor-only assemblies;
 - noEngineReferences assemblies containing UnityEngine/UnityEditor API references;
@@ -24,6 +25,11 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 UNITY_SOURCE_ROOT = REPO_ROOT / "unity" / "Assets" / "MassRPG"
 UNITY_API_PATTERN = re.compile(
     r"(?:^|\s)using\s+Unity(?:Engine|Editor)(?:\.|\s*;)|\bUnity(?:Engine|Editor)\."
+)
+MASSRPG_USING_PATTERN = re.compile(
+    r"^\s*using\s+(?:static\s+)?(?:[A-Za-z_][A-Za-z0-9_]*\s*=\s*)?"
+    r"(MassRPG\.(?:EditorCore|Editor|Client|Server|Data|Core|Tests))(?:\.|\s*;)",
+    re.MULTILINE,
 )
 
 
@@ -156,6 +162,35 @@ def owner_for(source: Path, assemblies: dict[str, Assembly]) -> Assembly | None:
     return max(candidates, key=lambda assembly: len(assembly.directory.parts))
 
 
+def validate_declared_imports(
+    source: Path,
+    text: str,
+    owner: Assembly,
+    assemblies: dict[str, Assembly],
+    errors: list[str],
+) -> None:
+    declared_refs = {
+        project_name
+        for reference in owner.references
+        if (project_name := project_reference_name(reference)) is not None
+    }
+    for match in MASSRPG_USING_PATTERN.finditer(text):
+        target_name = match.group(1)
+        if target_name == owner.name:
+            continue
+        if target_name not in assemblies:
+            # A namespace can exist without its own asmdef; only enforce known project assemblies.
+            continue
+        if target_name in declared_refs:
+            continue
+        line_number = text.count("\n", 0, match.start()) + 1
+        fail(
+            errors,
+            f"{source.relative_to(REPO_ROOT)}:{line_number}: imports {target_name!r} but "
+            f"asmdef {owner.name!r} does not reference it",
+        )
+
+
 def validate_sources(assemblies: dict[str, Assembly], errors: list[str]) -> int:
     source_count = 0
     for source in sorted(UNITY_SOURCE_ROOT.rglob("*.cs")):
@@ -173,12 +208,15 @@ def validate_sources(assemblies: dict[str, Assembly], errors: list[str]) -> int:
                 f"{rel}: Editor-directory source is owned by non-Editor assembly {owner.name!r}",
             )
 
+        try:
+            text = source.read_text(encoding="utf-8")
+        except OSError as exc:
+            fail(errors, f"{rel}: could not read source: {exc}")
+            continue
+
+        validate_declared_imports(source, text, owner, assemblies, errors)
+
         if owner.no_engine_references:
-            try:
-                text = source.read_text(encoding="utf-8")
-            except OSError as exc:
-                fail(errors, f"{rel}: could not read source: {exc}")
-                continue
             for line_number, line in enumerate(text.splitlines(), start=1):
                 stripped = line.strip()
                 if stripped.startswith("//"):
