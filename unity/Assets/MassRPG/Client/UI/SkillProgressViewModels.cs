@@ -77,7 +77,7 @@ namespace MassRPG.Client.UI
 
             var cards = new List<SkillCardViewData>();
             foreach (SkillId skill in Enum.GetValues(typeof(SkillId)))
-                cards.Add(new SkillCardViewData(skill, SkillProgressSnapshot.FromXp(player.Skills.GetXp(skill))));
+                cards.Add(new SkillCardViewData(skill, SkillProgressSnapshot.FromXp(skill, player.Skills.GetXp(skill))));
 
             return new SkillsPanelViewData(player.CombatLevel, cards.ToArray());
         }
@@ -91,7 +91,7 @@ namespace MassRPG.Client.UI
             if (player == null) throw new ArgumentNullException(nameof(player));
             if (unlockCatalog == null) throw new ArgumentNullException(nameof(unlockCatalog));
 
-            var progress = SkillProgressSnapshot.FromXp(player.Skills.GetXp(skill));
+            var progress = SkillProgressSnapshot.FromXp(skill, player.Skills.GetXp(skill));
             var definitions = unlockCatalog.ForSkill(skill);
             var categories = new List<string> { "All" };
             var seenCategories = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "All" };
