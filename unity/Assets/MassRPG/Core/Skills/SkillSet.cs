@@ -12,12 +12,13 @@ namespace MassRPG.Core.Skills
             foreach (SkillId skill in Enum.GetValues(typeof(SkillId)))
             {
                 var startingLevel = skill == SkillId.Hitpoints ? 10 : 1;
-                _xp[skill] = SkillProgression.XpForLevel(startingLevel);
+                _xp[skill] = SkillProgression.XpForLevel(skill, startingLevel);
             }
         }
 
         public long GetXp(SkillId skill) => _xp[skill];
-        public int GetLevel(SkillId skill) => SkillProgression.LevelForXp(GetXp(skill));
+        public int GetLevel(SkillId skill) => SkillProgression.LevelForXp(skill, GetXp(skill));
+        public int GetMaxLevel(SkillId skill) => SkillProgression.MaxLevelFor(skill);
 
         public void SetXp(SkillId skill, long xp)
         {
