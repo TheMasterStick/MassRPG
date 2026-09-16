@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using MassRPG.Core.Characters;
+using MassRPG.Core.Combat;
 using MassRPG.Core.World;
 using MassRPG.Data.Creatures;
 using MassRPG.Server.Creatures;
