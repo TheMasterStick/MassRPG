@@ -2,19 +2,26 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using MassRPG.Core.Content;
+using MassRPG.Core.Skills;
+using MassRPG.Data.Construction;
 using MassRPG.Data.Items;
 using MassRPG.Data.Recipes;
+using MassRPG.Data.Resources;
 
 namespace MassRPG.Data.Skills
 {
     /// <summary>
     /// Builds the migrated skillbook ledger from published gameplay data instead of hard-coded UI
-    /// arrays. Gathering/construction providers can append their own entries as those catalogs are
-    /// standardized; recipes and item requirements are already fully data driven here.
+    /// arrays. Recipes, item requirements, gathering resources and modular construction pieces can
+    /// all feed the same ledger used by the Unity client.
     /// </summary>
     public static class SkillUnlockCatalogBuilder
     {
-        public static SkillUnlockCatalog Build(RecipeCatalog recipes, ItemCatalog items)
+        public static SkillUnlockCatalog Build(
+            RecipeCatalog recipes,
+            ItemCatalog items,
+            ResourceCatalog resources = null,
+            BuildPieceCatalog buildPieces = null)
         {
             if (recipes == null) throw new ArgumentNullException(nameof(recipes));
             if (items == null) throw new ArgumentNullException(nameof(items));
@@ -22,6 +29,8 @@ namespace MassRPG.Data.Skills
             var catalog = new SkillUnlockCatalog();
             AddRecipeUnlocks(catalog, recipes, items);
             AddItemRequirementUnlocks(catalog, items);
+            if (resources != null) AddGatheringUnlocks(catalog, resources, items);
+            if (buildPieces != null) AddConstructionUnlocks(catalog, buildPieces, items);
             return catalog;
         }
 
@@ -69,6 +78,63 @@ namespace MassRPG.Data.Skills
             }
         }
 
+        private static void AddGatheringUnlocks(
+            SkillUnlockCatalog catalog,
+            ResourceCatalog resources,
+            ItemCatalog items)
+        {
+            foreach (var resource in resources.All)
+            {
+                var detail = new StringBuilder();
+                detail.Append(resource.Experience).Append(" XP");
+                if (resource.RequiredToolKind != Core.Resources.GatheringToolKind.None)
+                {
+                    detail.Append(" · Requires ")
+                        .Append(Humanize(resource.RequiredToolKind.ToString()))
+                        .Append(" tier ")
+                        .Append(resource.MinimumToolTier);
+                }
+                detail.Append(" · Yields ").Append(NameOf(items, resource.YieldItemId));
+
+                catalog.Register(new SkillUnlockDefinition(
+                    resource.GatheringSkill,
+                    resource.RequiredLevel,
+                    SkillUnlockKind.Gathering,
+                    GatheringCategory(resource.GatheringSkill),
+                    GatheringVerb(resource.GatheringSkill) + " " + resource.DisplayName,
+                    detail.ToString(),
+                    resource.Id));
+            }
+        }
+
+        private static void AddConstructionUnlocks(
+            SkillUnlockCatalog catalog,
+            BuildPieceCatalog buildPieces,
+            ItemCatalog items)
+        {
+            foreach (var piece in buildPieces.All)
+            {
+                var detail = new StringBuilder();
+                for (var i = 0; i < piece.Costs.Count; i++)
+                {
+                    if (i > 0) detail.Append(", ");
+                    var cost = piece.Costs[i];
+                    detail.Append(cost.Quantity).Append('x').Append(' ').Append(NameOf(items, cost.ItemId));
+                }
+                if (piece.ConstructionXp > 0)
+                    detail.Append(" · ").Append(piece.ConstructionXp).Append(" XP");
+
+                catalog.Register(new SkillUnlockDefinition(
+                    SkillId.Construction,
+                    piece.ConstructionLevel,
+                    SkillUnlockKind.Construction,
+                    ConstructionCategory(piece.Kind),
+                    "Build " + piece.DisplayName,
+                    detail.ToString(),
+                    piece.Id));
+            }
+        }
+
         private static string BuildRecipeDetail(RecipeDefinition recipe, ItemCatalog items)
         {
             var text = new StringBuilder();
@@ -102,6 +168,42 @@ namespace MassRPG.Data.Skills
                 case ItemType.Ammunition: return "Ammunition";
                 case ItemType.Tool: return "Tools";
                 default: return "Equipment";
+            }
+        }
+
+        private static string GatheringCategory(SkillId skill)
+        {
+            switch (skill)
+            {
+                case SkillId.Woodcutting: return "Trees";
+                case SkillId.Mining: return "Ores";
+                case SkillId.Fishing: return "Fish";
+                case SkillId.Farming: return "Crops";
+                default: return "Resources";
+            }
+        }
+
+        private static string GatheringVerb(SkillId skill)
+        {
+            switch (skill)
+            {
+                case SkillId.Woodcutting: return "Cut";
+                case SkillId.Mining: return "Mine";
+                case SkillId.Fishing: return "Catch";
+                case SkillId.Farming: return "Harvest";
+                default: return "Gather";
+            }
+        }
+
+        private static string ConstructionCategory(BuildPieceKind kind)
+        {
+            switch (kind)
+            {
+                case BuildPieceKind.Workstation: return "Workstations";
+                case BuildPieceKind.Container: return "Storage";
+                case BuildPieceKind.Bed: return "Furniture";
+                case BuildPieceKind.Decoration: return "Decoration";
+                default: return "Structures";
             }
         }
 
