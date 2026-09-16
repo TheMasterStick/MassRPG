@@ -18,7 +18,7 @@ permissions:
   contents: read
 
 jobs:
-  compile-core-data-server:
+  compile-engine-independent-assemblies:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -35,7 +35,7 @@ jobs:
           <Project Sdk="Microsoft.NET.Sdk">
             <PropertyGroup>
               <TargetFramework>net8.0</TargetFramework>
-              <LangVersion>latest</LangVersion>
+              <LangVersion>9.0</LangVersion>
               <Nullable>disable</Nullable>
               <ImplicitUsings>disable</ImplicitUsings>
               <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
@@ -45,11 +45,12 @@ jobs:
               <Compile Include="../../unity/Assets/MassRPG/Core/**/*.cs" />
               <Compile Include="../../unity/Assets/MassRPG/Data/**/*.cs" />
               <Compile Include="../../unity/Assets/MassRPG/Server/**/*.cs" />
+              <Compile Include="../../unity/Assets/MassRPG/EditorCore/**/*.cs" />
             </ItemGroup>
           </Project>
           EOF
 
-      - name: Compile engine-independent migration assemblies
+      - name: Compile engine-independent migration assemblies as C# 9
         run: dotnet build .ci/csharp-smoke/MassRPG.Smoke.csproj --configuration Release --nologo
 
   test-engine-independent-rules:
@@ -69,7 +70,7 @@ jobs:
           <Project Sdk="Microsoft.NET.Sdk">
             <PropertyGroup>
               <TargetFramework>net8.0</TargetFramework>
-              <LangVersion>latest</LangVersion>
+              <LangVersion>9.0</LangVersion>
               <Nullable>disable</Nullable>
               <ImplicitUsings>disable</ImplicitUsings>
               <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
@@ -104,5 +105,5 @@ jobs:
           EOF
           echo "Selected $count engine-independent test source files."
 
-      - name: Run engine-independent migration tests
+      - name: Run engine-independent migration tests as C# 9
         run: dotnet test .ci/csharp-tests/MassRPG.EngineTests.csproj --configuration Release --nologo --verbosity normal
