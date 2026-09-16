@@ -27,7 +27,9 @@ namespace MassRPG.Data.Resources
         {
             if (id.IsEmpty) throw new ArgumentException("Resource id cannot be empty.", nameof(id));
             if (yieldItemId.IsEmpty) throw new ArgumentException("Yield item id cannot be empty.", nameof(yieldItemId));
-            if (requiredLevel < 1 || requiredLevel > 300) throw new ArgumentOutOfRangeException(nameof(requiredLevel));
+            var maximumLevel = SkillProgression.MaxLevelFor(gatheringSkill);
+            if (requiredLevel < 1 || requiredLevel > maximumLevel)
+                throw new ArgumentOutOfRangeException(nameof(requiredLevel), $"{gatheringSkill} resource requirements cannot exceed level {maximumLevel}.");
             if (experience < 0) throw new ArgumentOutOfRangeException(nameof(experience));
             if (respawnSeconds < 0) throw new ArgumentOutOfRangeException(nameof(respawnSeconds));
             if (minimumYield <= 0 || maximumYield < minimumYield) throw new ArgumentOutOfRangeException(nameof(maximumYield));
