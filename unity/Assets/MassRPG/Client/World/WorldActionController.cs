@@ -1,12 +1,11 @@
 using System;
 using MassRPG.Core.Authority;
-using MassRPG.Core.Resources;
 using MassRPG.Core.World;
 
 namespace MassRPG.Client.World
 {
     /// <summary>
-    /// Thin client bridge for movement and world-target actions. Presentation selects a logical
+    /// Thin client bridge for movement and combat-target intent. Presentation selects a logical
     /// destination or target; authoritative pathing, range checks and simulation stay server-owned.
     /// </summary>
     public sealed class WorldActionController
@@ -27,9 +26,6 @@ namespace MassRPG.Client.World
 
         public AuthorityDecision CancelMovement()
             => _authority.Submit(new CancelMovementRequest(Guid.NewGuid(), _characterId));
-
-        public AuthorityDecision Gather(ResourceNodeKey node)
-            => _authority.Submit(new GatherResourceRequest(Guid.NewGuid(), _characterId, node));
 
         public AuthorityDecision AttackCreature(Guid creatureInstanceId)
             => _authority.Submit(new AttackCreatureRequest(Guid.NewGuid(), _characterId, creatureInstanceId));
