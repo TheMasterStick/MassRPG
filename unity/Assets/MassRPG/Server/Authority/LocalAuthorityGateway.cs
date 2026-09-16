@@ -2,6 +2,7 @@ using System;
 using MassRPG.Core.Authority;
 using MassRPG.Server.Combat;
 using MassRPG.Server.Items;
+using MassRPG.Server.Quests;
 using MassRPG.Server.Travel;
 
 namespace MassRPG.Server.Authority
@@ -9,7 +10,7 @@ namespace MassRPG.Server.Authority
     /// <summary>
     /// Composition layer for migrated systems that were added after the original LocalGameAuthority
     /// request switch. Unity should bind its gameplay input to this IGameAuthority gateway rather
-    /// than mutating travel/ammunition/potion state directly. The inner authority remains the
+    /// than mutating travel/ammunition/potion/quest state directly. The inner authority remains the
     /// simulation host for movement, combat, skilling, inventory and economy while this gateway
     /// intercepts newer request families. The same split can later become network command routing.
     /// </summary>
@@ -20,19 +21,22 @@ namespace MassRPG.Server.Authority
         private readonly FastTravelStateRegistry _travelStates;
         private readonly RangedAmmunitionService _ammunition;
         private readonly PotionConsumptionService _potions;
+        private readonly QuestService _quests;
 
         public LocalAuthorityGateway(
             LocalGameAuthority inner,
             FastTravelService fastTravel = null,
             FastTravelStateRegistry travelStates = null,
             RangedAmmunitionService ammunition = null,
-            PotionConsumptionService potions = null)
+            PotionConsumptionService potions = null,
+            QuestService quests = null)
         {
             _inner = inner ?? throw new ArgumentNullException(nameof(inner));
             _fastTravel = fastTravel;
             _travelStates = travelStates;
             _ammunition = ammunition;
             _potions = potions;
+            _quests = quests;
         }
 
         public LocalGameAuthority Inner => _inner;
@@ -76,6 +80,20 @@ namespace MassRPG.Server.Authority
                 return AuthorityDecision.Accept(request.RequestId);
             }
 
+            if (request is StartQuestRequest startQuest)
+            {
+                if (_quests == null)
+                    return AuthorityDecision.Reject(request.RequestId, "quests_unavailable", "Quest progression is not initialized.");
+                return FromQuest(request.RequestId, _quests.TryStart(player, startQuest.QuestId));
+            }
+
+            if (request is ClaimQuestRewardRequest claimQuest)
+            {
+                if (_quests == null)
+                    return AuthorityDecision.Reject(request.RequestId, "quests_unavailable", "Quest progression is not initialized.");
+                return FromQuest(request.RequestId, _quests.TryClaim(player, claimQuest.QuestId));
+            }
+
             if (request is ActivateFastTravelNodeRequest activate)
             {
                 if (_fastTravel == null)
@@ -112,6 +130,11 @@ namespace MassRPG.Server.Authority
             => result.Success
                 ? AuthorityDecision.Accept(requestId)
                 : AuthorityDecision.Reject(requestId, result.Code, "Fast travel request was rejected by the authority.");
+
+        private static AuthorityDecision FromQuest(Guid requestId, QuestOperationResult result)
+            => result.Success
+                ? AuthorityDecision.Accept(requestId)
+                : AuthorityDecision.Reject(requestId, result.Code, "Quest request was rejected by the authority.");
 
         private static bool EndsArrivalProtection(GameRequest request)
         {
