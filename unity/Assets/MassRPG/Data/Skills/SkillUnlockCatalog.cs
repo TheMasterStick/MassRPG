@@ -30,8 +30,11 @@ namespace MassRPG.Data.Skills
             string detail,
             ContentId? sourceContentId = null)
         {
-            if (levelRequired < 1 || levelRequired > SkillProgression.MaxLevel)
-                throw new ArgumentOutOfRangeException(nameof(levelRequired));
+            var maximumLevel = SkillProgression.MaxLevelFor(skill);
+            if (levelRequired < 1 || levelRequired > maximumLevel)
+                throw new ArgumentOutOfRangeException(
+                    nameof(levelRequired),
+                    $"{skill} unlock levels must be between 1 and {maximumLevel}.");
 
             Skill = skill;
             LevelRequired = levelRequired;
