@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using MassRPG.Core.Content;
+using MassRPG.Core.Resources;
 using MassRPG.Core.Skills;
 using MassRPG.Data.Construction;
 using MassRPG.Data.Items;
@@ -87,7 +88,7 @@ namespace MassRPG.Data.Skills
             {
                 var detail = new StringBuilder();
                 detail.Append(resource.Experience).Append(" XP");
-                if (resource.RequiredToolKind != Core.Resources.GatheringToolKind.None)
+                if (resource.RequiredToolKind != GatheringToolKind.None)
                 {
                     detail.Append(" · Requires ")
                         .Append(Humanize(resource.RequiredToolKind.ToString()))
