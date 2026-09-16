@@ -1,6 +1,8 @@
 using System;
 using MassRPG.Core.Characters;
+using MassRPG.Core.Combat;
 using MassRPG.Core.Content;
+using MassRPG.Core.Creatures;
 using MassRPG.Core.World;
 using MassRPG.Data.Creatures;
 using MassRPG.Server.Combat;
@@ -27,12 +29,13 @@ namespace MassRPG.Tests
                 attackBonus: 0,
                 strengthBonus: 0,
                 defenceBonus: 0,
+                combatStyle: CombatStyle.Melee,
                 attackIntervalMilliseconds: 2400,
                 attackRangeTiles: 1,
                 disposition: CreatureDisposition.Neutral,
+                footprint: new CreatureFootprint(2, 2),
                 aggroRadiusTiles: 0,
-                leashRadiusTiles: 8,
-                footprint: new MassRPG.Core.Creatures.CreatureFootprint(2, 2));
+                leashRadiusTiles: 8);
             catalog.Register(definition);
             var creature = CreatureState.Spawn(Guid.NewGuid(), definition, Loc(10, 10));
             var source = new DistanceCombatRewardPresenceSource(catalog, rewardRangeTiles: 2);
