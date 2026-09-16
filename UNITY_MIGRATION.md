@@ -52,6 +52,7 @@ The migration must not blindly reproduce retired browser geography assumptions.
 - Inventory and settled equipment slots are in Core; two-handed weapons exclude shields and rings target Ring1/Ring2. The retired ammo slot is not restored.
 - `GameRequest -> IGameAuthority -> AuthorityDecision` establishes the local authoritative boundary.
 - Combat style, melee training style and ranged-ammunition selection now cross that authority boundary; Unity presentation has a client request bridge instead of mutating `PlayerState` directly.
+- Unity-side action bridges now cover movement/combat targeting, inventory/equipment/consumables/ground items, gathering/farming/firemaking/production, banking/shops and fast travel without moving validation into presentation code.
 - Exact-grid movement/pathing, discrete elevation transitions and ranged line-of-sight are represented independently of Unity rendering.
 - Authored 180k-world page storage, overlapping semantic areas, published-data versioning and editor-core brush/edit sessions are present.
 - Personal/shared gathering depletion and sleeping creature-population timestamps are server-owned.
