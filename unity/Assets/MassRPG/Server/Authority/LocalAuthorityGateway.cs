@@ -24,6 +24,7 @@ namespace MassRPG.Server.Authority
         private readonly PotionConsumptionService _potions;
         private readonly QuestService _quests;
         private readonly PlotConstructionService _construction;
+        private readonly PlotUpkeepService _plotUpkeep;
 
         public LocalAuthorityGateway(
             LocalGameAuthority inner,
@@ -32,7 +33,8 @@ namespace MassRPG.Server.Authority
             RangedAmmunitionService ammunition = null,
             PotionConsumptionService potions = null,
             QuestService quests = null,
-            PlotConstructionService construction = null)
+            PlotConstructionService construction = null,
+            PlotUpkeepService plotUpkeep = null)
         {
             _inner = inner ?? throw new ArgumentNullException(nameof(inner));
             _fastTravel = fastTravel;
@@ -41,6 +43,7 @@ namespace MassRPG.Server.Authority
             _potions = potions;
             _quests = quests;
             _construction = construction;
+            _plotUpkeep = plotUpkeep;
         }
 
         public LocalGameAuthority Inner => _inner;
@@ -110,6 +113,19 @@ namespace MassRPG.Server.Authority
 
                 if (!_construction.TryDemolish(player, demolishBuildPiece.PlotId, demolishBuildPiece.PieceInstanceId))
                     return AuthorityDecision.Reject(request.RequestId, "demolish_rejected", "The requested build piece could not be demolished.");
+
+                EndArrivalProtectionIfNeeded(request);
+                return AuthorityDecision.Accept(request.RequestId);
+            }
+
+            if (request is PayPlotUpkeepRequest payPlotUpkeep)
+            {
+                if (_plotUpkeep == null)
+                    return AuthorityDecision.Reject(request.RequestId, "plot_upkeep_unavailable", "Plot upkeep is not initialized.");
+
+                var result = _plotUpkeep.Pay(player, payPlotUpkeep.PlotId, payPlotUpkeep.OfferedGold, nowUnixMilliseconds);
+                if (!result.Success)
+                    return AuthorityDecision.Reject(request.RequestId, result.Code, "The plot upkeep payment was rejected.");
 
                 EndArrivalProtectionIfNeeded(request);
                 return AuthorityDecision.Accept(request.RequestId);
@@ -189,7 +205,8 @@ namespace MassRPG.Server.Authority
                 || request is BuyShopItemRequest
                 || request is SellShopItemRequest
                 || request is PlaceBuildPieceRequest
-                || request is DemolishBuildPieceRequest;
+                || request is DemolishBuildPieceRequest
+                || request is PayPlotUpkeepRequest;
         }
     }
 }
