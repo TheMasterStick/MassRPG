@@ -18,7 +18,10 @@ namespace MassRPG.Core.Inventory
             SkillId? equipRequirementSkill = null,
             int equipRequirementLevel = 1)
         {
-            if (equipRequirementLevel < 1 || equipRequirementLevel > 300)
+            var maximumRequirementLevel = equipRequirementSkill.HasValue
+                ? SkillProgression.MaxLevelFor(equipRequirementSkill.Value)
+                : SkillProgression.MaxLevel;
+            if (equipRequirementLevel < 1 || equipRequirementLevel > maximumRequirementLevel)
                 throw new ArgumentOutOfRangeException(nameof(equipRequirementLevel));
             Id = id;
             Stackable = stackable;
