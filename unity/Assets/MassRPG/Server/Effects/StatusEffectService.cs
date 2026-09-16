@@ -22,10 +22,13 @@ namespace MassRPG.Server.Effects
     }
 
     /// <summary>
-    /// Server-owned temporary effect state. Permanent skills remain XP-driven; this service only
-    /// supplies effective levels while an effect is active. Reapplying the same effect id refreshes
-    /// its duration instead of stacking duplicate copies. Distinct effect ids may combine, which
-    /// keeps stacking policy explicit in content identity rather than hidden in combat code.
+    /// Server-owned temporary effect state. Permanent skills remain XP-driven and respect their
+    /// trainable ceilings; this service supplies effective levels while effects are active.
+    /// Effective levels may temporarily exceed the trainable ceiling (for example Attack > 100 or
+    /// Mining > 300), while debuffs can never reduce an effective level below 1.
+    /// Reapplying the same effect id refreshes its duration instead of stacking duplicate copies.
+    /// Distinct effect ids may combine, which keeps stacking policy explicit in content identity
+    /// rather than hidden in combat code.
     /// </summary>
     public sealed class StatusEffectService : IEffectiveSkillLevelSource
     {
@@ -94,7 +97,9 @@ namespace MassRPG.Server.Effects
                 }
             }
 
-            return Math.Max(1, Math.Min(SkillProgression.MaxLevel, level));
+            // Trainable ceilings belong to SkillSet/SkillProgression, not temporary effects.
+            // Deliberately do not clamp upward: potions/buffs can exceed 100/300 temporarily.
+            return Math.Max(1, level);
         }
 
         public bool HasFlag(PlayerState player, StatusEffectFlags flag, long nowUnixMilliseconds)
