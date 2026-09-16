@@ -6,10 +6,10 @@ This file tracks the browser-to-Unity migration. The TypeScript/browser game rem
 
 ## Current architecture
 
-- **MassRPG.Core** — engine-independent rules, IDs, character state, inventory, combat math, movement/pathing, logical interaction ordering and construction blueprint data.
-- **MassRPG.Data** — item/creature/resource/recipe/build-piece/loot definitions, authored-world documents and migration seed catalogs.
-- **MassRPG.Server** — authoritative movement, gathering, production, combat, parties/reward/loot grouping, creature population, construction, upkeep/reclamation and publishing foundations.
-- **MassRPG.Client** — Unity presentation: camera, logical actor interpolation, terrain meshes/streaming, presentation-asset catalog and equipment visuals.
+- **MassRPG.Core** — engine-independent rules, IDs, character state, inventory, combat math, movement/pathing, logical interaction ordering, effective-skill contracts and construction blueprint data.
+- **MassRPG.Data** — item/creature/resource/recipe/build-piece/loot/spell/quest/NPC/effect definitions, authored-world documents and migration seed catalogs.
+- **MassRPG.Server** — authoritative movement, gathering, production, combat, PvP, spells, quests, dialogue, parties/reward/loot grouping, creature population, item effects, persistence, construction, upkeep/reclamation and publishing foundations.
+- **MassRPG.Client** — Unity presentation: camera, logical actor interpolation, terrain meshes/streaming, interaction raycast collection, presentation-asset catalog and equipment visuals.
 - **MassRPG.EditorCore** — engine-light world-authoring/session logic.
 - **MassRPG.Editor** — tactile Unity authoring windows, repository content bridge, Play From Here and asset-link tooling.
 
@@ -19,17 +19,23 @@ The authority rule remains unchanged: the client requests actions and renders re
 
 | Browser/source area | Current Unity/C# state |
 | --- | --- |
-| Skills / XP | Core progression ported with tests; 1-99 parity retained while MassRPG supports levels up to 300. |
-| Items / equipment | Broad migration catalog, requirements, dual-hand semantics, two-handed exclusion, combat bonuses, tools and consumables represented. |
+| Skills / XP | Core progression ported with tests; 1-99 parity retained while MassRPG supports levels up to 300. Temporary effects use an effective-level layer and never rewrite permanent XP. |
+| Items / equipment | Broad migration catalog, requirements, dual-hand semantics, two-handed exclusion, combat bonuses, tools, consumables and per-equipped-item durability represented. |
 | Inventory | Core rules ported and authority-facing operations tested. |
 | Movement / pathfinding | Eight-direction exact 1x1 movement, no corner cutting, explicit elevation transitions and LOS foundations ported. |
-| Interaction stack | Engine-independent target/action model and settled default/right-click/visual crowd priorities are now represented and tested. Unity physics may discover views, but it is not allowed to decide target priority by collider order. |
-| Combat | Authoritative player auto-attacks, creature aggro/retaliation/chase/leash, range/LOS/elevation rules, cooldowns and damage contribution facts active. Party-aware reward planning groups qualifying contributors, nearby party recipients and first-engager claim context without hard-coding final XP balance. |
-| Loot | Browser-style guaranteed + one weighted ordinary drop tables now have data definitions and a server-owned deterministic/testable roller. Representative migrated creatures reference those tables. Party item pools support Round Robin, Need/Greed, Leader Distribution and Free For All without duplicating combat eligibility rules. |
+| Interaction stack | Engine-independent target/action model and settled default/right-click/visual crowd priorities are represented and tested. Unity physics may discover views, but it is not allowed to decide target priority by collider order. |
+| Combat | Authoritative PvE and PvP attacks share logical range/LOS/elevation/cooldown rules. Creature aggro/retaliation/chase/leash, contribution facts, party-aware reward planning and XP settlement are represented. |
+| PvP | Voluntary opt-in, forced-PvP areas, protected areas, skull timing, melee/ranged attacks, PvP-gated player-target damage spells and configurable defender/skulled death settlement are server owned. Lethal PvP attacks can now invoke death settlement directly. |
+| Loot | Browser-style guaranteed + one weighted ordinary drop tables are data driven and deterministic/testable. Kill settlement can grant XP, split party money, create shared classic-loot pools or protected solo ground loot without personal-loot duplication. |
+| Magic / spells | Data-driven spell requirements, reagents, cooldowns, range/LOS, creature damage, self-healing and PvP-gated player damage foundations are active. |
+| NPCs / dialogue | Stable NPC service definitions, range/layer validation and server-validated dialogue graphs/actions are represented. |
+| Quests | Prerequisites, skill requirements, talk/kill/gather/reach/use objectives, atomic item/XP rewards and stable-ID persistence are represented. |
+| Potions / timed effects | Authoritative potion consumption, timed skill modifiers, status flags, refresh/expiry behavior, PvE/PvP effective combat levels and absolute-expiry persistence are represented. Browser +3 Attack/+3 Strength and Antipoison semantics are mapped without inventing live durations. |
 | Gathering | Resource definitions, personal/shared depletion, node keys and authoritative gathering active. |
 | Production | Smelting, smithing, cooking, crafting, fletching, Herblore and related timed production represented; failures/burns are data/server owned. |
 | Creature populations | Fixed authored caps, sleeping/materialization, ordinary-vs-persistent identities, respawn timing and combat-death integration active. |
-| Construction | Shared-world plots, future-Large reservation, permissions/blocklists, modular pieces, three storeys, support, stations, upkeep and reusable blueprints active. Atomic whole-blueprint preview/placement validates the complete arrangement before committing. Abandoned plots require an explicit authoritative reclamation command that snapshots the build, removes live stations/structures and releases reserved land. |
+| Character persistence | Versioned aggregate persistence covers player/inventory/equipment, bank, respawn preference, fast-travel discovery, quests, durability, PvP status and timed effects. Transient travel protection/map state remains intentionally non-persistent. |
+| Construction | Shared-world plots, future-Large reservation, permissions/blocklists, modular pieces, three storeys, support, stations, upkeep and reusable blueprints active. Atomic whole-blueprint preview/placement validates the complete arrangement before committing. Abandoned plots require explicit authoritative reclamation. |
 | Publishing | Version/manifest/rollback and review-candidate foundations exist; live-server promotion remains deliberately separate from ordinary editing. |
 
 ## Repository-backed game data editor
@@ -42,7 +48,7 @@ Typed authoring currently covers:
 - creatures/monsters;
 - gathering resources;
 - production recipes;
-- flexible **Other Definitions** for game concepts whose final typed runtime schema does not exist yet.
+- flexible **Other Definitions** for game concepts whose final typed repository schema does not exist yet.
 
 Every entry keeps a permanent machine ID separate from its display name. Presentation requirements are optional and can remain `needs-assets` while gameplay/design data is authored. The browser Asset Backlog collects unfinished icon/model/portrait/animation needs.
 
@@ -58,7 +64,7 @@ Gameplay data no longer needs a Unity path or art file to exist. Stable presenta
 
 The generated `PresentationAssetCatalog` converts source AssetLinks into a compact build/runtime lookup. The first `EquipmentVisualBinder` consumes that catalog for Main Hand, Off Hand, Head and Cape socket-mounted models. Body-fitted skinned armour remains intentionally deferred until the canonical male/female rigs are imported.
 
-The Node/content GitHub Actions pipeline now syntax-checks the browser tooling and validates both repository drafts and AssetLinks. This pipeline has completed successfully on the migration branch.
+The Node/content GitHub Actions pipeline syntax-checks the browser tooling and validates both repository drafts and AssetLinks.
 
 ## World/editor foundation
 
@@ -97,28 +103,42 @@ The repository/StreamingAssets loader is a development/build-packaging source. A
 
 ## Logical interaction ordering
 
-The old browser `Game.ts`/`ContextPopup.ts` behavior has now been separated from the DOM and represented as engine-independent interaction data. `InteractionTarget`, `InteractionOption` and `InteractionPriority` define the logical stack that a future Unity cursor/controller consumes.
+The old browser `Game.ts`/`ContextPopup.ts` behavior has been separated from the DOM and represented as engine-independent interaction data. `InteractionTarget`, `InteractionOption` and `InteractionPriority` define the logical stack consumed by the Unity cursor collector.
 
-Left click uses the settled priority rather than raycast accident: current/hostile combat creature first, then NPC, ordinary attackable creature, gameplay object/resource, ground item, other player and finally movement. A neutral creature loses to an overlapping NPC, while the player's current combat target overrides that NPC. Examine-only actions can never accidentally become the left-click default.
+Left click uses the settled priority rather than raycast accident: current/hostile combat creature first, then NPC, ordinary attackable creature, gameplay object/resource, ground item, other player and finally movement. A neutral creature loses to an overlapping NPC, while the player's current combat target overrides that NPC. Examine-only actions cannot become the left-click default.
 
-Right click retains **all** overlapping options. Primary actions are ordered by target importance, then `Walk here`, then Examine entries; presentation can append Cancel. Actor visual ordering is likewise explicit: hostile/in-combat creature -> NPC -> local player -> passive/neutral creature -> other player. Tests lock those rules down before the Unity physics/raycast adapter is added.
+Right click retains **all** overlapping options. Primary actions are ordered by target importance, then `Walk here`, then Examine entries; presentation can append Cancel. Actor visual ordering is explicit: hostile/in-combat creature -> NPC -> local player -> passive/neutral creature -> other player.
+
+`InteractionCursorCollector` now performs the Unity-side raycast collection while keeping logical target identity and priority outside collider order. The next client step is turning selected options into the appropriate authority requests and building the actual context-menu/UI presentation.
 
 ## Combat parties, loot and reward settlement
 
 Server-owned `PartyRegistry`/`PartyState` enforce one-party-per-character membership, leader-controlled loot mode and the four settled party loot modes: **Round Robin, Need/Greed, Leader Distribution and Free For All**. Round-robin selection skips currently ineligible/out-of-range members without silently removing them from the party.
 
-`CombatRewardPlanner` consumes the authoritative damage ledger instead of trusting client reward claims. A contributor must pass the configurable contribution threshold and be in reward range before creating a reward group. Qualifying party contribution is combined into one group, while other nearby party members become shared recipients; non-party contributors remain individual groups. The first engager/group is recorded separately as the initial claim context even if that first tap later fails the contribution threshold. Exact XP multipliers, claim-steal rules and boss/event exceptions remain separate policies rather than arbitrary constants hidden in combat.
+`CombatRewardPlanner` consumes the authoritative damage ledger instead of trusting client reward claims. A contributor must pass the configurable contribution threshold and be in reward range before creating a reward group. Qualifying party contribution is combined into one group, while other nearby party members become shared recipients; non-party contributors remain individual groups. The first engager/group is recorded separately as the initial claim context even if that first tap later fails the contribution threshold.
 
-Money splitting exposes an equal integer share for each eligible party recipient plus any indivisible remainder. Item drops now use `SharedPartyLootPool`/`PartyLootPoolService`:
+`CombatExperienceSettlementService` applies the resulting XP plan, while `CombatKillSettlementService` rolls the creature's data-driven loot table, splits divisible party money, creates a party loot pool for remaining shared drops, or spawns protected ground loot for a solo claim. Exact boss/event/claim-steal exceptions remain separate policies instead of arbitrary constants hidden in ordinary-kill settlement.
+
+Money splitting exposes an equal integer share for each eligible party recipient plus any indivisible remainder. Item drops use `SharedPartyLootPool`/`PartyLootPoolService`:
 
 - **Round Robin** pre-assigns each rolled stack to the next eligible member and carries the cursor between pools through party state.
-- **Need/Greed** records one response per eligible member, Need outranks Greed, ties use an injected authoritative selector, and an explicit forced resolution supports timeout handling.
+- **Need/Greed** records one response per eligible member, Need outranks Greed, ties use an injected authoritative selector, and explicit forced resolution supports timeout handling.
 - **Leader Distribution** requires the party leader to assign an entry to an eligible recipient before it can be claimed.
 - **Free For All** gives the first eligible claimant the open entry.
 
-The pool resolves ownership before inventory insertion. That separation is deliberate so a full inventory can later fall back to protected ground loot/mail/other server policy rather than silently deleting an awarded item.
+The pool resolves ownership before inventory insertion. That separation is deliberate so a full inventory can fall back to protected ground loot/mail/another server policy rather than silently deleting an awarded item.
 
-The browser's useful loot-table behavior is also ported. `LootTableDefinition` stores guaranteed entries, weighted entries and a no-drop chance. `LootTableRoller` always rolls guaranteed entries, then rolls at most one weighted ordinary drop exactly like the browser reference, but randomness is injected from the server/test layer. Chicken, cow, goblin, wolf, dark wizard, hill giant and lesser demon migration creatures now point at representative browser-parity tables.
+`LootTableDefinition` stores guaranteed entries, weighted entries and a no-drop chance. `LootTableRoller` always rolls guaranteed entries, then rolls at most one weighted ordinary drop like the browser reference, with randomness injected from the server/test layer. Chicken, cow, goblin, wolf, dark wizard, hill giant and lesser demon migration creatures reference representative browser-parity tables.
+
+## Character effects and persistence
+
+Temporary character effects deliberately sit outside permanent skill XP. `StatusEffectService` exposes effective skill levels to PvE/PvP combat, handles expiry, same-effect refresh and status flags, and supports exact absolute-expiry restore rather than restarting duration after logout.
+
+`PotionConsumptionService` is authority-facing through `DrinkPotionRequest`/`LocalAuthorityGateway`. The client submits only an inventory slot; it cannot submit its own bonus magnitude or duration. A missing/invalid effect definition rejects the request without consuming the potion.
+
+`MigrationSeedPotionEffectCatalog` preserves only facts present in the browser data: Attack potion gives +3 Attack, Strength potion gives +3 Strength, and Antipoison supplies poison-immunity semantics. The browser did not provide trustworthy durations, so callers must provide duration policy explicitly. Prayer potion remains unmapped until a real Prayer resource/skill system exists.
+
+`CompleteCharacterPersistenceSnapshot` v2 aggregates the character's core state, bank, respawn preference, fast-travel discovery, quests, equipment durability, PvP opt-in/skull and timed effects. Timed effects store absolute expiry timestamps. An active effect whose definition has disappeared is rejected before live effect state is cleared; already-expired removed effects are safely discarded.
 
 ## Construction / housing
 
@@ -151,18 +171,19 @@ The connected GitHub tooling available to this chat can move/create refs but can
 
 ## Verification state
 
-A substantial Editor test suite exists for skills/XP, combat math, inventory/equipment, movement/pathing, LOS/elevation, world pages, semantic areas/POIs, gathering/resources, creature behavior/populations, production, construction/plots/upkeep and publishing. New tests additionally cover stable presentation IDs/safe JSON patching, atomic blueprint placement/rotation, explicit abandoned-plot reclamation, interaction-stack priorities, party membership/loot-mode authority, party-aware contribution grouping, all four shared party loot modes and browser-parity loot-table rolling.
+A substantial Editor test suite exists for skills/XP, combat math, inventory/equipment, movement/pathing, LOS/elevation, world pages, semantic areas/POIs, gathering/resources, creature behavior/populations, production, construction/plots/upkeep and publishing. Tests now also cover presentation IDs/safe JSON patching, interaction-stack priorities, parties and all four loot modes, contribution/reward settlement, loot-table rolling, quests, spells, PvP/death, durability, aggregate persistence, potion/status effects and absolute-expiry restoration.
 
-**Important:** the C# additions are committed source but have still not had their first real Unity compile/Test Runner pass. That requires opening the project in Unity `6000.3.24f1` on the home PC. Until then, do not treat remote static review as a substitute for Unity compilation.
+The repository also has a **pure-C# GitHub Actions smoke pipeline** that compiles the engine-independent Core/Data/Server source and runs its NUnit suite. This catches a large class of migration errors before the home-PC Unity open and has been repeatedly green on the current migration work.
 
-The repository's Node/content-data GitHub Actions validation is separate and was green on its latest applicable run.
+**Important:** the Unity-specific assemblies still have not had their first real Unity compile/Test Runner pass. That requires opening the project in Unity `6000.3.24f1` on the home PC. Pure-C# CI materially reduces risk, but it is not a substitute for Unity's compiler, asmdefs, package resolution or runtime/editor API validation.
 
 ## Next implementation work
 
-1. Add the Unity-side cursor/raycast adapter that collects logical interaction targets but delegates default/context ordering to `InteractionPriority`; then wire attack/gather/use/move choices into authority requests.
-2. Continue creature/object/ground-item presentation and production-quality terrain material/ground-ID binding.
-3. Connect rolled creature drops and reward groups to final XP awarding plus protected item-delivery/ground-loot behavior without inventing unresolved claim/boss policy.
-4. Extend presentation binding from socket equipment to skinned body armour after the canonical character bases/rig are imported.
-5. Expand typed repository authoring for additional runtime categories (NPCs, shops, build pieces, loot tables, spells/abilities, quests) while retaining Other Definitions as the forward-compatible fallback.
+1. Wire selected Unity interaction options into authority requests and build the actual left-click/right-click presentation flow.
+2. Continue creature/NPC/resource/ground-item presentation, pooling and production-quality terrain material/ground-ID/water binding.
+3. Integrate ordinary creature kill settlement into the authoritative world-tick/combat orchestration with an injected/configurable reward-range source rather than hard-coding a range.
+4. Expand typed repository authoring for NPCs, shops, build pieces, loot tables, spells/effects and quests while retaining Other Definitions as the forward-compatible fallback.
+5. Continue map/navigation presentation: minimap, player world map, waypoints, Show Route, route preferences and fast-travel destination UI.
 6. Continue world-editor QoL and semantic integration rather than rebuilding already-working terrain/road/area/POI/spawn/placement tools.
-7. On first home-PC Unity open: resolve real packages/render pipeline, run full compile/Test Runner, fix any compile/parity failures, then visually inspect ramp terrain, chunk boundaries, camera and character/equipment binding before art production accelerates.
+7. Extend presentation binding from socket equipment to skinned body armour after the canonical character bases/rig are imported.
+8. On first home-PC Unity open: resolve real packages/render pipeline, run full compile/Test Runner, fix any compile/parity failures, then visually inspect ramp terrain, chunk boundaries, camera, interactions and character/equipment binding before art production accelerates.
