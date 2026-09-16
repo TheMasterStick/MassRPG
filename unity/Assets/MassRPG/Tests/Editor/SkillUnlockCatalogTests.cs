@@ -1,9 +1,12 @@
 using System.Linq;
 using MassRPG.Core.Content;
 using MassRPG.Core.Inventory;
+using MassRPG.Core.Resources;
 using MassRPG.Core.Skills;
+using MassRPG.Data.Construction;
 using MassRPG.Data.Items;
 using MassRPG.Data.Recipes;
+using MassRPG.Data.Resources;
 using MassRPG.Data.Skills;
 using NUnit.Framework;
 
@@ -58,6 +61,59 @@ namespace MassRPG.Tests
             Assert.AreEqual(20, attack[0].LevelRequired);
             Assert.AreEqual("Equip Test sword", attack[0].DisplayName);
             Assert.AreEqual("Weapons", attack[0].Category);
+        }
+
+        [Test]
+        public void GatheringAndConstructionCatalogsJoinTheSameLedger()
+        {
+            var items = new ItemCatalog();
+            var oreItem = new ContentId("item.copper_ore");
+            var plankItem = new ContentId("item.plank");
+            items.Register(new ItemDefinition(oreItem, "Copper ore", ItemType.Resource, true));
+            items.Register(new ItemDefinition(plankItem, "Plank", ItemType.Material, true));
+
+            var resources = new ResourceCatalog();
+            resources.Register(new ResourceDefinition(
+                new ContentId("resource.copper_rock"),
+                "Copper rock",
+                SkillId.Mining,
+                7,
+                18,
+                oreItem,
+                10,
+                requiredToolKind: GatheringToolKind.Pickaxe,
+                minimumToolTier: 1));
+
+            var buildPieces = new BuildPieceCatalog();
+            buildPieces.Register(new BuildPieceDefinition(
+                new ContentId("build.wood_wall"),
+                "Wood wall",
+                BuildPieceKind.Wall,
+                BuildPlacementMode.CardinalEdge,
+                BuildOccupancyLayer.Structure,
+                12,
+                30,
+                new[] { new BuildMaterialCost(plankItem, 2) }));
+
+            var catalog = SkillUnlockCatalogBuilder.Build(
+                new RecipeCatalog(), items, resources, buildPieces);
+            var mining = catalog.ForSkill(SkillId.Mining);
+            var construction = catalog.ForSkill(SkillId.Construction);
+
+            Assert.AreEqual(1, mining.Count);
+            Assert.AreEqual(SkillUnlockKind.Gathering, mining[0].Kind);
+            Assert.AreEqual("Mine Copper rock", mining[0].DisplayName);
+            Assert.AreEqual("Ores", mining[0].Category);
+            StringAssert.Contains("18 XP", mining[0].Detail);
+            StringAssert.Contains("Pickaxe", mining[0].Detail);
+            StringAssert.Contains("Copper ore", mining[0].Detail);
+
+            Assert.AreEqual(1, construction.Count);
+            Assert.AreEqual(SkillUnlockKind.Construction, construction[0].Kind);
+            Assert.AreEqual("Build Wood wall", construction[0].DisplayName);
+            Assert.AreEqual("Structures", construction[0].Category);
+            StringAssert.Contains("2x Plank", construction[0].Detail);
+            StringAssert.Contains("30 XP", construction[0].Detail);
         }
 
         [Test]
