@@ -1,6 +1,7 @@
 using System;
 using MassRPG.Core.Authority;
 using MassRPG.Server.Combat;
+using MassRPG.Server.Construction;
 using MassRPG.Server.Items;
 using MassRPG.Server.Quests;
 using MassRPG.Server.Travel;
@@ -10,9 +11,9 @@ namespace MassRPG.Server.Authority
     /// <summary>
     /// Composition layer for migrated systems that were added after the original LocalGameAuthority
     /// request switch. Unity should bind its gameplay input to this IGameAuthority gateway rather
-    /// than mutating travel/ammunition/potion/quest state directly. The inner authority remains the
-    /// simulation host for movement, combat, skilling, inventory and economy while this gateway
-    /// intercepts newer request families. The same split can later become network command routing.
+    /// than mutating travel/ammunition/potion/quest/construction state directly. The inner authority
+    /// remains the simulation host for movement, combat, skilling, inventory and economy while this
+    /// gateway intercepts newer request families. The same split can later become network command routing.
     /// </summary>
     public sealed class LocalAuthorityGateway : IGameAuthority
     {
@@ -22,6 +23,7 @@ namespace MassRPG.Server.Authority
         private readonly RangedAmmunitionService _ammunition;
         private readonly PotionConsumptionService _potions;
         private readonly QuestService _quests;
+        private readonly PlotConstructionService _construction;
 
         public LocalAuthorityGateway(
             LocalGameAuthority inner,
@@ -29,7 +31,8 @@ namespace MassRPG.Server.Authority
             FastTravelStateRegistry travelStates = null,
             RangedAmmunitionService ammunition = null,
             PotionConsumptionService potions = null,
-            QuestService quests = null)
+            QuestService quests = null,
+            PlotConstructionService construction = null)
         {
             _inner = inner ?? throw new ArgumentNullException(nameof(inner));
             _fastTravel = fastTravel;
@@ -37,6 +40,7 @@ namespace MassRPG.Server.Authority
             _ammunition = ammunition;
             _potions = potions;
             _quests = quests;
+            _construction = construction;
         }
 
         public LocalGameAuthority Inner => _inner;
@@ -75,6 +79,37 @@ namespace MassRPG.Server.Authority
                 var result = _potions.Drink(player, drinkPotion.InventorySlot, nowUnixMilliseconds);
                 if (!result.Success)
                     return AuthorityDecision.Reject(request.RequestId, result.Code, "The requested potion could not be consumed.");
+
+                EndArrivalProtectionIfNeeded(request);
+                return AuthorityDecision.Accept(request.RequestId);
+            }
+
+            if (request is PlaceBuildPieceRequest placeBuildPiece)
+            {
+                if (_construction == null)
+                    return AuthorityDecision.Reject(request.RequestId, "construction_unavailable", "Construction is not initialized.");
+
+                var result = _construction.TryPlace(
+                    player,
+                    placeBuildPiece.PlotId,
+                    placeBuildPiece.DefinitionId,
+                    placeBuildPiece.Anchor,
+                    placeBuildPiece.Edge,
+                    placeBuildPiece.RotationQuarterTurns);
+                if (!result.Success)
+                    return AuthorityDecision.Reject(request.RequestId, result.Code, "The requested build piece could not be placed.");
+
+                EndArrivalProtectionIfNeeded(request);
+                return AuthorityDecision.Accept(request.RequestId);
+            }
+
+            if (request is DemolishBuildPieceRequest demolishBuildPiece)
+            {
+                if (_construction == null)
+                    return AuthorityDecision.Reject(request.RequestId, "construction_unavailable", "Construction is not initialized.");
+
+                if (!_construction.TryDemolish(player, demolishBuildPiece.PlotId, demolishBuildPiece.PieceInstanceId))
+                    return AuthorityDecision.Reject(request.RequestId, "demolish_rejected", "The requested build piece could not be demolished.");
 
                 EndArrivalProtectionIfNeeded(request);
                 return AuthorityDecision.Accept(request.RequestId);
@@ -152,7 +187,9 @@ namespace MassRPG.Server.Authority
                 || request is DepositBankItemRequest
                 || request is WithdrawBankItemRequest
                 || request is BuyShopItemRequest
-                || request is SellShopItemRequest;
+                || request is SellShopItemRequest
+                || request is PlaceBuildPieceRequest
+                || request is DemolishBuildPieceRequest;
         }
     }
 }
