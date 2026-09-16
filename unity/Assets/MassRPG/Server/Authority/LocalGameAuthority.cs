@@ -42,6 +42,7 @@ namespace MassRPG.Server.Authority
         private readonly FoodConsumptionService _food;
         private readonly PlayerDeathService _death;
         private readonly CombatKillSettlementCoordinator _killSettlement;
+        private readonly RangedAmmunitionService _rangedAmmunition;
 
         public LocalGameAuthority(
             IItemRuleSource itemRules,
@@ -62,7 +63,8 @@ namespace MassRPG.Server.Authority
             GroundItemService groundItems = null,
             FoodConsumptionService food = null,
             PlayerDeathService death = null,
-            CombatKillSettlementCoordinator killSettlement = null)
+            CombatKillSettlementCoordinator killSettlement = null,
+            RangedAmmunitionService rangedAmmunition = null)
         {
             _itemRules = itemRules ?? throw new ArgumentNullException(nameof(itemRules));
             _movementMap = movementMap;
@@ -83,6 +85,7 @@ namespace MassRPG.Server.Authority
             _food = food;
             _death = death;
             _killSettlement = killSettlement;
+            _rangedAmmunition = rangedAmmunition;
         }
 
         /// <summary>
@@ -237,6 +240,35 @@ namespace MassRPG.Server.Authority
             {
                 if (_production != null) _production.Cancel(player);
                 else player.Production.Clear();
+                return AuthorityDecision.Accept(request.RequestId);
+            }
+
+            if (request is SelectCombatStyleRequest selectCombatStyle)
+            {
+                player.CombatStyle = selectCombatStyle.Style;
+                return AuthorityDecision.Accept(request.RequestId);
+            }
+
+            if (request is SelectMeleeTrainingStyleRequest selectMeleeTraining)
+            {
+                player.MeleeTrainingStyle = selectMeleeTraining.Style;
+                player.CombatStyle = CombatStyle.Melee;
+                return AuthorityDecision.Accept(request.RequestId);
+            }
+
+            if (request is SelectRangedAmmunitionRequest selectAmmunition)
+            {
+                if (_rangedAmmunition == null)
+                    return AuthorityDecision.Reject(request.RequestId, "ranged_ammunition_unavailable", "Ranged ammunition selection is not initialized.");
+                return FromRangedAmmunitionResult(request.RequestId,
+                    _rangedAmmunition.Select(player, selectAmmunition.AmmunitionItemId));
+            }
+
+            if (request is ClearRangedAmmunitionRequest)
+            {
+                if (_rangedAmmunition == null)
+                    return AuthorityDecision.Reject(request.RequestId, "ranged_ammunition_unavailable", "Ranged ammunition selection is not initialized.");
+                _rangedAmmunition.ClearSelection(player);
                 return AuthorityDecision.Accept(request.RequestId);
             }
 
@@ -450,6 +482,11 @@ namespace MassRPG.Server.Authority
             => result.Success
                 ? AuthorityDecision.Accept(requestId)
                 : AuthorityDecision.Reject(requestId, result.Code, result.Message);
+
+        private static AuthorityDecision FromRangedAmmunitionResult(Guid requestId, RangedAmmunitionResult result)
+            => result.Success
+                ? AuthorityDecision.Accept(requestId)
+                : AuthorityDecision.Reject(requestId, result.Code, result.Code);
 
         private static AuthorityDecision FromProductionResult(Guid requestId, ProductionResult result)
             => result.Success
