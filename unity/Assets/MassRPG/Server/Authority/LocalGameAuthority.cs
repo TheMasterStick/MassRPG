@@ -41,6 +41,7 @@ namespace MassRPG.Server.Authority
         private readonly GroundItemService _groundItems;
         private readonly FoodConsumptionService _food;
         private readonly PlayerDeathService _death;
+        private readonly CombatKillSettlementCoordinator _killSettlement;
 
         public LocalGameAuthority(
             IItemRuleSource itemRules,
@@ -60,7 +61,8 @@ namespace MassRPG.Server.Authority
             FiremakingService firemaking = null,
             GroundItemService groundItems = null,
             FoodConsumptionService food = null,
-            PlayerDeathService death = null)
+            PlayerDeathService death = null,
+            CombatKillSettlementCoordinator killSettlement = null)
         {
             _itemRules = itemRules ?? throw new ArgumentNullException(nameof(itemRules));
             _movementMap = movementMap;
@@ -80,7 +82,15 @@ namespace MassRPG.Server.Authority
             _groundItems = groundItems;
             _food = food;
             _death = death;
+            _killSettlement = killSettlement;
         }
+
+        /// <summary>
+        /// Raised synchronously after a lethal player attack is handed to the configured kill
+        /// settlement coordinator. Presentation/telemetry can observe the immutable result without
+        /// becoming responsible for XP, loot or population removal.
+        /// </summary>
+        public event Action<Guid, CombatKillSettlementResult> CombatKillSettled;
 
         public void RegisterPlayer(PlayerState player)
         {
@@ -283,11 +293,12 @@ namespace MassRPG.Server.Authority
                 return CombatAdvanceResult.State(CombatAdvanceKind.Failed, "combat_simulation_unavailable");
             if (!_players.TryGetValue(characterId, out var player))
                 return CombatAdvanceResult.State(CombatAdvanceKind.Failed, "unknown_character");
+            if (random01 == null) throw new ArgumentNullException(nameof(random01));
 
             var targetBeforeAttack = player.Combat.TargetActorId;
             var result = _combatSimulation.AdvancePlayerAttack(player, nowUnixMilliseconds, random01);
             if (result.Kind == CombatAdvanceKind.TargetKilled && targetBeforeAttack.HasValue)
-                _creaturePopulations?.RecordKillForInstance(targetBeforeAttack.Value, nowUnixMilliseconds);
+                HandleCreatureKilled(targetBeforeAttack.Value, nowUnixMilliseconds, random01);
             return result;
         }
 
@@ -303,7 +314,7 @@ namespace MassRPG.Server.Authority
                 var result = _combatSimulation.AdvancePlayerAttack(player, nowUnixMilliseconds, random01);
                 if (result.DidAttack) attacksResolved++;
                 if (result.Kind == CombatAdvanceKind.TargetKilled && targetBeforeAttack.HasValue)
-                    _creaturePopulations?.RecordKillForInstance(targetBeforeAttack.Value, nowUnixMilliseconds);
+                    HandleCreatureKilled(targetBeforeAttack.Value, nowUnixMilliseconds, random01);
             }
             return attacksResolved;
         }
@@ -368,6 +379,22 @@ namespace MassRPG.Server.Authority
                 completed += result.CompletedQuantity;
             }
             return completed;
+        }
+
+        private void HandleCreatureKilled(Guid creatureInstanceId, long nowUnixMilliseconds, Func<double> random01)
+        {
+            if (_killSettlement == null)
+            {
+                _creaturePopulations?.RecordKillForInstance(creatureInstanceId, nowUnixMilliseconds);
+                return;
+            }
+
+            var settlement = _killSettlement.SettleKilledCreature(
+                creatureInstanceId,
+                _players.Values,
+                nowUnixMilliseconds,
+                random01);
+            CombatKillSettled?.Invoke(creatureInstanceId, settlement);
         }
 
         private AuthorityDecision HandleEquipRequest(Guid requestId, PlayerState player, EquipInventoryItemRequest equip)
