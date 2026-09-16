@@ -28,3 +28,102 @@ jobs:
 
       - name: Audit MassRPG asmdefs and engine boundaries
         run: python3 scripts/audit-unity-assemblies.py
+
+  parse-all-source-as-csharp9:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Generate Roslyn syntax preflight
+        shell: bash
+        run: |
+          mkdir -p .ci/unity-csharp9-syntax
+          cat > .ci/unity-csharp9-syntax/UnityCSharp9Syntax.csproj <<'EOF'
+          <Project Sdk="Microsoft.NET.Sdk">
+            <PropertyGroup>
+              <OutputType>Exe</OutputType>
+              <TargetFramework>net8.0</TargetFramework>
+              <ImplicitUsings>disable</ImplicitUsings>
+              <Nullable>disable</Nullable>
+            </PropertyGroup>
+            <ItemGroup>
+              <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.11.0" />
+            </ItemGroup>
+          </Project>
+          EOF
+
+          cat > .ci/unity-csharp9-syntax/Program.cs <<'EOF'
+          using System;
+          using System.Collections.Generic;
+          using System.IO;
+          using System.Linq;
+          using System.Text.RegularExpressions;
+          using Microsoft.CodeAnalysis;
+          using Microsoft.CodeAnalysis.CSharp;
+
+          internal static class Program
+          {
+              private static int Main()
+              {
+                  const string root = "unity/Assets/MassRPG";
+                  var files = Directory.GetFiles(root, "*.cs", SearchOption.AllDirectories)
+                      .OrderBy(path => path, StringComparer.Ordinal)
+                      .ToArray();
+                  var parseOptions = CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.CSharp9);
+                  var failures = new List<string>();
+                  var sawRecord = false;
+                  var sawIsExternalInit = false;
+
+                  foreach (var file in files)
+                  {
+                      var text = File.ReadAllText(file);
+                      var tree = CSharpSyntaxTree.ParseText(text, parseOptions, file);
+                      foreach (var diagnostic in tree.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error))
+                      {
+                          failures.Add(diagnostic.ToString());
+                      }
+
+                      if (Regex.IsMatch(text, @"\binit\s*(?:;|\{)"))
+                      {
+                          failures.Add(file + ": init-only setters are unsupported by Unity 6's documented C# profile.");
+                      }
+                      if (text.Contains("ModuleInitializer", StringComparison.Ordinal))
+                      {
+                          failures.Add(file + ": module initializers are unsupported by Unity 6's documented C# profile.");
+                      }
+                      if (text.Contains("SkipLocalsInit", StringComparison.Ordinal))
+                      {
+                          failures.Add(file + ": suppressing locals-init emission is unsupported by Unity 6's documented C# profile.");
+                      }
+
+                      sawRecord |= Regex.IsMatch(text, @"\brecord\s+(?:class\s+|struct\s+)?[A-Za-z_]");
+                      sawIsExternalInit |= text.Contains("IsExternalInit", StringComparison.Ordinal);
+                  }
+
+                  if (sawRecord && !sawIsExternalInit)
+                  {
+                      failures.Add("Record declarations exist but no IsExternalInit compatibility shim was found; Unity's C# 9 record support requires it.");
+                  }
+
+                  if (failures.Count != 0)
+                  {
+                      Console.Error.WriteLine("Unity C# 9 syntax preflight FAILED:");
+                      foreach (var failure in failures.Distinct(StringComparer.Ordinal))
+                      {
+                          Console.Error.WriteLine("  - " + failure);
+                      }
+                      return 1;
+                  }
+
+                  Console.WriteLine($"Unity C# 9 syntax preflight passed: {files.Length} C# source files parsed.");
+                  return 0;
+              }
+          }
+          EOF
+
+      - name: Parse all MassRPG C# source with Unity-compatible language level
+        run: dotnet run --project .ci/unity-csharp9-syntax/UnityCSharp9Syntax.csproj --configuration Release --nologo
